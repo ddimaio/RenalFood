@@ -1,0 +1,35 @@
+[
+ {
+  "name": "Cauldron Authentic Tofu (organic, 396 g)",
+  "category": "food",
+  "note": "Label per 100 g: 118 kcal, protein 13 g, fat 7.1 g, carb 1.0 g, fibre 1.9 g, salt 0.03 g, calcium 401 mg (calcium sulphate set). NOT on label, ESTIMATED from USDA firm calcium-set tofu scaled to 13 g protein: phosphorus 143 mg, potassium 178 mg, magnesium 44 mg; water by difference. Vitamins unknown.",
+  "per100g": {
+   "kcal": 118,
+   "water": 75.5,
+   "protein": 13.0,
+   "fat": 7.1,
+   "carb": 2.9,
+   "fibre": 1.9,
+   "ca": 401,
+   "p": 143,
+   "na": 12,
+   "k": 178,
+   "mg": 44,
+   "vit_a": 0,
+   "b1": null,
+   "b2": null,
+   "b3": null,
+   "b6": null,
+   "b12": 0,
+   "folate": null,
+   "b5": null,
+   "choline": null,
+   "vit_d": 0,
+   "vit_e": null,
+   "vit_c": null,
+   "epa_dha": 0,
+   "base_meq": 0,
+   "p_bind": 0
+  }
+ }
+]
