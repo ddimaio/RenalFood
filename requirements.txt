@@ -1,0 +1,6 @@
+# Desktop app (renal_diet_calc.py) needs only the standard library (Tkinter).
+# Streamlit app (renal_diet_app.py):
+streamlit
+pandas
+# Optional - makes the optimiser faster:
+scipy

@@ -1,0 +1,34 @@
+[
+ {
+  "name": "Rice, white, raw (dry, unenriched)",
+  "category": "food",
+  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked.",
+  "per100g": {
+   "kcal": 365,
+   "water": 11.6,
+   "protein": 7.1,
+   "fat": 0.7,
+   "carb": 80.0,
+   "fibre": 1.3,
+   "ca": 28,
+   "p": 115,
+   "na": 5,
+   "k": 115,
+   "mg": 25,
+   "vit_a": 0,
+   "b1": 0.07,
+   "b2": 0.05,
+   "b3": 1.6,
+   "b6": 0.16,
+   "b12": 0,
+   "folate": 8,
+   "vit_c": 0,
+   "epa_dha": 0,
+   "base_meq": 0,
+   "b5": 1.01,
+   "choline": 5.8,
+   "vit_d": 0,
+   "vit_e": 0.16
+  }
+ }
+]

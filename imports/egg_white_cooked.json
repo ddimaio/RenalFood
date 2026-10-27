@@ -1,0 +1,34 @@
+[
+ {
+  "name": "Egg white, cooked (boiled/poached, no fat)",
+  "category": "food",
+  "note": "Based on USDA raw egg white: boiling or poaching without fat barely changes composition per 100 g. Small B-vitamin losses with heat; if fried, add the oil separately.",
+  "per100g": {
+   "kcal": 52,
+   "water": 87.6,
+   "protein": 10.9,
+   "fat": 0.2,
+   "carb": 0.7,
+   "fibre": 0,
+   "ca": 7,
+   "p": 15,
+   "na": 166,
+   "k": 163,
+   "mg": 11,
+   "vit_a": 0,
+   "b1": 0.004,
+   "b2": 0.4,
+   "b3": 0.11,
+   "b6": 0.005,
+   "b12": 0.08,
+   "folate": 3,
+   "vit_c": 0,
+   "epa_dha": 0,
+   "base_meq": 0,
+   "b5": 0.19,
+   "choline": 1.1,
+   "vit_d": 0,
+   "vit_e": 0
+  }
+ }
+]
