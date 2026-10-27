@@ -90,7 +90,10 @@ RENAL = {
     "p": (400, 1200),        # mg
     "na": (400, 1200),       # mg
     "k": (800, 2100),        # mg
-    "epa_dha": (32, 1200),   # mg
+    # EPA+DHA: 32 = lowest level in commercial renal diets (ACVN table, whose
+    # 1200 top is just the highest diet, not a limit); upper bound = NRC 2006
+    # safe upper limit for dogs, 280 mg/100 kcal
+    "epa_dha": (32, 2800),   # mg
 }
 # AAFCO adult maintenance minimums, per 1000 kcal ME
 AAFCO = {
@@ -441,7 +444,8 @@ def status_for(k, per1000, renal_mode):
             msgs.append("below renal range")
             tag = "warn" if k in ("epa_dha", "na") else "bad"
         elif per1000 > hi:
-            msgs.append("above renal range")
+            msgs.append("above NRC safe upper limit" if k == "epa_dha"
+                        else "above renal range")
             tag = "bad"
         else:
             msgs.append("in renal range")
