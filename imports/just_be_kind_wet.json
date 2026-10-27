@@ -1,0 +1,35 @@
+[
+ {
+  "name": "Just Be Kind vegan wet dog food (290 g tray)",
+  "category": "commercial food",
+  "note": "From label (as fed). Ca, P, Na, K, Mg not declared - ask info@justbekind.co.uk. Vitamins D3, E, B1, B12, niacin are the ADDED amounts only (ingredients add a little more). Contains algae; EPA+DHA not stated. Also adds taurine, L-carnitine, zinc, copper, iodine, selenium, methionine, tryptophan.",
+  "per100g": {
+   "kcal": 89,
+   "water": 79,
+   "protein": 6.1,
+   "fat": 4.5,
+   "carb": 9.0,
+   "fibre": 1.1,
+   "ca": null,
+   "p": null,
+   "na": null,
+   "k": null,
+   "mg": null,
+   "vit_a": null,
+   "b1": 1.0,
+   "b2": null,
+   "b3": 1.5,
+   "b5": null,
+   "b6": null,
+   "b12": 7.5,
+   "folate": null,
+   "choline": null,
+   "vit_d": 20,
+   "vit_e": 2.0,
+   "vit_c": null,
+   "epa_dha": null,
+   "base_meq": 0,
+   "p_bind": 0
+  }
+ }
+]

@@ -466,20 +466,33 @@ with tab_gen:
                      and rc.ingredient_role(db[n]) != "binder"),
                     key=lambda n: (rc.ROLES.index(rc.ingredient_role(db[n])),
                                    n.lower()))
-    st.caption("Untick anything you do not want used (e.g. animal "
-               "products). Roles are assigned automatically.")
+    st.caption("Untick **Use** for anything you do not want (e.g. animal "
+               "products). Tick **Always include** to force an ingredient "
+               "into every recipe – its amount is optimised but never below "
+               "**Min g** (blank = 5 g, 0.5 g for oils/supplements). A forced "
+               "protein, starch or vegetable fills that role. Roles are "
+               "assigned automatically.")
     gdf = st.data_editor(
-        pd.DataFrame({"Use": True,
+        pd.DataFrame({"Use": True, "Always include": False,
+                      "Min g": pd.Series([None] * len(gnames),
+                                         dtype="float"),
                       "Role": [rc.ingredient_role(db[n]) for n in gnames],
                       "Ingredient": gnames}),
         hide_index=True, **FULL, height=300,
-        disabled=["Role", "Ingredient"], key=f"g_pool_{ss.lib_ver}")
+        disabled=["Role", "Ingredient"], key=f"g_pool_{ss.lib_ver}",
+        column_config={"Min g": st.column_config.NumberColumn(
+            "Min g", min_value=0.0, step=1.0, format="%g")})
 
     if st.button("Generate", type="primary", key="g_run"):
         ctx = score_context(gk)
         if ign:
             ctx["weights"]["vitamins"] = 0.0
-        pool = list(gdf.loc[gdf["Use"], "Ingredient"])
+        frows = gdf[gdf["Always include"]]
+        forced = {rw["Ingredient"]: (None if pd.isna(rw["Min g"])
+                                     else float(rw["Min g"]))
+                  for _, rw in frows.iterrows()}
+        pool = list(gdf.loc[gdf["Use"] | gdf["Always include"],
+                            "Ingredient"])
         if len(pool) < 2:
             st.error("Select more ingredients.")
         else:
@@ -491,9 +504,10 @@ with tab_gen:
             res = rc.generate_recipes(
                 db, pool, ctx, gn, gmax,
                 [tuple(x) for x in ss.recipe] if fixed_base else (),
-                prog, n_veg=gveg, veg_max_uses=guse, veg_min_g=gmin)
+                prog, n_veg=gveg, veg_max_uses=guse, veg_min_g=gmin,
+                forced=forced)
             bar.empty()
-            ss.gen_result = {"ctx": ctx, "res": res,
+            ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),
                              "n_fixed": len(ss.recipe) if fixed_base else 0}
 
     gr = ss.gen_result
@@ -519,8 +533,9 @@ with tab_gen:
                     "Role": [rc.ingredient_role(db[n]) for n in names],
                     "g/day": [round(x, 1) for x in g],
                     "kcal": [fmt_kcal(n, x) for n, x in zip(names, g)],
-                    "": ["fixed" if j < gr["n_fixed"] else ""
-                         for j in range(len(names))]}),
+                    "": ["fixed" if j < gr["n_fixed"] else
+                         "forced" if n in gr.get("forced", []) else ""
+                         for j, n in enumerate(names)]}),
                     hide_index=True, **FULL)
                 capr = per["ca"] / per["p"] if per["p"] else 0
                 cc[1].markdown(

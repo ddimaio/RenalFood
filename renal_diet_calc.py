@@ -753,7 +753,7 @@ def _family(name):
 
 def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                      progress=None, cancelled=lambda: False, n_veg=2,
-                     veg_max_uses=2, veg_min_g=None):
+                     veg_max_uses=2, veg_min_g=None, forced=None):
     """Build balanced recipes from scratch.
     Stage 1: every protein x starch x vegetable base (amounts optimised).
     Stage 2: best bases get vegetables added up to n_veg (forced, for
@@ -763,21 +763,30 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     family, each vegetable in at most veg_max_uses recipes, every vegetable
     kept at >= veg_min_g grams.
     fixed: [(name, grams)] always included at locked amounts (e.g. kibble).
+    forced: {name: min_grams} always included, amounts optimised (>= min).
+            A forced protein/starch/vegetable fills that role in the base.
     Returns up to n_recipes distinct (names, grams, score, terms), best first.
     """
+    forced = {n: m for n, m in (forced or {}).items()
+              if n in db and n not in [f for f, _ in fixed]}
     fx_names = [n for n, _ in fixed]
     fx_g = [g for _, g in fixed]
     fx_b = [(g, g, True) for g in fx_g]
     nfx = len(fx_names)
+    fo_names = list(forced)
+    base_names = fx_names + fo_names    # in every recipe, in this order
+    nb = len(base_names)
     tgt = ctx["kcal_target"]
     roles = {n: ingredient_role(db[n]) for n in pool}
-    for n in fx_names:
+    for n in base_names:
         roles.setdefault(n, ingredient_role(db[n]))
-    by = {r: [n for n in pool if roles[n] == r and n not in fx_names]
+    by = {r: [n for n in pool if roles[n] == r and n not in base_names]
           for r in ROLES}
-    groups = [by[r] for r in ("protein", "starch", "veg") if by[r]]
-    if not groups:
-        groups = [[n for n in pool if n not in fx_names
+    filled = {roles[n] for n in fo_names}        # roles covered by forced
+    groups = [by[r] for r in ("protein", "starch", "veg")
+              if by[r] and r not in filled]
+    if not groups and not fo_names:
+        groups = [[n for n in pool if n not in base_names
                    and roles[n] not in ("binder", "supplement")]]
     combos = [[]]
     for grp in groups:
@@ -787,10 +796,20 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         lo, hi = default_bounds(db[n], tgt)
         if roles.get(n) == "veg" and veg_min_g:
             lo = min(veg_min_g, hi)
+        if n in forced:
+            dflt = 0.5 if roles.get(n) in ("oil", "supplement") else 5.0
+            lo = max(lo, forced[n] or dflt)
+            hi = max(hi, lo)
         return (lo, hi, False)
 
-    def vegs(names, grams=None):
-        return [n for i, n in enumerate(names) if i >= nfx and
+    fo_b = [bnd(n) for n in fo_names]
+    fo_x0 = [max(b[0], 1.0) for b in fo_b]
+
+    def vegs(names, grams=None, variety=False):
+        """Vegetables in a recipe (forced ones count towards n_veg but not
+        towards the variety caps)."""
+        start = nb if variety else nfx
+        return [n for i, n in enumerate(names) if i >= start and
                 roles.get(n) == "veg" and (grams is None or grams[i] >= 2)]
 
     # ---- stage 1
@@ -800,9 +819,9 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             return []
         if progress and i % 5 == 0:
             progress("Testing base combinations", i, len(combos))
-        names = fx_names + combo
-        g, s, t = optimise(names, db, fx_b + [bnd(n) for n in combo],
-                           fx_g + [0.0] * len(combo), ctx,
+        names = base_names + combo
+        g, s, t = optimise(names, db, fx_b + fo_b + [bnd(n) for n in combo],
+                           fx_g + fo_x0 + [0.0] * len(combo), ctx,
                            use_scipy=False, max_evals=1500)
         bases.append((s, names, g))
     bases.sort(key=lambda b: b[0])
@@ -814,15 +833,15 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     for strict in (True, False):
         fams = {}
         for b in bases:
-            first = b[1][nfx] if len(b[1]) > nfx else ""
+            first = b[1][nb] if len(b[1]) > nb else ""
             fams.setdefault(_family(first), []).append(b)
         while len(keep) < n_keep and any(fams.values()):
             for fam in sorted(fams, key=lambda f: fams[f][0][0] if fams[f]
                               else 1e9):
                 while fams[fam]:
                     s, names, g = fams[fam].pop(0)
-                    key = tuple(names[nfx:][:2])
-                    vf = [_family(v) for v in vegs(names)]
+                    key = tuple(names[nb:][:2])
+                    vf = [_family(v) for v in vegs(names, variety=True)]
                     if key in seen or (strict and any(
                             vuse.get(f, 0) >= veg_max_uses for f in vf)):
                         continue
@@ -840,7 +859,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     results = []
     used = {}                            # vegetable family -> recipes so far
     # keep each base's protein identity: no second main-protein food
-    extra_pool = [n for n in pool if n not in fx_names
+    extra_pool = [n for n in pool if n not in base_names
                   and roles[n] not in ("binder", "protein")]
 
     def try_add(cur_n, cur_b, cur_g, cands):
@@ -855,7 +874,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
 
     for bi, (s, names, g) in enumerate(keep):
         cur_n, cur_g, cur_s = list(names), list(g), s
-        cur_b = fx_b + [bnd(n) for n in names[nfx:]]
+        cur_b = fx_b + fo_b + [bnd(n) for n in names[nb:]]
         if progress:
             progress(f"Refining recipe {bi + 1}/{len(keep)}", bi, len(keep))
 
@@ -900,13 +919,13 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         # final polish, drop trivial amounts (vegetables keep their minimum)
         g2, s2, t2 = optimise(cur_n, db, cur_b, cur_g, ctx)
         keep_idx = [i for i, (n, a) in enumerate(zip(cur_n, g2))
-                    if i < nfx or a >= (0.1 if roles.get(n) in
-                                        ("supplement", "oil") else 2.0)]
+                    if i < nb or a >= (0.1 if roles.get(n) in
+                                       ("supplement", "oil") else 2.0)]
         cur_n = [cur_n[i] for i in keep_idx]
         cur_b = [cur_b[i] for i in keep_idx]
         g2, s2, t2 = optimise(cur_n, db, cur_b, [g2[i] for i in keep_idx],
                               ctx)
-        for f in {_family(v) for v in vegs(cur_n, g2)}:
+        for f in {_family(v) for v in vegs(cur_n, g2, variety=True)}:
             used[f] = used.get(f, 0) + 1
         results.append((cur_n, g2, s2, t2))
 
@@ -916,7 +935,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     def main_protein(r):
         cand = [(a * (db[n]["per100g"]["kcal"] or 0), n)
                 for n, a in zip(r[0], r[1])
-                if roles.get(n) == "protein" and n not in fx_names]
+                if roles.get(n) == "protein" and n not in base_names]
         return _family(max(cand)[1]) if cand else None
 
     out, sigs, per_prot, per_veg = [], [], {}, {}
@@ -930,7 +949,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             if any(len(sig & o) / max(1, len(sig | o)) > 0.75 for o in sigs):
                 continue
             mp = main_protein(r)
-            vf = {_family(v) for v in vegs(r[0], r[1])}
+            vf = {_family(v) for v in vegs(r[0], r[1], variety=True)}
             if strict and (per_prot.get(mp, 0) >= 2 or any(
                     per_veg.get(f, 0) >= veg_max_uses for f in vf)):
                 continue
@@ -1505,6 +1524,29 @@ class GeneratorDialog(tk.Toplevel):
         ttk.Button(bb, text="None", command=lambda: self.lb.select_clear(
             0, "end")).pack(side="left", padx=4)
 
+        ff = ttk.LabelFrame(frm, text="Always include (amount optimised, "
+                                      "at least the minimum)", padding=6)
+        ff.pack(fill="x", pady=(6, 0))
+        r2 = ttk.Frame(ff)
+        r2.pack(fill="x")
+        self.f_pick = ttk.Combobox(r2, values=sorted(app.db, key=str.lower),
+                                   width=42)
+        self.f_pick.pack(side="left")
+        ttk.Label(r2, text=" min g").pack(side="left")
+        self.f_min = tk.StringVar(value="")
+        ttk.Entry(r2, textvariable=self.f_min, width=6).pack(side="left",
+                                                             padx=4)
+        ttk.Button(r2, text="Add", command=self.add_forced).pack(side="left")
+        ttk.Button(r2, text="Remove selected",
+                   command=self.remove_forced).pack(side="left", padx=4)
+        self.forced = {}
+        self.f_list = tk.Listbox(ff, height=3, exportselection=False)
+        self.f_list.pack(fill="x", pady=(4, 0))
+        ttk.Label(ff, foreground="#555", wraplength=700, justify="left",
+                  text="A forced protein, starch or vegetable fills that role "
+                       "(no second one is added). Blank min = 5 g (0.5 g for "
+                       "oils/supplements).").pack(anchor="w")
+
         bot = ttk.Frame(frm)
         bot.pack(fill="x", pady=(8, 0))
         self.run_btn = ttk.Button(bot, text="Generate", command=self.run)
@@ -1517,6 +1559,32 @@ class GeneratorDialog(tk.Toplevel):
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left")
         self.protocol("WM_DELETE_WINDOW", self.close)
+
+    def add_forced(self):
+        n = self.f_pick.get().strip()
+        if n not in self.app.db:
+            messagebox.showerror("Always include", "Pick an ingredient from "
+                                 "the list.", parent=self)
+            return
+        try:
+            m = to_float(self.f_min.get())
+        except ValueError:
+            messagebox.showerror("Always include", "Min g must be a number.",
+                                 parent=self)
+            return
+        self.forced[n] = m
+        self._refresh_forced()
+
+    def remove_forced(self):
+        for i in reversed(self.f_list.curselection()):
+            self.forced.pop(list(self.forced)[i], None)
+        self._refresh_forced()
+
+    def _refresh_forced(self):
+        self.f_list.delete(0, "end")
+        for n, m in self.forced.items():
+            self.f_list.insert("end", f"{n}  –  min "
+                               + (f"{m:g} g" if m else "default"))
 
     def stop(self):
         self._cancel = True
@@ -1541,6 +1609,7 @@ class GeneratorDialog(tk.Toplevel):
             messagebox.showerror("Generate", "Check the numbers.", parent=self)
             return
         pool = [self.names[i] for i in self.lb.curselection()]
+        pool += [n for n in self.forced if n not in pool]
         if len(pool) < 2:
             messagebox.showerror("Generate", "Select more ingredients.",
                                  parent=self)
@@ -1562,7 +1631,8 @@ class GeneratorDialog(tk.Toplevel):
             res = generate_recipes(app.db, pool, ctx, n, max_ing, fixed,
                                    progress, lambda: self._cancel,
                                    n_veg=n_veg, veg_max_uses=veg_uses,
-                                   veg_min_g=veg_min)
+                                   veg_min_g=veg_min,
+                                   forced=dict(self.forced))
         except tk.TclError:              # window closed mid-run
             return
         if not self.winfo_exists():
@@ -1574,13 +1644,14 @@ class GeneratorDialog(tk.Toplevel):
             return
         self.status.config(text=f"Done – {len(res)} recipes.")
         if res:
-            GenResultsWindow(app, ctx, res, len(fixed))
+            GenResultsWindow(app, ctx, res, len(fixed), set(self.forced))
 
 
 class GenResultsWindow(tk.Toplevel):
-    def __init__(self, app, ctx, results, n_fixed):
+    def __init__(self, app, ctx, results, n_fixed, forced=()):
         super().__init__(app)
         self.app, self.ctx, self.results = app, ctx, results
+        self.forced = set(forced)
         self.title("Generated recipes")
         self.geometry("900x760")
         frm = ttk.Frame(self, padding=8)
@@ -1619,7 +1690,8 @@ class GenResultsWindow(tk.Toplevel):
             w = max(len(n) for n in names) + 2
             for j, (n, a) in enumerate(zip(names, g)):
                 kc = (db[n]["per100g"]["kcal"] or 0) * a / 100
-                tag = "  (fixed)" if j < n_fixed else ""
+                tag = ("  (fixed)" if j < n_fixed else
+                       "  (forced)" if n in self.forced else "")
                 L.append(f"  {n:<{w}} {a:>7.1f} g  {kc:>5.0f} kcal{tag}")
             capr = per["ca"] / per["p"] if per["p"] else 0
             L.append(f"  per 1000 kcal: protein {per['protein']:.0f} g, "
