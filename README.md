@@ -25,6 +25,10 @@ scripts on first run.
 - Checks against ACVN renal-diet ranges, AAFCO adult minimums/maximums and
   IRIS stage guidance; Ca:P, calcium and vitamin D excess, acid load
   (indicative), fat share, phosphate binders (estimated binding).
+- EPA+DHA floor in renal stages from the ACVN therapeutic dose
+  (140 mg × BW^0.75 a day) spread over the daily energy target.
+- Missing nutrient values are not treated as zero: totals are minimums, so
+  shortfalls in those nutrients are not scored, only excesses.
 - Daily energy need (MER = factor × 70 × BW^0.75) and scaling to body weight.
 - Optimiser: best amounts for chosen ingredients + suggested additions.
 - Generator: balanced recipes from the whole library, with protein and

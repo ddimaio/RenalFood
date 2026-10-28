@@ -92,10 +92,16 @@ RENAL = {
     "na": (400, 1200),       # mg
     "k": (800, 2100),        # mg
     # EPA+DHA: 32 = lowest level in commercial renal diets (ACVN table, whose
-    # 1200 top is just the highest diet, not a limit); upper bound = NRC 2006
-    # safe upper limit for dogs, 280 mg/100 kcal
+    # 1200 top is just the highest diet, not a limit) - only a fallback when
+    # body weight is unknown; with a body weight the floor is the therapeutic
+    # dose below (omega3_floor). Upper bound = NRC 2006 safe upper limit for
+    # dogs, 280 mg/100 kcal
     "epa_dha": (32, 2800),   # mg
 }
+# Therapeutic EPA+DHA dose for dogs with CKD, mg per kg^0.75 per day (ACVN
+# Nutrition Notes, 2016; ~ the older 40 mg/kg EPA + 25 mg/kg DHA). Turned
+# into a per-1000 kcal floor from body weight and the daily energy target.
+OMEGA3_DOSE_MG_PER_KG075 = 140
 # AAFCO adult maintenance minimums, per 1000 kcal ME
 AAFCO = {
     "protein": 45, "fat": 13.8, "ca": 1250, "p": 1000, "k": 1500, "na": 200,
@@ -446,7 +452,22 @@ def get_ranges(ctx=None):
     r = {**RENAL, **DEFAULT_LIMITS}
     for k, v in ((ctx or {}).get("ranges") or {}).items():
         r[k] = tuple(v) if isinstance(v, (list, tuple)) else v
+    fl = omega3_floor(ctx)
+    if fl is not None:                   # dose floor never lowered
+        lo, hi = r["epa_dha"]
+        r["epa_dha"] = (round(min(max(lo, fl), hi)), hi)
     return r
+
+
+def omega3_floor(ctx):
+    """EPA+DHA floor in mg/1000 kcal: the therapeutic daily dose for the
+    dog's body weight (ctx['bw'], kg) spread over the daily energy target
+    (ctx['kcal_target']). None when either is unknown."""
+    bw = (ctx or {}).get("bw") or 0
+    kcal = (ctx or {}).get("kcal_target") or 0
+    if bw <= 0 or kcal <= 0:
+        return None
+    return OMEGA3_DOSE_MG_PER_KG075 * bw ** 0.75 / kcal * 1000.0
 
 
 def status_for(k, per1000, renal_mode, ranges=None):
@@ -534,7 +555,14 @@ def default_bounds(item, kcal_target=None):
 
 
 def _vec(item):
-    return [item["per100g"][k] or 0.0 for k in KEYS]   # unknown -> 0
+    return [item["per100g"][k] for k in KEYS]   # unknown stays None
+
+
+def _unknown(g, vecs):
+    """Nutrients with no value for at least one ingredient in use. Their
+    totals (unknowns counted as 0) are only lower bounds."""
+    return {k for gi, v in zip(g, vecs) if gi > 0
+            for k, val in zip(KEYS, v) if val is None}
 
 
 def _totals(g, vecs):
@@ -570,46 +598,57 @@ def score_amounts(g, vecs, ctx):
         return 1e6, {"Energy": 1e6}
     W, terms = ctx["weights"], {}
     R = get_ranges(ctx)
+    unk = _unknown(g, vecs)
 
     def add(name, w, val):
         if val > 0 and w > 0:
             terms[name] = terms.get(name, 0.0) + w * val
+
+    def bandk(k, v, lo, hi):
+        # an unknown value can only add to the known total, so a shortfall
+        # may not be real - only an excess is certain
+        return _band(v, None if k in unk else lo, hi)
 
     tgt = ctx["kcal_target"]
     add("Energy", W["energy"], ((kcal - tgt) / tgt) ** 2)
     # phosphorus net of any (locked) binder
     p_eff = max(0.0, per["p"] - per["p_bind"])
     if ctx["renal"]:
-        add("Phosphorus", W["phosphorus"], _band(p_eff, *R["p"]))
-        add("Protein", W["protein"], _band(per["protein"], *R["protein"]))
-        add("Sodium", W["sodium"], _band(per["na"], *R["na"]))
-        add("Potassium", W["potassium"], _band(per["k"], *R["k"]))
-        add("EPA+DHA", W["omega3"], _band(per["epa_dha"], *R["epa_dha"]))
+        add("Phosphorus", W["phosphorus"], bandk("p", p_eff, *R["p"]))
+        add("Protein", W["protein"],
+            bandk("protein", per["protein"], *R["protein"]))
+        add("Sodium", W["sodium"], bandk("na", per["na"], *R["na"]))
+        add("Potassium", W["potassium"], bandk("k", per["k"], *R["k"]))
+        add("EPA+DHA", W["omega3"],
+            bandk("epa_dha", per["epa_dha"], *R["epa_dha"]))
         for k, aim in ctx["aims"].items():
-            if aim:
+            if aim and k not in unk:
                 v = p_eff if k == "p" else per[k]
                 add(f"{LABEL[k]} vs aim", W["aim"], ((v - aim) / aim) ** 2)
     else:
-        add("Protein", W["protein"], _band(per["protein"], AAFCO["protein"], None))
-        add("Phosphorus", W["phosphorus"], _band(per["p"], AAFCO["p"], None))
-        add("Sodium", W["sodium"], _band(per["na"], AAFCO["na"], None))
-        add("Potassium", W["potassium"], _band(per["k"], AAFCO["k"], None))
-    if per["p"] > 0:
+        add("Protein", W["protein"],
+            bandk("protein", per["protein"], AAFCO["protein"], None))
+        add("Phosphorus", W["phosphorus"],
+            bandk("p", per["p"], AAFCO["p"], None))
+        add("Sodium", W["sodium"], bandk("na", per["na"], AAFCO["na"], None))
+        add("Potassium", W["potassium"],
+            bandk("k", per["k"], AAFCO["k"], None))
+    if per["p"] > 0 and not {"ca", "p"} & unk:
         add("Ca:P ratio", W["ca_p"], _band(per["ca"] / per["p"], *R["ca_p"]))
     add("Calcium (max)", W["ca_p"], _band(per["ca"], None, R["ca_max"]))
-    if W.get("acid"):                    # set from low blood bicarbonate
+    if W.get("acid") and not {"protein", "p", "k", "mg", "ca"} & unk:
         add("Acid load", W["acid"], (max(0.0, pral(per)) / 50.0) ** 2)
     add("Vitamin D (max)", W["ca_p"], _band(per["vit_d"], None,
                                             AAFCO_MAX["vit_d"]))
     for k in MICROS:
-        add(LABEL[k], W["micros"] * 0.5, _band(per[k], AAFCO[k], None))
+        add(LABEL[k], W["micros"] * 0.5, bandk(k, per[k], AAFCO[k], None))
     for k in VITAMINS:
         add(LABEL[k], W.get("vitamins", W["micros"]) * 0.5,
-            _band(per[k], AAFCO[k], None))
+            bandk(k, per[k], AAFCO[k], None))
     fat_me = 8.5 * t[KI["fat"]]
     me = (fat_me + 3.5 * t[KI["protein"]] +
           3.5 * max(0.0, t[KI["carb"]] - t[KI["fibre"]]))
-    if me > 0:
+    if me > 0 and not {"fat", "protein", "carb", "fibre"} & unk:
         add("Fat % of calories", W["fat"], _band(fat_me / me, None, 0.55))
     add("Fibre (bulk)", W.get("fibre", 0), _band(per["fibre"], None, FIBRE_MAX))
     return sum(terms.values()), terms
@@ -645,7 +684,7 @@ def optimise(names, db, bounds, x0, ctx, use_scipy=True, max_evals=5000):
     """names: ingredients; bounds: [(min, max, locked)] in g/day; x0: start
     grams (locked items keep x0). Returns (grams, score, terms)."""
     vecs = [_vec(db[n]) for n in names]
-    kc = [v[KI["kcal"]] for v in vecs]
+    kc = [v[KI["kcal"]] or 0.0 for v in vecs]
     free = [i for i, (lo, hi, lk) in enumerate(bounds) if not lk and hi > 0]
     fixed = [i for i in range(len(names)) if i not in free]
     tgt = ctx["kcal_target"]
@@ -1027,8 +1066,15 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
             out.append("• POTASSIUM above renal range – check bloodwork; "
                        "some CKD dogs run high.")
         if per["epa_dha"] < R["epa_dha"][0]:
-            out.append("• EPA+DHA is very low – renal diets add long-chain "
-                       "omega-3 (fish or algal oil).")
+            basis = ("therapeutic dose ≈ "
+                     f"{OMEGA3_DOSE_MG_PER_KG075} mg × BW^0.75 a day, ACVN"
+                     if R["epa_dha"][0] > RENAL["epa_dha"][0] else
+                     "lowest commercial renal diet - enter body weight for "
+                     "the therapeutic dose")
+            out.append(f"• EPA+DHA {per['epa_dha']:.0f} mg/1000 kcal is "
+                       f"below the {R['epa_dha'][0]:g} floor ({basis}) – add "
+                       "long-chain omega-3 (fish or algal oil); agree the "
+                       "dose with your vet.")
     else:
         if per["p"] > 2000:
             out.append("• Phosphorus is well above typical maintenance "
@@ -1114,7 +1160,8 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
     missing = sorted({n for k in KEYS for n in miss[k]})
     if missing:
         out.append("• Incomplete data for: " + ", ".join(missing) +
-                   " – values marked ≥ are minimums.")
+                   " – values marked ≥ are minimums. Shortfalls in those "
+                   "nutrients are not scored (only excesses are certain).")
     out += ["", "Not checked: trace minerals (Zn, Cu, Fe, I, Se), vitamin "
             "K, biotin, essential fatty acids, amino-acid balance. A "
             "home-made renal diet should be balanced by a vet "
@@ -1580,13 +1627,13 @@ def adapt_from_bloods(b, current_stage="Stage 2"):
             "note": note}
 
 
-def build_score_context(sc, stage, need):
+def build_score_context(sc, stage, need, bw=None):
     """Scoring ctx from saved settings `sc` (optimiser run and/or blood
     adaptation). Saved aims/ranges only apply to the stage they were made
-    for."""
+    for. bw (kg) sets the EPA+DHA dose floor."""
     sc = sc or {}
     same = sc.get("stage") == stage
-    ctx = {"kcal_target": sc.get("kcal_override") or need,
+    ctx = {"kcal_target": sc.get("kcal_override") or need, "bw": bw,
            "renal": STAGES[stage][0] or bool(same and sc.get("renal_force")),
            "weights": {**OPT_WEIGHTS, **sc.get("weights", {})},
            "aims": (dict(sc["aims"]) if same and "aims" in sc
@@ -2328,6 +2375,7 @@ class OptimiseDialog(tk.Toplevel):
         ctx0 = app.score_context()
         self.renal = ctx0["renal"]
         self.ranges = ctx0.get("ranges", {})
+        self.bw = ctx0.get("bw")
         R0 = get_ranges(ctx0)
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
@@ -2446,7 +2494,7 @@ class OptimiseDialog(tk.Toplevel):
     def run(self):
         app = self.app
         try:
-            ctx = {"kcal_target": float(self.kcal.get()),
+            ctx = {"kcal_target": float(self.kcal.get()), "bw": self.bw,
                    "renal": self.renal, "ranges": dict(self.ranges),
                    "weights": {k: float(v.get()) for k, v in self.w.items()},
                    "aims": {k: to_float(v.get()) for k, v in
@@ -3085,7 +3133,13 @@ class App(tk.Tk):
         """Scoring settings: last optimiser run / blood adaptation if for the
         same stage, else defaults."""
         return build_score_context(self.score_ctx, self.stage.get(),
-                                   self.current_mer())
+                                   self.current_mer(), self.current_bw())
+
+    def current_bw(self):
+        try:
+            return float(self.bw.get().replace(",", "."))
+        except ValueError:
+            return None
 
     def current_mer(self):
         try:

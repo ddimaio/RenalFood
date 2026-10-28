@@ -149,7 +149,7 @@ def need_now():
 def score_context(kcal=None):
     """Last optimiser/generator settings or blood adaptation for this stage,
     else defaults."""
-    ctx = rc.build_score_context(ss.score_ctx, ss.stage, need_now())
+    ctx = rc.build_score_context(ss.score_ctx, ss.stage, need_now(), ss.bw)
     if kcal:
         ctx["kcal_target"] = kcal
     return ctx
@@ -573,7 +573,8 @@ with tab_opt:
             if do_sug else None
 
         if st.button("Run optimisation", type="primary", key="o_run"):
-            ctx = {"kcal_target": o_kcal, "renal": ctx0["renal"],
+            ctx = {"kcal_target": o_kcal, "bw": ctx0.get("bw"),
+                   "renal": ctx0["renal"],
                    "ranges": dict(ctx0.get("ranges", {})),
                    "weights": weights, "aims": {k: v for k, v in
                                                 aims.items() if v}}
