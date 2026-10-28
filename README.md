@@ -52,7 +52,9 @@ use their labels. Iodine is rarely in FDC.
 ## Extra ingredients
 
 `imports/` holds JSON files to import via **Import CSV/JSON**: dry white
-rice, cooked egg white, and oils (rapeseed, coconut, linseed, hemp, walnut).
+rice, cooked egg white, oils (rapeseed, coconut, linseed, hemp, walnut)
+and mushrooms (white, chestnut, portobello, shiitake, oyster; also in the
+library).
 
 ## Sources
 
