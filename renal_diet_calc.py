@@ -435,11 +435,25 @@ def fmt(v):
     return f"{v:.3f}" if v else "0"
 
 
-def status_for(k, per1000, renal_mode):
+# Extra limits that blood results can tighten (defaults = AAFCO)
+DEFAULT_LIMITS = {"ca_p": (1.0, 2.0), "ca_max": AAFCO_MAX["ca"]}
+
+
+def get_ranges(ctx=None):
+    """Renal ranges + Ca limits, with any blood-adapted overrides in
+    ctx['ranges'] applied."""
+    r = {**RENAL, **DEFAULT_LIMITS}
+    for k, v in ((ctx or {}).get("ranges") or {}).items():
+        r[k] = tuple(v) if isinstance(v, (list, tuple)) else v
+    return r
+
+
+def status_for(k, per1000, renal_mode, ranges=None):
     """Returns (text, tag) comparing a nutrient per 1000 kcal to targets."""
     msgs, tag = [], ""
+    R = ranges or RENAL
     if renal_mode and k in RENAL:
-        lo, hi = RENAL[k]
+        lo, hi = R[k]
         if per1000 < lo:
             msgs.append("below renal range")
             tag = "warn" if k in ("epa_dha", "na") else "bad"
@@ -480,14 +494,14 @@ KI = {k: i for i, k in enumerate(KEYS)}
 OPT_WEIGHTS = {"energy": 10.0, "phosphorus": 5.0, "protein": 4.0,
                "ca_p": 3.0, "sodium": 1.0, "potassium": 1.0, "omega3": 1.0,
                "micros": 1.0, "vitamins": 1.0, "fat": 1.0, "fibre": 2.0,
-               "aim": 0.5}
+               "aim": 0.5, "acid": 0.0}
 WEIGHT_LABELS = {"energy": "Energy", "phosphorus": "Phosphorus",
                  "protein": "Protein", "ca_p": "Ca:P ratio",
                  "sodium": "Sodium", "potassium": "Potassium",
                  "omega3": "EPA+DHA", "micros": "Fat/Ca/Mg minimums",
                  "vitamins": "Vitamin minimums",
                  "fat": "Fat ≤55% kcal", "fibre": "Fibre ≤15 g/1000kcal",
-                 "aim": "Pull to aims"}
+                 "aim": "Pull to aims", "acid": "Acid load (PRAL)"}
 # Practical bulk limit (app default, not a published renal target): total
 # dietary fibre per 1000 kcal. Stops the optimiser filling up on vegetables.
 FIBRE_MAX = 15.0
@@ -554,6 +568,7 @@ def score_amounts(g, vecs, ctx):
     if kcal <= 1e-6:
         return 1e6, {"Energy": 1e6}
     W, terms = ctx["weights"], {}
+    R = get_ranges(ctx)
 
     def add(name, w, val):
         if val > 0 and w > 0:
@@ -564,11 +579,11 @@ def score_amounts(g, vecs, ctx):
     # phosphorus net of any (locked) binder
     p_eff = max(0.0, per["p"] - per["p_bind"])
     if ctx["renal"]:
-        add("Phosphorus", W["phosphorus"], _band(p_eff, *RENAL["p"]))
-        add("Protein", W["protein"], _band(per["protein"], *RENAL["protein"]))
-        add("Sodium", W["sodium"], _band(per["na"], *RENAL["na"]))
-        add("Potassium", W["potassium"], _band(per["k"], *RENAL["k"]))
-        add("EPA+DHA", W["omega3"], _band(per["epa_dha"], *RENAL["epa_dha"]))
+        add("Phosphorus", W["phosphorus"], _band(p_eff, *R["p"]))
+        add("Protein", W["protein"], _band(per["protein"], *R["protein"]))
+        add("Sodium", W["sodium"], _band(per["na"], *R["na"]))
+        add("Potassium", W["potassium"], _band(per["k"], *R["k"]))
+        add("EPA+DHA", W["omega3"], _band(per["epa_dha"], *R["epa_dha"]))
         for k, aim in ctx["aims"].items():
             if aim:
                 v = p_eff if k == "p" else per[k]
@@ -579,8 +594,10 @@ def score_amounts(g, vecs, ctx):
         add("Sodium", W["sodium"], _band(per["na"], AAFCO["na"], None))
         add("Potassium", W["potassium"], _band(per["k"], AAFCO["k"], None))
     if per["p"] > 0:
-        add("Ca:P ratio", W["ca_p"], _band(per["ca"] / per["p"], 1.0, 2.0))
-    add("Calcium (max)", W["ca_p"], _band(per["ca"], None, AAFCO_MAX["ca"]))
+        add("Ca:P ratio", W["ca_p"], _band(per["ca"] / per["p"], *R["ca_p"]))
+    add("Calcium (max)", W["ca_p"], _band(per["ca"], None, R["ca_max"]))
+    if W.get("acid"):                    # set from low blood bicarbonate
+        add("Acid load", W["acid"], (max(0.0, pral(per)) / 50.0) ** 2)
     add("Vitamin D (max)", W["ca_p"], _band(per["vit_d"], None,
                                             AAFCO_MAX["vit_d"]))
     for k in MICROS:
@@ -970,16 +987,21 @@ def improvement_reasons(before, after, n=3):
 
 
 def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
-                  acid, k1000, renal_mode, stage_note, fat_frac):
+                  acid, k1000, renal_mode, stage_note, fat_frac, ranges=None,
+                  blood_note=""):
     """Plain-language assessment notes for a recipe."""
-    out = [f"{stage_name}: {stage_note}", ""]
+    R = ranges or get_ranges()
+    out = [f"{stage_name}: {stage_note}"]
+    if blood_note:
+        out.append(blood_note)
+    out.append("")
     if not kcal or not k1000:
         return "\n".join(out + ["Energy unknown – cannot assess."])
     per = {k: t[k] * k1000 for k in KEYS}
 
     p_eff = net_p(t) * k1000
     if renal_mode:
-        lo, hi = RENAL["p"]
+        lo, hi = R["p"]
         if p_eff > hi:
             out.append(f"• PHOSPHORUS {p_eff:.0f} mg/1000 kcal"
                        + (" (net of binder)" if t["p_bind"] else "") +
@@ -988,22 +1010,22 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                        "is the best-supported intervention: reduce "
                        "high-P foods (egg yolk, lentils, chickpeas, oats, "
                        "brown rice, tofu) or ask your vet about a binder.")
-        if per["protein"] < RENAL["protein"][0]:
-            out.append("• PROTEIN is below 25 g/1000 kcal – risk of protein "
-                       "malnutrition and muscle loss.")
-        elif per["protein"] > RENAL["protein"][1]:
+        if per["protein"] < R["protein"][0]:
+            out.append(f"• PROTEIN is below {R['protein'][0]:g} g/1000 kcal – "
+                       "risk of protein malnutrition and muscle loss.")
+        elif per["protein"] > R["protein"][1]:
             out.append("• PROTEIN is above the renal range – may worsen "
                        "uraemic signs and adds phosphorus.")
-        if per["na"] > RENAL["na"][1]:
+        if per["na"] > R["na"][1]:
             out.append("• SODIUM above renal range – relevant for blood "
                        "pressure. Restrict gradually, not severely.")
-        if per["k"] < RENAL["k"][0]:
+        if per["k"] < R["k"][0]:
             out.append("• POTASSIUM below renal range – hypokalaemia is "
                        "common in CKD; supplement only per bloodwork.")
-        elif per["k"] > RENAL["k"][1]:
+        elif per["k"] > R["k"][1]:
             out.append("• POTASSIUM above renal range – check bloodwork; "
                        "some CKD dogs run high.")
-        if per["epa_dha"] < RENAL["epa_dha"][0]:
+        if per["epa_dha"] < R["epa_dha"][0]:
             out.append("• EPA+DHA is very low – renal diets add long-chain "
                        "omega-3 (fish or algal oil).")
     else:
@@ -1011,13 +1033,15 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
             out.append("• Phosphorus is well above typical maintenance "
                        "levels; consider moderating even at stage 1.")
 
-    if capr is not None and capr < 1.0:
-        out.append(f"• Ca:P ratio {capr:.2f} is below 1:1. Add P-free "
+    if capr is not None and capr < R["ca_p"][0]:
+        out.append(f"• Ca:P ratio {capr:.2f} is below {R['ca_p'][0]:g}:1. "
+                   "Add P-free "
                    "calcium (calcium carbonate/citrate) rather than bone "
                    "meal, which also adds phosphorus.")
-    if (capr is not None and capr > 2.0) or per["ca"] > AAFCO_MAX["ca"]:
+    if (capr is not None and capr > R["ca_p"][1]) or per["ca"] > R["ca_max"]:
         out.append(f"• CALCIUM is high (Ca:P {capr:.2f}, {per['ca']:.0f} "
-                   "mg/1000 kcal; AAFCO max 2:1 and 6250). In CKD blood "
+                   f"mg/1000 kcal; limits {R['ca_p'][1]:g}:1 and "
+                   f"{R['ca_max']:g}). In CKD blood "
                    "calcium can rise as well as fall, and high calcium "
                    "with high phosphorus promotes tissue calcification. "
                    "Reduce added calcium unless your vet advises it.")
@@ -1135,6 +1159,9 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     Returns dict: mass, totals, missing, summary [(name, unit, value,
     status)], rows [(values10, tag)], breakdown [13-tuples], notes."""
     renal_mode, stage_note = STAGES[stage_name]
+    if sctx and "renal" in sctx:
+        renal_mode = sctx["renal"]
+    ranges = get_ranges(sctx)
     mass, t, miss = compute(recipe, db)
     res = {"mass": mass, "totals": t, "missing": miss, "summary": [],
            "rows": [], "breakdown": [], "score": None, "terms": {}}
@@ -1162,7 +1189,8 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
         ("Energy split (protein/fat/carb)", "% ME",
          f"{prot_me / me_sum * 100:.0f} / {fat_me / me_sum * 100:.0f} / "
          f"{carb_me / me_sum * 100:.0f}", ""),
-        ("Ca : P ratio", "", fmt(capr) + "  (AAFCO 1–2 : 1)", ""),
+        ("Ca : P ratio", "", fmt(capr) + f"  (target {ranges['ca_p'][0]:g}–"
+         f"{ranges['ca_p'][1]:g} : 1)", ""),
         ("Phosphorus net of binder (est.)", "mg/1000 kcal",
          (fmt(net_p(t) * k1000) + f"  (binds ≈{fmt(min(t['p_bind'], t['p']))}"
           " mg)") if (t["p_bind"] and k1000) else "no binder", ""),
@@ -1192,11 +1220,11 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
         perdm = t[k] / dm * 100 if dm > 0 else None
         p1000 = t[k] * k1000 if k1000 else None
         pday = p1000 * day if (p1000 is not None and day) else None
-        renal = (f"{RENAL[k][0]:g}–{RENAL[k][1]:g}" if k in RENAL else "")
+        renal = (f"{ranges[k][0]:g}–{ranges[k][1]:g}" if k in RENAL else "")
         aafco = f"{AAFCO[k]:g}" if k in AAFCO else ""
         st, tag = ("", "")
         if p1000 is not None and k not in ("kcal", "p_bind"):
-            st, tag = status_for(k, p1000, renal_mode)
+            st, tag = status_for(k, p1000, renal_mode, ranges)
         if miss[k]:
             st = (st + "; " if st else "") + f"data missing ({len(miss[k])})"
             if tag == "ok":
@@ -1208,7 +1236,8 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     res["breakdown"] = breakdown_rows(recipe, db, mass, t)
     res["notes"] = assess_recipe(stage_name, recipe, db, t, miss, mass, kcal,
                                  need, capr, acid, k1000, renal_mode,
-                                 stage_note, fat_me / me_sum)
+                                 stage_note, fat_me / me_sum, ranges,
+                                 (sctx or {}).get("blood_note", ""))
     return res
 
 
@@ -1255,6 +1284,343 @@ def per100g_from_label(v):
     if v["choline_mg"] is not None:
         per["choline"] = v["choline_mg"] / 10.0
     return per
+
+
+
+# --------------------------------------------------------------------------
+# Blood results -> stage, ranges, aims, priorities
+# --------------------------------------------------------------------------
+# Inputs use UK units. Thresholds: IRIS staging (creatinine, SDMA, UPC,
+# blood pressure, phosphate targets by stage, bicarbonate 18-24 mmol/L);
+# other cut-offs are typical canine reference intervals - labs differ, so
+# the lab's own range wins. The size of each adjustment is this app's
+# judgement, not a published rule. Everything here is for discussion with
+# the vet, not a substitute for it.
+BLOOD_FIELDS = [
+    # key, label, unit, typical reference / IRIS cut-offs (text)
+    ("creat", "Creatinine", "µmol/L", "IRIS: <125 st1, 125–250 st2, 251–440 st3, >440 st4"),
+    ("sdma", "SDMA", "µg/dL", "IRIS: <18 st1, 18–35 st2, 36–54 st3, >54 st4"),
+    ("phos", "Phosphate", "mmol/L", "IRIS target 0.9–1.5 (st1–2), <1.6 (st3), <1.9 (st4)"),
+    ("upc", "Urine protein:creatinine (UPC)", "", "<0.2 normal, 0.2–0.5 borderline, >0.5 proteinuric"),
+    ("urea", "Urea", "mmol/L", "typical ~2.5–9.6"),
+    ("alb", "Albumin", "g/L", "typical ~23–40"),
+    ("k", "Potassium", "mmol/L", "typical ~3.5–5.8"),
+    ("tco2", "Bicarbonate / total CO2", "mmol/L", "IRIS target 18–24"),
+    ("ica", "Ionised calcium", "mmol/L", "typical ~1.20–1.45"),
+    ("tca", "Total calcium", "mmol/L", "typical ~2.2–3.0"),
+    ("sbp", "Systolic blood pressure", "mmHg", "IRIS: <140 normal, 140–159 pre-, 160–179 hypertensive, ≥180 severe"),
+    ("pcv", "PCV / haematocrit", "%", "typical ~37–55"),
+    ("bcs", "Body condition score", "1–9", "ideal 4–5"),
+]
+STAGE_NAMES = {1: "Stage 1 – non-proteinuric", 2: "Stage 2", 3: "Stage 3",
+               4: "Stage 4"}
+PHOS_TARGET = {1: (0.9, 1.5), 2: (0.9, 1.5), 3: (0.9, 1.6), 4: (0.9, 1.9)}
+
+
+def _num(x):
+    try:
+        return None if x is None or x == "" else float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def adapt_from_bloods(b, current_stage="Stage 2"):
+    """b: dict of BLOOD_FIELDS keys (None = not tested) plus optional
+    'weight_trend' ('stable'|'losing'|'gaining') and 'date'.
+    Returns dict: stage, renal_force, aims, ranges, weights, mer_delta,
+    findings [(test, value, reference, finding, change)], changes
+    [(target, default, adapted)], note (one line)."""
+    v = {k: _num(b.get(k)) for k, *_ in BLOOD_FIELDS}
+    trend = b.get("weight_trend") or "stable"
+    F = []                                    # findings
+
+    def unit(k):
+        return next(u for kk, _, u, _ in BLOOD_FIELDS if kk == k)
+
+    def ref(k):
+        return next(r for kk, _, _, r in BLOOD_FIELDS if kk == k)
+
+    def fv(k):
+        return f"{v[k]:g} {unit(k)}".strip()
+
+    # ---- stage
+    st_c = st_s = None
+    if v["creat"] is not None:
+        c = v["creat"]
+        st_c = 1 if c < 125 else 2 if c <= 250 else 3 if c <= 440 else 4
+        F.append(("Creatinine", fv("creat"), ref("creat"),
+                  f"IRIS stage {st_c} range", ""))
+    if v["sdma"] is not None:
+        sd = v["sdma"]
+        st_s = 1 if sd < 18 else 2 if sd <= 35 else 3 if sd <= 54 else 4
+        F.append(("SDMA", fv("sdma"), ref("sdma"), f"IRIS stage {st_s} range",
+                  "SDMA higher than creatinine stage → treat as the higher "
+                  "stage (IRIS)" if st_c and st_s > st_c else ""))
+    if st_c or st_s:
+        n = max(x for x in (st_c, st_s) if x)
+    else:
+        n = next((k for k, nm in STAGE_NAMES.items() if nm == current_stage),
+                 1 if current_stage.startswith("Stage 1") else 2)
+    proteinuric = v["upc"] is not None and v["upc"] > 0.5
+    stage = ("Stage 1 – proteinuric" if n == 1 and proteinuric
+             else STAGE_NAMES[n])
+    renal = STAGES[stage][0]
+    renal_force = False
+
+    aims = dict(AIMS[stage]) or {}
+    R = {**RENAL, **DEFAULT_LIMITS}
+    W = dict(OPT_WEIGHTS)
+    mer_delta = 0.0
+
+    # ---- phosphate
+    if v["phos"] is not None:
+        lo_t, hi_t = PHOS_TARGET[n]
+        ph = v["phos"]
+        base = aims.get("p", 900)
+        if ph > hi_t:
+            if not renal:
+                renal_force = True
+                aims.setdefault("protein", 45)
+            ex = ph - hi_t
+            cut = 150 if ex <= 0.2 else 250 if ex <= 0.5 else 350
+            aims["p"] = max(450, base - cut)
+            R["p"] = (400, aims["p"] + 150)
+            W["phosphorus"] *= 2
+            F.append(("Phosphate", fv("phos"), f"target {lo_t}–{hi_t}",
+                      f"ABOVE target by {ex:.2f}",
+                      f"Phosphorus aim → {aims['p']}, max → {R['p'][1]} "
+                      "mg/1000 kcal. If still above target after 4–6 weeks "
+                      "the vet may add a phosphate binder."))
+        elif ph < lo_t:
+            aims["p"] = min(1200, base + 200)
+            R["p"] = (aims["p"] - 200, 1200)
+            F.append(("Phosphate", fv("phos"), f"target {lo_t}–{hi_t}",
+                      "BELOW target – probably over-restricted",
+                      f"Phosphorus aim → {aims['p']}, min → {R['p'][0]}."))
+        else:
+            F.append(("Phosphate", fv("phos"), f"target {lo_t}–{hi_t}",
+                      "within target", "Keep current phosphorus."))
+
+    # ---- protein: proteinuria -> urea -> albumin (albumin sets the floor)
+    p_lo, p_hi = R["protein"]
+    if v["upc"] is not None:
+        u = v["upc"]
+        if u > 0.5:
+            aims["protein"] = min(aims.get("protein", 45), 35)
+            p_hi = 45
+            W["protein"] *= 1.5
+            F.append(("UPC", fv("upc"), ref("upc"), "PROTEINURIC",
+                      "Protein aim → 35, max → 45 g/1000 kcal; omega-3 kept "
+                      "up. The vet usually adds an ACE-inhibitor/ARB."))
+            R["epa_dha"] = (max(R["epa_dha"][0], 300), R["epa_dha"][1])
+        elif u >= 0.2:
+            F.append(("UPC", fv("upc"), ref("upc"), "borderline",
+                      "No change; recheck."))
+        else:
+            F.append(("UPC", fv("upc"), ref("upc"), "normal", ""))
+    if v["urea"] is not None and renal | renal_force:
+        if v["urea"] > 15:
+            aims["protein"] = max(30, aims.get("protein", 45) - 5)
+            F.append(("Urea", fv("urea"), ref("urea"), "HIGH",
+                      f"Protein aim → {aims['protein']} g/1000 kcal (more so "
+                      "if nausea, poor appetite, ammonia breath)."))
+        elif v["urea"] > 9.6:
+            F.append(("Urea", fv("urea"), ref("urea"),
+                      "raised – expected in CKD",
+                      "No change unless uraemic signs."))
+        else:
+            F.append(("Urea", fv("urea"), ref("urea"), "normal", ""))
+    low_alb = v["alb"] is not None and v["alb"] < 25
+    if v["alb"] is not None:
+        if low_alb:
+            p_lo = max(p_lo, 35)
+            aims["protein"] = max(aims.get("protein", 40), 40)
+            F.append(("Albumin", fv("alb"), ref("alb"), "LOW",
+                      "Protein min → 35, aim ≥ 40 g/1000 kcal – do not cut "
+                      "protein further; check energy intake. With "
+                      "proteinuria this needs the vet promptly."))
+        else:
+            F.append(("Albumin", fv("alb"), ref("alb"), "ok", ""))
+    if trend == "losing" or (v["bcs"] is not None and v["bcs"] < 4):
+        p_lo = max(p_lo, 35)
+        mer_delta += 0.2
+        F.append(("Weight / BCS", trend if v["bcs"] is None else
+                  f"{trend}, BCS {v['bcs']:g}", "ideal BCS 4–5",
+                  "losing weight / thin",
+                  "MER factor +0.2, protein min → 35 g/1000 kcal."))
+    elif trend == "gaining" or (v["bcs"] is not None and v["bcs"] > 6):
+        mer_delta -= 0.1
+        F.append(("Weight / BCS", trend if v["bcs"] is None else
+                  f"{trend}, BCS {v['bcs']:g}", "ideal BCS 4–5",
+                  "gaining / overweight", "MER factor −0.1."))
+    if p_lo > p_hi:
+        p_hi = p_lo + 10
+    if "protein" in aims and aims["protein"] < p_lo + 5:
+        aims["protein"] = min(p_hi, p_lo + 5)   # weight loss/low albumin win
+    R["protein"] = (p_lo, p_hi)
+
+    # ---- potassium
+    if v["k"] is not None:
+        if v["k"] < 3.5:
+            R["k"] = (1500, R["k"][1])
+            W["potassium"] *= 3
+            F.append(("Potassium", fv("k"), ref("k"), "LOW",
+                      "Potassium min → 1500 mg/1000 kcal. The vet may "
+                      "prescribe potassium (gluconate/citrate) – add it at "
+                      "that dose and lock it."))
+        elif v["k"] > 5.5:
+            R["k"] = (R["k"][0], 1300)
+            W["potassium"] *= 3
+            F.append(("Potassium", fv("k"), ref("k"), "HIGH",
+                      "Potassium max → 1300 mg/1000 kcal; avoid spinach, "
+                      "potato, beet greens, banana; boil and drain "
+                      "vegetables; no potassium citrate."))
+        else:
+            F.append(("Potassium", fv("k"), ref("k"), "ok", ""))
+
+    # ---- acid-base
+    if v["tco2"] is not None:
+        if v["tco2"] < 18:
+            W["acid"] = 2.0
+            F.append(("Bicarbonate", fv("tco2"), ref("tco2"),
+                      "LOW – metabolic acidosis",
+                      "Acid-load priority on (prefers alkalinising "
+                      "recipes). Avoid methionine-rich supplements; the vet "
+                      "may prescribe potassium citrate or sodium "
+                      "bicarbonate."))
+        elif v["tco2"] > 24:
+            F.append(("Bicarbonate", fv("tco2"), ref("tco2"), "high",
+                      "Do not add alkalinisers."))
+        else:
+            F.append(("Bicarbonate", fv("tco2"), ref("tco2"), "ok", ""))
+
+    # ---- calcium (ionised preferred)
+    ca_state = None
+    if v["ica"] is not None:
+        ca_state = "high" if v["ica"] > 1.45 else "low" if v["ica"] < 1.20 \
+            else "ok"
+        ca_row = ("Ionised calcium", fv("ica"), ref("ica"))
+    elif v["tca"] is not None:
+        ca_state = "high" if v["tca"] > 3.0 else "low" if v["tca"] < 2.2 \
+            else "ok"
+        ca_row = ("Total calcium", fv("tca"), ref("tca"))
+    if ca_state == "high":
+        R["ca_p"] = (R["ca_p"][0], 1.5)
+        R["ca_max"] = 2500
+        W["ca_p"] *= 2
+        F.append(ca_row + ("HIGH", "Ca:P max → 1.5, Ca max → 2500 mg/1000 "
+                           "kcal; cut added calcium. If on a calcium-based "
+                           "binder the vet may switch; no vitamin D unless "
+                           "prescribed."))
+    elif ca_state == "low":
+        F.append(ca_row + ("LOW", "No automatic change – discuss with the "
+                           "vet (often improves once phosphate is "
+                           "controlled)."))
+    elif ca_state == "ok":
+        F.append(ca_row + ("ok", ""))
+
+    # ---- blood pressure
+    if v["sbp"] is not None:
+        if v["sbp"] >= 160:
+            R["na"] = (R["na"][0], 800)
+            W["sodium"] *= 3
+            F.append(("Blood pressure", fv("sbp"), ref("sbp"), "HYPERTENSIVE",
+                      "Sodium max → 800 mg/1000 kcal (reduce gradually). "
+                      "Needs vet treatment."))
+        elif v["sbp"] >= 140:
+            R["na"] = (R["na"][0], 1000)
+            W["sodium"] *= 2
+            F.append(("Blood pressure", fv("sbp"), ref("sbp"),
+                      "pre-hypertensive", "Sodium max → 1000 mg/1000 kcal."))
+        else:
+            F.append(("Blood pressure", fv("sbp"), ref("sbp"), "normal", ""))
+
+    # ---- anaemia
+    if v["pcv"] is not None:
+        if v["pcv"] < 37:
+            R["protein"] = (max(R["protein"][0], 30), R["protein"][1])
+            F.append(("PCV", fv("pcv"), ref("pcv"), "LOW – anaemia",
+                      "Protein min → 30; keep the vitamin/mineral supplement "
+                      "(iron, B12). Treatment (e.g. EPO) is the vet's."))
+        else:
+            F.append(("PCV", fv("pcv"), ref("pcv"), "ok", ""))
+
+    if not (renal or renal_force):          # stage 1 non-proteinuric
+        aims = {}
+    # ---- summary of changes vs defaults
+    D = {**RENAL, **DEFAULT_LIMITS}
+    d_aims = AIMS[stage]
+    changes = []
+    labels = {"protein": "Protein (g/1000 kcal)", "p": "Phosphorus (mg/1000 kcal)",
+              "na": "Sodium (mg/1000 kcal)", "k": "Potassium (mg/1000 kcal)",
+              "epa_dha": "EPA+DHA (mg/1000 kcal)", "ca_p": "Ca:P ratio",
+              "ca_max": "Calcium max (mg/1000 kcal)"}
+    for k, lab in labels.items():
+        a, b2 = D[k], R[k]
+        fa = f"{a[0]:g}–{a[1]:g}" if isinstance(a, tuple) else f"{a:g}"
+        fb = f"{b2[0]:g}–{b2[1]:g}" if isinstance(b2, tuple) else f"{b2:g}"
+        if k in ("protein", "p"):
+            fa += f" (aim {d_aims[k]})" if k in d_aims else ""
+            fb += f" (aim {aims[k]})" if k in aims else ""
+        changes.append((lab, fa, fb))
+    if W["acid"]:
+        changes.append(("Acid-load priority", "off", f"{W['acid']:g}"))
+    if mer_delta:
+        changes.append(("MER factor", "current", f"{mer_delta:+.1f}"))
+    diff = [c for c in changes if c[1] != c[2]]
+    note = ("Targets adapted from blood results"
+            + (f" of {b['date']}" if b.get("date") else "") + ": "
+            + ("; ".join(f"{c[0].split(' (')[0]} {c[2]}" for c in diff)
+               if diff else "no changes needed")
+            + ". Discuss with your vet.")
+    return {"stage": stage, "renal_force": renal_force, "aims": aims,
+            "ranges": {k: R[k] for k in D}, "weights": W,
+            "mer_delta": mer_delta, "findings": F, "changes": changes,
+            "note": note}
+
+
+def build_score_context(sc, stage, need):
+    """Scoring ctx from saved settings `sc` (optimiser run and/or blood
+    adaptation). Saved aims/ranges only apply to the stage they were made
+    for."""
+    sc = sc or {}
+    same = sc.get("stage") == stage
+    ctx = {"kcal_target": sc.get("kcal_override") or need,
+           "renal": STAGES[stage][0] or bool(same and sc.get("renal_force")),
+           "weights": {**OPT_WEIGHTS, **sc.get("weights", {})},
+           "aims": (dict(sc["aims"]) if same and "aims" in sc
+                    else dict(AIMS[stage]))}
+    if same and sc.get("ranges"):
+        ctx["ranges"] = {k: tuple(v) if isinstance(v, (list, tuple)) else v
+                         for k, v in sc["ranges"].items()}
+    if same and sc.get("blood_note"):
+        ctx["blood_note"] = sc["blood_note"]
+    return ctx
+
+
+def store_score_context(old, ctx, stage, need):
+    """Settings to keep after an optimiser/generator result is applied
+    (keeps any blood adaptation for the same stage)."""
+    old = old or {}
+    new = {"stage": stage, "weights": dict(ctx["weights"]),
+           "aims": dict(ctx["aims"])}
+    if ctx.get("ranges"):
+        new["ranges"] = dict(ctx["ranges"])
+    if old.get("stage") == stage:
+        for k in ("renal_force", "bloods", "blood_note"):
+            if k in old:
+                new[k] = old[k]
+    if abs(ctx["kcal_target"] - need) > 1:
+        new["kcal_override"] = ctx["kcal_target"]
+    return new
+
+
+def blood_score_context(adapt, bloods):
+    """Saved settings produced by applying a blood adaptation."""
+    return {"stage": adapt["stage"], "weights": dict(adapt["weights"]),
+            "aims": dict(adapt["aims"]), "ranges": dict(adapt["ranges"]),
+            "renal_force": adapt["renal_force"], "bloods": dict(bloods),
+            "blood_note": adapt["note"]}
 
 
 # --------------------------------------------------------------------------
@@ -1422,6 +1788,136 @@ class LabelDialog(tk.Toplevel):
         self.result = {"name": name, "category": "commercial food",
                        "note": "From label (as fed).", "per100g": per}
         self.destroy()
+
+
+class BloodDialog(tk.Toplevel):
+    """Enter blood/urine results; adapt stage, ranges, aims, priorities."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self.title("Blood results → adapted targets")
+        self.transient(app)
+        self.adapt = None
+        prev = (app.score_ctx or {}).get("bloods") or app.bloods or {}
+        frm = ttk.Frame(self, padding=10)
+        frm.pack(fill="both", expand=True)
+        top = ttk.Frame(frm)
+        top.pack(fill="x")
+        ttk.Label(top, text="Test date").pack(side="left")
+        self.date = tk.StringVar(value=prev.get("date", ""))
+        ttk.Entry(top, textvariable=self.date, width=12).pack(side="left",
+                                                              padx=4)
+        ttk.Label(top, text="   Weight trend").pack(side="left")
+        self.trend = ttk.Combobox(top, values=["stable", "losing", "gaining"],
+                                  state="readonly", width=9)
+        self.trend.set(prev.get("weight_trend", "stable"))
+        self.trend.pack(side="left", padx=4)
+        ttk.Label(top, foreground="#555", text="   leave blank anything not "
+                  "tested · use your lab's ranges if they differ").pack(
+            side="left")
+
+        g = ttk.Frame(frm)
+        g.pack(fill="x", pady=6)
+        for c, h in enumerate(("Test", "Value", "Unit", "Reference / IRIS")):
+            ttk.Label(g, text=h, font=("TkDefaultFont", 10, "bold")).grid(
+                row=0, column=c, sticky="w", padx=4)
+        self.e = {}
+        for r, (k, lab, unit, ref) in enumerate(BLOOD_FIELDS, start=1):
+            ttk.Label(g, text=lab).grid(row=r, column=0, sticky="w", padx=4)
+            var = tk.StringVar(value="" if prev.get(k) is None
+                               else f"{prev[k]:g}")
+            ttk.Entry(g, textvariable=var, width=9).grid(row=r, column=1,
+                                                         padx=4, pady=1)
+            ttk.Label(g, text=unit).grid(row=r, column=2, sticky="w", padx=4)
+            ttk.Label(g, text=ref, foreground="#555").grid(
+                row=r, column=3, sticky="w", padx=4)
+            self.e[k] = var
+
+        b = ttk.Frame(frm)
+        b.pack(fill="x", pady=(4, 4))
+        ttk.Button(b, text="Evaluate", command=self.evaluate).pack(
+            side="left")
+        self.mer_too = tk.BooleanVar(value=True)
+        ttk.Checkbutton(b, text="also adjust MER factor",
+                        variable=self.mer_too).pack(side="left", padx=8)
+        self.apply_btn = ttk.Button(b, text="Apply to targets",
+                                    command=self.apply)
+        self.apply_btn.pack(side="left")
+        self.apply_btn.state(["disabled"])
+        ttk.Button(b, text="Reset targets to defaults",
+                   command=self.reset).pack(side="left", padx=6)
+        ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
+
+        self.out = tk.Text(frm, height=18, wrap="word",
+                           font=("TkFixedFont", 10))
+        self.out.pack(fill="both", expand=True)
+        make_readonly(self.out)
+        text_copy_menu(self.out)
+        if prev:
+            self.evaluate()
+
+    def values(self):
+        d = {"date": self.date.get().strip(), "weight_trend": self.trend.get()}
+        for k, var in self.e.items():
+            d[k] = to_float(var.get())
+        return d
+
+    def evaluate(self):
+        try:
+            b = self.values()
+        except ValueError:
+            messagebox.showerror("Blood results", "Values must be numbers.",
+                                 parent=self)
+            return
+        self.adapt = a = adapt_from_bloods(b, self.app.stage.get())
+        self.bvals = b
+        L = [f"Suggested stage: {a['stage']}"
+             + ("  (renal ranges applied because of high phosphate)"
+                if a["renal_force"] else ""), ""]
+        if a["findings"]:
+            L.append("FINDINGS")
+            for t, v, ref, f, ch in a["findings"]:
+                L.append(f"  {t:<16} {v:<14} {f}")
+                if ch:
+                    L.append(f"  {'':<16} → {ch}")
+        else:
+            L.append("No results entered.")
+        L += ["", "TARGETS (per 1000 kcal)", f"  {'':<28} {'default':<20} "
+              "adapted"]
+        for lab, d0, d1 in a["changes"]:
+            flag = "  *" if d0 != d1 else ""
+            L.append(f"  {lab:<28} {d0:<20} {d1}{flag}")
+        L += ["", "Adjustment sizes are this app's rules of thumb – review "
+              "with your vet. Recheck phosphate/calcium 4–6 weeks after a "
+              "change, then every 12 weeks (IRIS)."]
+        self.out.delete("1.0", "end")
+        self.out.insert("end", "\n".join(L))
+        self.apply_btn.state(["!disabled"])
+
+    def apply(self):
+        if not self.adapt:
+            return
+        a, app = self.adapt, self.app
+        app.bloods = dict(self.bvals)
+        app.stage.set(a["stage"])
+        app.score_ctx = blood_score_context(a, self.bvals)
+        if self.mer_too.get() and a["mer_delta"]:
+            try:
+                f = float(app.factor.get().replace(",", "."))
+                app.factor.set(f"{min(3.0, max(0.8, f + a['mer_delta'])):.1f}")
+            except ValueError:
+                pass
+        app.recalc()
+        messagebox.showinfo("Blood results", f"Applied: {a['stage']}.\n\n"
+                            + a["note"] + "\n\nThe optimiser and generator "
+                            "now use these targets.", parent=self)
+
+    def reset(self):
+        self.app.score_ctx = None
+        self.app.recalc()
+        messagebox.showinfo("Blood results", "Targets reset to the defaults "
+                            "for the current stage.", parent=self)
 
 
 class GeneratorDialog(tk.Toplevel):
@@ -1828,7 +2324,10 @@ class OptimiseDialog(tk.Toplevel):
         self.title("Optimise recipe")
         self.transient(app)
         stage = app.stage.get()
-        self.renal, _ = STAGES[stage]
+        ctx0 = app.score_context()
+        self.renal = ctx0["renal"]
+        self.ranges = ctx0.get("ranges", {})
+        R0 = get_ranges(ctx0)
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
 
@@ -1877,9 +2376,9 @@ class OptimiseDialog(tk.Toplevel):
                                       " 0 = ignore)", padding=6)
         wf.pack(fill="x", pady=4)
         self.w = {}
-        for i, (k, v) in enumerate(OPT_WEIGHTS.items()):
+        for i, (k, v) in enumerate(ctx0["weights"].items()):
             r, c = (i // 5) * 2, i % 5
-            ttk.Label(wf, text=WEIGHT_LABELS[k]).grid(row=r, column=c,
+            ttk.Label(wf, text=WEIGHT_LABELS.get(k, k)).grid(row=r, column=c,
                                                       sticky="w", padx=6)
             var = tk.StringVar(value=f"{v:g}")
             ttk.Entry(wf, textvariable=var, width=7).grid(
@@ -1888,15 +2387,17 @@ class OptimiseDialog(tk.Toplevel):
 
         self.aims = {}
         if self.renal:
-            af = ttk.LabelFrame(frm, text="Aims per 1000 kcal (editable "
-                                          "defaults inside the ACVN range)",
-                                padding=6)
+            af = ttk.LabelFrame(frm, text="Aims per 1000 kcal (editable; "
+                                          + ("adapted from blood results"
+                                             if self.ranges else
+                                             "defaults inside the ACVN range")
+                                          + ")", padding=6)
             af.pack(fill="x", pady=4)
             for c, k in enumerate(("protein", "p")):
                 ttk.Label(af, text=f"{LABEL[k]} ({UNIT[k]}), range "
-                                   f"{RENAL[k][0]}–{RENAL[k][1]}").grid(
+                                   f"{R0[k][0]:g}–{R0[k][1]:g}").grid(
                     row=0, column=c * 2, sticky="w", padx=6)
-                var = tk.StringVar(value=f"{AIMS[stage].get(k, ''):}")
+                var = tk.StringVar(value=f"{ctx0['aims'].get(k, ''):}")
                 ttk.Entry(af, textvariable=var, width=8).grid(
                     row=0, column=c * 2 + 1, padx=6)
                 self.aims[k] = var
@@ -1945,7 +2446,7 @@ class OptimiseDialog(tk.Toplevel):
         app = self.app
         try:
             ctx = {"kcal_target": float(self.kcal.get()),
-                   "renal": self.renal,
+                   "renal": self.renal, "ranges": dict(self.ranges),
                    "weights": {k: float(v.get()) for k, v in self.w.items()},
                    "aims": {k: to_float(v.get()) for k, v in
                             self.aims.items()}}
@@ -2095,8 +2596,9 @@ class ResultsWindow(tk.Toplevel):
         kcal, per, t = per1000_from(g, vecs)
         rows = [f"Per 1000 kcal  ({kcal:.0f} kcal/day, {sum(g):.0f} g/day):"]
         for k in ("protein", "p", "na", "k", "ca", "epa_dha"):
-            st, _ = status_for(k, per[k], ctx["renal"])
-            rng = (f"renal {RENAL[k][0]}–{RENAL[k][1]}" if ctx["renal"] and
+            R = get_ranges(ctx)
+            st, _ = status_for(k, per[k], ctx["renal"], R)
+            rng = (f"renal {R[k][0]:g}–{R[k][1]:g}" if ctx["renal"] and
                    k in RENAL else f"AAFCO ≥{AAFCO.get(k, '–')}")
             rows.append(f"  {LABEL[k]:<12} {per[k]:>8.1f} {UNIT[k]:<4} "
                         f"[{rng}]  {st}")
@@ -2150,6 +2652,7 @@ class App(tk.Tk):
         self.score_ctx = None       # settings from the last optimiser run
         self.recipe_note = ""       # e.g. "Optimised recipe – score 0.29"
         self.applied_recipe = None  # snapshot of the applied recipe
+        self.bloods = {}            # last blood results entered
         self._build()
         self.refresh_list()
         self.recalc()
@@ -2242,6 +2745,9 @@ class App(tk.Tk):
         self.rec_tree.bind("<Double-Button-1>", lambda e: self.edit_amount())
         r4 = ttk.Frame(rec)
         r4.pack(fill="x", pady=3)
+        ttk.Button(rec, text="🩸  Blood results → adapt targets…",
+                   command=lambda: BloodDialog(self)).pack(fill="x",
+                                                           pady=(4, 0))
         ttk.Button(rec, text="✨  Generate balanced recipes from library…",
                    command=self.open_generator).pack(fill="x", pady=(4, 0))
         ttk.Button(rec, text="⚖  Scale amounts to body weight…",
@@ -2575,16 +3081,10 @@ class App(tk.Tk):
         to_clipboard(self, "\n".join(lines))
 
     def score_context(self):
-        """Scoring settings: last optimiser run if same stage, else defaults."""
-        stage = self.stage.get()
-        renal, _ = STAGES[stage]
-        sc = self.score_ctx or {}
-        same = sc.get("stage") == stage
-        return {"kcal_target": sc.get("kcal_override") or self.current_mer(),
-                "renal": renal,
-                "weights": {**OPT_WEIGHTS, **sc.get("weights", {})},
-                "aims": dict(sc["aims"]) if same and "aims" in sc
-                else dict(AIMS[stage])}
+        """Scoring settings: last optimiser run / blood adaptation if for the
+        same stage, else defaults."""
+        return build_score_context(self.score_ctx, self.stage.get(),
+                                   self.current_mer())
 
     def current_mer(self):
         try:
@@ -2595,11 +3095,9 @@ class App(tk.Tk):
 
     def apply_recipe(self, names, g, score, label, ctx, parent):
         self.recipe = [[n, float(a)] for n, a in zip(names, g) if a >= 0.1]
-        self.score_ctx = {"stage": self.stage.get(),
-                          "weights": dict(ctx["weights"]),
-                          "aims": dict(ctx["aims"])}
-        if abs(ctx["kcal_target"] - self.current_mer()) > 1:
-            self.score_ctx["kcal_override"] = ctx["kcal_target"]
+        self.score_ctx = store_score_context(self.score_ctx, ctx,
+                                             self.stage.get(),
+                                             self.current_mer())
         self.recipe_note = (f"{label} – score {score:.3f} "
                             f"({ctx['kcal_target']:.0f} kcal/day, "
                             f"{self.stage.get()})")

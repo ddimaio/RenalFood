@@ -32,7 +32,8 @@ if "db" not in ss:
 for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
                  "applied": None, "score_ctx": None, "opt_result": None,
                  "gen_result": None, "bw": 6.0, "factor": 1.6,
-                 "stage": "Stage 2", "lib_ver": 0}.items():
+                 "stage": "Stage 2", "lib_ver": 0, "tgt_ver": 0,
+                 "blood_eval": None}.items():
     ss.setdefault(key, val)
 db = ss.db
 
@@ -45,14 +46,12 @@ def need_now():
 
 
 def score_context(kcal=None):
-    """Last optimiser/generator settings for this stage, else defaults."""
-    sc = ss.score_ctx or {}
-    same = sc.get("stage") == ss.stage
-    return {"kcal_target": kcal or sc.get("kcal_override") or need_now(),
-            "renal": rc.STAGES[ss.stage][0],
-            "weights": {**rc.OPT_WEIGHTS, **sc.get("weights", {})},
-            "aims": (dict(sc["aims"]) if same and "aims" in sc
-                     else dict(rc.AIMS[ss.stage]))}
+    """Last optimiser/generator settings or blood adaptation for this stage,
+    else defaults."""
+    ctx = rc.build_score_context(ss.score_ctx, ss.stage, need_now())
+    if kcal:
+        ctx["kcal_target"] = kcal
+    return ctx
 
 
 def set_recipe(recipe):
@@ -62,14 +61,39 @@ def set_recipe(recipe):
 
 def apply_recipe(names, g, score, label, ctx):
     set_recipe([(n, a) for n, a in zip(names, g) if a >= 0.1])
-    ss.score_ctx = {"stage": ss.stage, "weights": dict(ctx["weights"]),
-                    "aims": dict(ctx["aims"])}
-    if abs(ctx["kcal_target"] - need_now()) > 1:
-        ss.score_ctx["kcal_override"] = ctx["kcal_target"]
+    ss.score_ctx = rc.store_score_context(ss.score_ctx, ctx, ss.stage,
+                                          need_now())
     ss.recipe_note = (f"{label} – score {score:.3f} "
                       f"({ctx['kcal_target']:.0f} kcal/day, {ss.stage})")
     ss.applied = [list(r) for r in ss.recipe]
     st.toast("Recipe applied – open the Recipe tab")
+
+
+def blood_values():
+    d = {"date": str(ss.get("bl_date") or ""),
+         "weight_trend": ss.get("bl_trend", "stable")}
+    for k, *_ in rc.BLOOD_FIELDS:
+        d[k] = ss.get(f"bl_{k}")
+    return d
+
+
+def apply_bloods_cb():
+    ev = ss.blood_eval
+    if not ev:
+        return
+    a, b = ev["adapt"], ev["bloods"]
+    ss.stage = a["stage"]
+    ss.score_ctx = rc.blood_score_context(a, b)
+    if ss.get("bl_mer", True) and a["mer_delta"]:
+        ss.factor = round(min(3.0, max(0.8, ss.factor + a["mer_delta"])), 1)
+    ss.tgt_ver += 1                      # refresh optimiser inputs
+    ss.blood_msg = f"Applied: {a['stage']}. " + a["note"]
+
+
+def reset_targets_cb():
+    ss.score_ctx = None
+    ss.tgt_ver += 1
+    ss.blood_msg = "Targets reset to the defaults for the current stage."
 
 
 def load_recipe_cb():
@@ -117,9 +141,9 @@ with st.sidebar:
     st.caption("Approximate tool – not veterinary advice. A home-made renal "
                "diet should be balanced by a vet nutritionist.")
 
-tab_rec, tab_opt, tab_gen, tab_lib, tab_about = st.tabs(
-    ["🍲 Recipe & analysis", "⚙️ Optimise", "✨ Generate recipes",
-     "📚 Ingredient library", "ℹ️ About"])
+tab_rec, tab_blood, tab_opt, tab_gen, tab_lib, tab_about = st.tabs(
+    ["🍲 Recipe & analysis", "🩸 Blood results", "⚙️ Optimise",
+     "✨ Generate recipes", "📚 Ingredient library", "ℹ️ About"])
 
 names_all = sorted(db, key=str.lower)
 
@@ -128,6 +152,9 @@ with tab_rec:
     if ss.recipe_note:
         edited = ss.recipe != ss.applied
         st.success(ss.recipe_note + ("   (edited since)" if edited else ""))
+    _bn = score_context().get("blood_note")
+    if _bn:
+        st.info("🩸 " + _bn)
 
     left, right = st.columns([2, 3], gap="large")
     with left:
@@ -256,6 +283,70 @@ with tab_rec:
         st.download_button("⬇️ Export results (.csv)", buf.getvalue(),
                            file_name="diet_results.csv", mime="text/csv")
 
+# ================================================================ BLOODS
+with tab_blood:
+    st.subheader("Blood results → adapted targets")
+    st.caption("Enter what was tested (leave the rest blank). The app "
+               "suggests the IRIS stage and tightens or relaxes the nutrient "
+               "ranges, aims and priorities; the optimiser and generator then "
+               "use them. Reference ranges are typical canine values – your "
+               "lab's own ranges take precedence. Adjustment sizes are this "
+               "app's rules of thumb, for discussion with your vet.")
+    prev = (ss.score_ctx or {}).get("bloods") or {}
+    for k, *_ in rc.BLOOD_FIELDS:            # prefill once from saved
+        if f"bl_{k}" not in ss:
+            ss[f"bl_{k}"] = (None if prev.get(k) is None
+                             else float(prev[k]))
+    ss.setdefault("bl_trend", prev.get("weight_trend", "stable"))
+    ss.setdefault("bl_date", prev.get("date", ""))
+    h = st.columns(3)
+    h[0].text_input("Test date", key="bl_date", placeholder="e.g. 2026-11-03")
+    h[1].selectbox("Weight trend", ["stable", "losing", "gaining"],
+                   key="bl_trend")
+    cols = st.columns(3)
+    for i, (k, lab, unit, refr) in enumerate(rc.BLOOD_FIELDS):
+        cols[i % 3].number_input(f"{lab}" + (f" ({unit})" if unit else ""),
+                                 min_value=0.0, format="%g",
+                                 key=f"bl_{k}", help=refr)
+    b = st.columns([1, 1, 2])
+    if b[0].button("Evaluate", type="primary", key="bl_eval"):
+        bv = blood_values()
+        ss.blood_eval = {"bloods": bv,
+                         "adapt": rc.adapt_from_bloods(bv, ss.stage)}
+    if ss.get("blood_msg"):
+        st.success(ss.pop("blood_msg"))
+    ev = ss.blood_eval
+    if ev:
+        a = ev["adapt"]
+        st.markdown(f"**Suggested stage: {a['stage']}**"
+                    + ("  · renal ranges applied because of high phosphate"
+                       if a["renal_force"] else ""))
+        if a["findings"]:
+            st.dataframe(pd.DataFrame(a["findings"], columns=[
+                "Test", "Value", "Reference / target", "Finding",
+                "Change to targets"]), hide_index=True, **FULL)
+        else:
+            st.info("No results entered.")
+        ch = pd.DataFrame(a["changes"], columns=["Target (per 1000 kcal)",
+                                                 "Default", "Adapted"])
+        changed = [r1 != r2 for r1, r2 in zip(ch["Default"], ch["Adapted"])]
+        st.dataframe(ch.style.apply(
+            lambda r: ["font-weight: 600; color: #b36b00"
+                       if changed[r.name] else ""] * len(r), axis=1),
+            hide_index=True, **FULL)
+        c = st.columns([1, 1, 2])
+        c[0].checkbox("Also adjust MER factor", True, key="bl_mer",
+                      disabled=not a["mer_delta"])
+        c[1].button("Apply to targets", type="primary", key="bl_apply",
+                    on_click=apply_bloods_cb)
+        c[2].button("Reset targets to defaults", key="bl_reset",
+                    on_click=reset_targets_cb)
+        st.caption("Recheck phosphate and calcium 4–6 weeks after a change, "
+                   "then every 12 weeks (IRIS). Change one thing at a time.")
+    elif (ss.score_ctx or {}).get("blood_note"):
+        st.button("Reset targets to defaults", key="bl_reset0",
+                  on_click=reset_targets_cb)
+
 # ================================================================ OPTIMISE
 with tab_opt:
     st.subheader("Optimise amounts & suggest additions")
@@ -267,7 +358,7 @@ with tab_opt:
         c1, c2 = st.columns([1, 2])
         o_kcal = c1.number_input("Target energy (kcal/day)", 1.0, 10000.0,
                                  value=float(round(ctx0["kcal_target"])),
-                                 key="o_kcal",
+                                 key=f"o_kcal_{ss.tgt_ver}",
                                  help="Covers the whole day – lock breakfast "
                                       "kibble if it is in the recipe.")
         rows = []
@@ -290,18 +381,20 @@ with tab_opt:
             for i, (k, v) in enumerate(ctx0["weights"].items()):
                 weights[k] = wc[i % 5].number_input(
                     rc.WEIGHT_LABELS.get(k, k), 0.0, 100.0, float(v),
-                    step=0.5, key=f"w_{k}")
+                    step=0.5, key=f"w_{k}_{ss.tgt_ver}")
             aims = {}
             if ctx0["renal"]:
                 ac = st.columns(2)
                 for i, k in enumerate(("protein", "p")):
-                    lo, hi = rc.RENAL[k]
+                    lo, hi = rc.get_ranges(ctx0)[k]
                     aims[k] = ac[i].number_input(
                         f"Aim {rc.LABEL[k]} ({rc.UNIT[k]}/1000 kcal), range "
-                        f"{lo}–{hi}", 0.0, 5000.0,
+                        f"{lo:g}–{hi:g}", 0.0, 5000.0,
                         float(ctx0["aims"].get(k, (lo + hi) / 2)),
-                        key=f"aim_{k}")
-            st.caption("Aims are this app's editable defaults inside the "
+                        key=f"aim_{k}_{ss.tgt_ver}")
+            st.caption("Aims and ranges adapted from blood results."
+                       if ctx0.get("ranges") else
+                       "Aims are this app's editable defaults inside the "
                        "ACVN range, not published targets.")
 
         do_sug = st.checkbox("Test additions from the library", True,
@@ -322,6 +415,7 @@ with tab_opt:
 
         if st.button("Run optimisation", type="primary", key="o_run"):
             ctx = {"kcal_target": o_kcal, "renal": ctx0["renal"],
+                   "ranges": dict(ctx0.get("ranges", {})),
                    "weights": weights, "aims": {k: v for k, v in
                                                 aims.items() if v}}
             names = list(bdf["Ingredient"])
@@ -371,7 +465,8 @@ with tab_opt:
                 kcal, per, _ = rc.per1000_from(grams, vecs)
                 out = []
                 for k in ("protein", "p", "na", "k", "ca", "epa_dha"):
-                    stt, _ = rc.status_for(k, per[k], ctx["renal"])
+                    stt, _ = rc.status_for(k, per[k], ctx["renal"],
+                                           rc.get_ranges(ctx))
                     out.append({"Per 1000 kcal": rc.LABEL[k],
                                 "Value": f"{per[k]:.1f} {rc.UNIT[k]}",
                                 "Status": stt})
