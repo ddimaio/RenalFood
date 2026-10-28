@@ -17,6 +17,7 @@ import pandas as pd
 import streamlit as st
 
 import importlib
+import inspect
 
 import renal_diet_calc as rc
 
@@ -27,11 +28,103 @@ if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
 st.set_page_config(page_title="Renal Diet Calculator", page_icon="🐕",
-                   layout="wide")
+                   layout="wide", initial_sidebar_state="auto")
 
 # full-width tables on old and new Streamlit versions
 _ver = tuple(int(x) for x in st.__version__.split(".")[:2])
 FULL = {"width": "stretch"} if _ver >= (1, 49) else {"use_container_width": True}
+
+# ---------------------------------------------------------------- layout
+# Phone vs desktop is decided by screen width in CSS (no JavaScript):
+# content in st.container(key="mob_...") shows on narrow screens only,
+# key="desk_..." on wide screens only. Keyed containers need Streamlit
+# >= 1.39; older versions just show the desktop layout.
+KEYED = "key" in inspect.signature(st.container).parameters
+PHONE_MAX = 700          # px; below this width the phone layout is used
+
+_PHONE_CSS = """
+[data-testid="stMainBlockContainer"], .block-container {
+  padding: 3.6rem 0.6rem 3rem !important; }
+h1 { font-size: 1.45rem !important; } h2 { font-size: 1.25rem !important; }
+h3 { font-size: 1.1rem !important; }
+[data-testid="stHorizontalBlock"] { flex-wrap: wrap !important;
+  gap: 0.5rem !important; }
+[data-testid="stColumn"], [data-testid="column"] {
+  min-width: 100% !important; flex: 1 1 100% !important; }
+[class*="st-key-metrics"] [data-testid="stColumn"] {
+  min-width: 45% !important; flex: 1 1 45% !important; }
+[data-testid="stMetricValue"] { font-size: 1.25rem !important; }
+[data-testid="stMetricLabel"] p { font-size: 0.8rem !important; }
+.stTabs [role="tablist"], .stTabs [data-baseweb="tab-list"] {
+  gap: 0.6rem !important; overflow-x: auto; flex-wrap: nowrap; }
+.stTabs [role="tab"], .stTabs [data-baseweb="tab"] {
+  padding-left: 0.1rem !important; padding-right: 0.1rem !important;
+  white-space: nowrap; }
+.stTabs [role="tab"] p, .stTabs [data-baseweb="tab"] p {
+  font-size: 0.85rem !important; }
+.stButton button, .stDownloadButton button, [data-testid="stFormSubmitButton"] button {
+  width: 100%; min-height: 2.75rem; }
+input, select, textarea { font-size: 16px !important; }
+[class*="st-key-desk_"] { display: none !important; }
+"""
+_DESK_CSS = '[class*="st-key-mob_"] { display: none !important; }'
+
+
+def layout_css(mode):
+    if mode == "Phone":
+        css = _PHONE_CSS
+    elif mode == "Desktop":
+        css = _DESK_CSS
+    else:                                   # Auto: by screen width
+        css = (f"@media (max-width: {PHONE_MAX}px) {{ {_PHONE_CSS} }}\n"
+               f"@media (min-width: {PHONE_MAX + 1}px) {{ {_DESK_CSS} }}")
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+
+_SHORT = [("above NRC safe upper limit", "↑ max"), ("above renal range", "↑"),
+          ("below renal range", "↓"), ("in renal range", "✓"),
+          ("above AAFCO max", "↑ max"), ("below AAFCO min", "↓ min"),
+          ("≥ AAFCO min", "✓")]
+
+
+def short_status(s):
+    out = s
+    for long_, short in _SHORT:
+        out = out.replace(long_, short)
+    return out.replace("; data missing", " ?").replace("data missing", "?")
+
+
+def with_unit(v, u):
+    """'75.1  (26% of weight)' + 'g' -> '75.1 g (26% of weight)'."""
+    if not u:
+        return v
+    head, _, rest = str(v).partition(" ")
+    if rest.lstrip().startswith("/"):            # '20 / 25 / 55' + '% ME'
+        return f"{v} {u}"
+    try:
+        float(head.replace(",", ""))
+    except ValueError:
+        return v
+    return f"{head} {u}" + (f" {rest.strip()}" if rest.strip() else "")
+
+
+_W = (lambda px, word: px) if _ver >= (1, 45) else (lambda px, word: word)
+PHONE_COMP_CFG = {"Nutrient": st.column_config.TextColumn(width=_W(165, "medium")),
+                  "/1000 kcal": st.column_config.TextColumn(width=_W(72, "small")),
+                  "Target": st.column_config.TextColumn(width=_W(80, "small")),
+                  "": st.column_config.TextColumn(width=_W(48, "small"))}
+
+
+def view(kind, name):
+    """Container shown only on phones (kind='mob') or only on wider screens
+    (kind='desk'). Without keyed containers: desktop only."""
+    if KEYED:
+        return st.container(key=f"{kind}_{name}")
+    return st.container() if kind == "desk" else None
+
+
+def keyed(name):
+    return st.container(key=name) if KEYED else st.container()
 
 # ---------------------------------------------------------------- state
 ss = st.session_state
@@ -146,8 +239,11 @@ with st.sidebar:
     st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal")
     st.caption(rc.STAGES[ss.stage][1])
     st.divider()
+    st.radio("Layout", ["Auto", "Phone", "Desktop"], key="layout",
+             horizontal=True, help="Auto picks by screen width.")
     st.caption("Approximate tool – not veterinary advice. A home-made renal "
                "diet should be balanced by a vet nutritionist.")
+layout_css(ss.get("layout", "Auto"))
 
 tab_rec, tab_blood, tab_opt, tab_gen, tab_lib, tab_about = st.tabs(
     ["🍲 Recipe & analysis", "🩸 Blood results", "⚙️ Optimise",
@@ -157,6 +253,11 @@ names_all = sorted(db, key=str.lower)
 
 # ================================================================ RECIPE
 with tab_rec:
+    _m = view("mob", "dog")
+    if _m:
+        with _m:
+            st.caption(f"🐕 {ss.bw:g} kg · {ss.stage} · {need_now():.0f} "
+                       "kcal/day — change in the sidebar (› top left)")
     if ss.recipe_note:
         edited = ss.recipe != ss.applied
         st.success(ss.recipe_note + ("   (edited since)" if edited else ""))
@@ -176,7 +277,7 @@ with tab_rec:
             column_config={
                 "Ingredient": st.column_config.SelectboxColumn(
                     "Ingredient", options=names_all, required=True,
-                    width="large"),
+                    width="medium"),
                 "g": st.column_config.NumberColumn(
                     "g/day", min_value=0.0, step=0.5, format="%.1f",
                     required=True)})
@@ -234,15 +335,16 @@ with tab_rec:
         else:
             t = a["totals"]
             k1000 = 1000 / t["kcal"] if t["kcal"] else 0
-            m = st.columns(5)
-            m[0].metric("Score (0 = all met)",
-                        f"{a['score']:.3f}" if a["score"] is not None
-                        else "–")
-            m[1].metric("Energy", f"{t['kcal']:.0f} kcal",
+            with keyed("metrics"):
+                m = st.columns(5)
+            m[0].metric("Score", f"{a['score']:.3f}" if a["score"]
+                        is not None else "–", help="0 = all targets met")
+            m[1].metric("kcal/day", f"{t['kcal']:.0f}",
                         f"{t['kcal'] - need_now():+.0f} vs need")
-            m[2].metric("Protein", f"{t['protein'] * k1000:.0f} g/1000kcal")
-            m[3].metric("Phosphorus (net)",
-                        f"{rc.net_p(t) * k1000:.0f} mg/1000kcal")
+            m[2].metric("Protein g", f"{t['protein'] * k1000:.0f}",
+                        help="per 1000 kcal")
+            m[3].metric("P mg (net)", f"{rc.net_p(t) * k1000:.0f}",
+                        help="phosphorus per 1000 kcal, net of any binder")
             m[4].metric("Ca : P",
                         f"{t['ca'] / t['p']:.2f}" if t["p"] else "–")
             st.subheader("Assessment")
@@ -253,24 +355,56 @@ with tab_rec:
     if a["mass"] > 0:
         st.divider()
         ct, bt = st.tabs(["Composition", "Ingredient breakdown"])
+        cols = ["Nutrient", "Unit", "Recipe total", "/100 g fed",
+                "/100 g DM", "/1000 kcal", "Per day", "Renal range",
+                "AAFCO min", "Status"]
+        comp = pd.DataFrame([v for v, _ in a["rows"]], columns=cols)
+        tags = [tg for _, tg in a["rows"]]
+        bcols = [c for _, c, _ in rc.App.BRK_COLS]
+        brk = pd.DataFrame(a["breakdown"], columns=bcols)
+        h_comp = 35 * (len(comp) + 1) + 3
+
+        def colour(df_):
+            return df_.style.apply(
+                lambda r: [TAG_COLOUR.get(tags[r.name], "")] * len(r),
+                axis=1)
         with ct:
             sm = pd.DataFrame(a["summary"],
                               columns=["Summary", "Unit", "Value", "Note"])
-            st.dataframe(sm, hide_index=True, **FULL)
-            cols = ["Nutrient", "Unit", "Recipe total", "/100 g fed",
-                    "/100 g DM", "/1000 kcal", "Per day", "Renal range",
-                    "AAFCO min", "Status"]
-            comp = pd.DataFrame([v for v, _ in a["rows"]], columns=cols)
-            tags = [tg for _, tg in a["rows"]]
-            styled = comp.style.apply(
-                lambda r: [TAG_COLOUR.get(tags[r.name], "")] * len(r),
-                axis=1)
-            st.dataframe(styled, hide_index=True, **FULL,
-                         height=35 * (len(comp) + 1) + 3)
+            with view("desk", "comp"):
+                st.dataframe(sm, hide_index=True, **FULL)
+                st.dataframe(colour(comp), hide_index=True, **FULL,
+                             height=h_comp)
+            _m = view("mob", "comp")
+            if _m:
+                with _m:
+                    st.dataframe(pd.DataFrame({
+                        "Summary": sm["Summary"],
+                        "Value": [with_unit(v, u) + (f" · {n}" if n else "")
+                                  for v, u, n in zip(sm["Value"], sm["Unit"],
+                                                     sm["Note"])]}),
+                        hide_index=True, **FULL)
+                    rng = [r or (f"≥{m_}" if m_ else "")
+                           for r, m_ in zip(comp["Renal range"],
+                                            comp["AAFCO min"])]
+                    st.dataframe(colour(pd.DataFrame({
+                        "Nutrient": [f"{n} ({u})" if u else n for n, u in
+                                     zip(comp["Nutrient"], comp["Unit"])],
+                        "/1000 kcal": comp["/1000 kcal"], "Target": rng,
+                        "": [short_status(s_) for s_ in comp["Status"]]})),
+                        hide_index=True, **FULL, height=h_comp,
+                        column_config=PHONE_COMP_CFG)
+                    st.caption("Values per 1000 kcal. ✓ ok · ↓ low · ↑ high "
+                               "· ? data missing. Per-day amounts: Layout → "
+                               "Desktop (sidebar).")
         with bt:
-            bcols = [c for _, c, _ in rc.App.BRK_COLS]
-            st.dataframe(pd.DataFrame(a["breakdown"], columns=bcols),
-                         hide_index=True, **FULL)
+            with view("desk", "brk"):
+                st.dataframe(brk, hide_index=True, **FULL)
+            _m = view("mob", "brk")
+            if _m:
+                with _m:
+                    st.dataframe(brk[["Ingredient", "g", "kcal", "P mg",
+                                      "% of P"]], hide_index=True, **FULL)
             st.caption("'?' = value unknown for that ingredient.")
 
         buf = io.StringIO()
@@ -311,8 +445,9 @@ with tab_blood:
     h[0].text_input("Test date", key="bl_date", placeholder="e.g. 2026-11-03")
     h[1].selectbox("Weight trend", ["stable", "losing", "gaining"],
                    key="bl_trend")
-    cols = st.columns(3)
     for i, (k, lab, unit, refr) in enumerate(rc.BLOOD_FIELDS):
+        if i % 3 == 0:
+            cols = st.columns(3)
         cols[i % 3].number_input(f"{lab}" + (f" ({unit})" if unit else ""),
                                  min_value=0.0, format="%g",
                                  key=f"bl_{k}", help=refr)
@@ -330,18 +465,34 @@ with tab_blood:
                     + ("  · renal ranges applied because of high phosphate"
                        if a["renal_force"] else ""))
         if a["findings"]:
-            st.dataframe(pd.DataFrame(a["findings"], columns=[
-                "Test", "Value", "Reference / target", "Finding",
-                "Change to targets"]), hide_index=True, **FULL)
+            with view("desk", "findings"):
+                st.dataframe(pd.DataFrame(a["findings"], columns=[
+                    "Test", "Value", "Reference / target", "Finding",
+                    "Change to targets"]), hide_index=True, **FULL)
+            _m = view("mob", "findings")
+            if _m:
+                with _m:
+                    st.markdown("\n".join(
+                        f"- **{t_}** {v_} — {f_}"
+                        + (f"  \n  → {c_}" if c_ else "")
+                        for t_, v_, r_, f_, c_ in a["findings"]))
         else:
             st.info("No results entered.")
         ch = pd.DataFrame(a["changes"], columns=["Target (per 1000 kcal)",
                                                  "Default", "Adapted"])
         changed = [r1 != r2 for r1, r2 in zip(ch["Default"], ch["Adapted"])]
-        st.dataframe(ch.style.apply(
-            lambda r: ["font-weight: 600; color: #b36b00"
-                       if changed[r.name] else ""] * len(r), axis=1),
-            hide_index=True, **FULL)
+        with view("desk", "changes"):
+            st.dataframe(ch.style.apply(
+                lambda r: ["font-weight: 600; color: #b36b00"
+                           if changed[r.name] else ""] * len(r), axis=1),
+                hide_index=True, **FULL)
+        _m = view("mob", "changes")
+        if _m:
+            with _m:
+                st.markdown("**Target changes (per 1000 kcal)**\n" + (
+                    "\n".join(f"- {t_}: {d0} → **{d1}**" for (t_, d0, d1), c_
+                              in zip(a["changes"], changed) if c_)
+                    or "- none"))
         c = st.columns([1, 1, 2])
         c[0].checkbox("Also adjust MER factor", True, key="bl_mer",
                       disabled=not a["mer_delta"])
@@ -674,6 +825,11 @@ with tab_lib:
                              "commercial food", "imported"])}
     cfg.update({k: st.column_config.NumberColumn(
         f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in rc.KEYS})
+    _m = view("mob", "libnote")
+    if _m:
+        with _m:
+            st.caption("📱 This table is wide – swipe sideways, or edit on a "
+                       "larger screen.")
     led = st.data_editor(ldf, key=f"lib_{ss.lib_ver}", num_rows="dynamic",
                          hide_index=True, **FULL,
                          height=420, column_config=cfg)
