@@ -156,6 +156,9 @@ AAFCO_EXT = {
     "fe": 10, "cu": 1.83, "mn": 1.25, "zn": 20, "i": 250, "se": 80,
 }
 AAFCO.update(AAFCO_EXT)
+# With the extended check on: penalty per unit share of calories coming from
+# ingredients without extended data (app default, not a published target).
+EXT_GAP_WEIGHT = 4.0
 AAFCO_MAX = {"ca": 6250, "vit_d": 750, "i": 2750, "se": 500}
 # Nutrients added in a later version: filled in for built-in foods already
 # saved in an older library file
@@ -701,6 +704,15 @@ def score_amounts(g, vecs, ctx):
         for k in EXT_KEYS:
             add(LABEL[k], we, bandk(k, per[k], AAFCO[k],
                                     AAFCO_MAX.get(k)))
+        # Unknown values are not scored as shortfalls, so without this the
+        # search would favour ingredients that lack extended data. Penalise
+        # the share of calories from such ingredients (iodine excluded: it
+        # is missing for almost every food).
+        kc_i = KI["kcal"]
+        gap = sum(gi * (v[kc_i] or 0) / 100.0 for gi, v in zip(g, vecs)
+                  if gi > 0 and any(v[KI[k]] is None for k in EXT_KEYS
+                                    if k != "i"))
+        add("Extended data missing", we * EXT_GAP_WEIGHT, gap / kcal)
     return sum(terms.values()), terms
 
 

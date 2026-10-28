@@ -62,3 +62,8 @@ rice, cooked egg white, and oils (rapeseed, coconut, linseed, hemp, walnut).
 - IRIS treatment recommendations
 - AAFCO dog food nutrient profiles (adult maintenance)
 - Ingredient values: approximations of USDA FoodData Central
+- Extended nutrients (amino acids, linoleic acid, Fe, Cu, Mn, Zn, Se) for
+  the generic foods: USDA National Nutrient Database SR26, matched by NDB
+  number; pure salts/binders set to 0, oils' amino acids set to 0. Iodine
+  is not in SR26 and stays empty. Commercial foods, yeast flakes, eggshell
+  powder, Cauldron tofu, hemp and algal oil minerals are left empty.
