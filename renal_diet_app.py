@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.28"
+ENGINE_VERSION = "2026.10.28b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -134,7 +134,7 @@ for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
                  "applied": None, "score_ctx": None, "opt_result": None,
                  "gen_result": None, "bw": 6.0, "factor": 1.6,
                  "stage": "Stage 2", "lib_ver": 0, "tgt_ver": 0,
-                 "blood_eval": None}.items():
+                 "blood_eval": None, "ext": False}.items():
     ss.setdefault(key, val)
 db = ss.db
 
@@ -149,7 +149,8 @@ def need_now():
 def score_context(kcal=None):
     """Last optimiser/generator settings or blood adaptation for this stage,
     else defaults."""
-    ctx = rc.build_score_context(ss.score_ctx, ss.stage, need_now(), ss.bw)
+    ctx = rc.build_score_context(ss.score_ctx, ss.stage, need_now(), ss.bw,
+                                 ss.ext)
     if kcal:
         ctx["kcal_target"] = kcal
     return ctx
@@ -238,6 +239,11 @@ with st.sidebar:
     st.selectbox("IRIS stage", list(rc.STAGES), key="stage")
     st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal")
     st.caption(rc.STAGES[ss.stage][1])
+    st.toggle("Extended nutrients", key="ext",
+              help="Also show and check essential amino acids, linoleic "
+                   "acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) against "
+                   "AAFCO adult minimums. Needs these values in the "
+                   "ingredient library.")
     st.divider()
     st.radio("Layout", ["Auto", "Phone", "Desktop"], key="layout",
              horizontal=True, help="Auto picks by screen width.")
@@ -574,6 +580,7 @@ with tab_opt:
 
         if st.button("Run optimisation", type="primary", key="o_run"):
             ctx = {"kcal_target": o_kcal, "bw": ctx0.get("bw"),
+                   "extended": ctx0.get("extended", False),
                    "renal": ctx0["renal"],
                    "ranges": dict(ctx0.get("ranges", {})),
                    "weights": weights, "aims": {k: v for k, v in
@@ -813,6 +820,7 @@ with tab_lib:
     st.subheader("Ingredient library")
     st.caption(f"{len(db)} ingredients · values per 100 g · blank = unknown "
                f"· shared with the desktop app ({os.path.basename(rc.DB_PATH)})")
+    lib_keys = rc.visible_keys(ss.ext)
     lib_rows = []
     for n in names_all:
         it = db[n]
@@ -820,12 +828,13 @@ with tab_lib:
                "note": it.get("note", "")}
         row.update({k: it["per100g"][k] for k in rc.KEYS})
         lib_rows.append(row)
-    ldf = pd.DataFrame(lib_rows)
+    full_df = pd.DataFrame(lib_rows)        # all columns, for export
+    ldf = full_df[["name", "category", "note"] + lib_keys]
     cfg = {"category": st.column_config.SelectboxColumn(
         "category", options=["food", "supplement", "binder",
                              "commercial food", "imported"])}
     cfg.update({k: st.column_config.NumberColumn(
-        f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in rc.KEYS})
+        f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in lib_keys})
     _m = view("mob", "libnote")
     if _m:
         with _m:
@@ -837,22 +846,31 @@ with tab_lib:
     lc = st.columns(3)
     if lc[0].button("💾 Save library changes", type="primary"):
         new_db = {}
-        for _, rw in led.iterrows():
+        for idx, rw in led.iterrows():
             nm = str(rw["name"]).strip() if pd.notna(rw["name"]) else ""
             if not nm:
                 continue
+            # hidden (extended) columns keep their stored values
+            try:
+                orig = db.get(names_all[int(idx)])
+            except (TypeError, ValueError, IndexError):
+                orig = None
+            orig = orig or db.get(nm)
+            per = {k: (orig["per100g"].get(k) if orig else None)
+                   for k in rc.KEYS}
+            per.update({k: (None if pd.isna(rw[k]) else float(rw[k]))
+                        for k in lib_keys})
             new_db[nm] = rc.normalise({
                 "name": nm, "category": rw["category"] or "food",
                 "note": rw["note"] if pd.notna(rw["note"]) else "",
-                "per100g": {k: (None if pd.isna(rw[k]) else float(rw[k]))
-                            for k in rc.KEYS}})
+                "per100g": per})
         ss.db = new_db
         rc.save_db(new_db)
         ss.lib_ver += 1
         st.success(f"Saved {len(new_db)} ingredients.")
         st.rerun()
     out = io.StringIO()
-    ldf.to_csv(out, index=False)
+    full_df.to_csv(out, index=False)
     lc[1].download_button("⬇️ Export library (.csv)", out.getvalue(),
                           file_name="ingredient_library.csv",
                           mime="text/csv")
@@ -935,7 +953,10 @@ with tab_about:
 **What it checks** – protein, phosphorus (net of any binder), calcium and
 Ca:P, sodium, potassium, magnesium, fat and energy density, vitamins A, B1,
 B2, B3, B5, B6, B12, folate, choline, D (min and max), E, C, EPA+DHA,
-acid load (indicative) and calories vs the dog's daily need.
+acid load (indicative) and calories vs the dog's daily need. With
+*Extended nutrients* on (sidebar): essential amino acids, linoleic acid and
+trace minerals (Fe, Cu, Mn, Zn, I, Se) vs AAFCO adult minimums; fill these
+values with `fdc_fill.py`.
 
 **Targets** – ACVN Nutrition Notes renal-diet ranges for dogs (per 1000
 kcal), AAFCO adult maintenance minimums/maximums, IRIS serum phosphate

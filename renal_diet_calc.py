@@ -22,9 +22,13 @@ Data sources / targets
   * Stage notes: IRIS serum phosphate targets.
   * PRAL: Remer & Manz (human) potential renal acid load - indicative only.
 
-Approximate tool - not veterinary advice. Trace minerals (Zn, Cu, Fe, I, Se),
-vitamins D/E, choline, essential fatty acids and amino-acid balance are NOT
-checked; a home-made diet needs a vet-approved vitamin/mineral supplement.
+Optional "extended nutrients" check (off by default): essential amino
+acids, linoleic acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) against
+AAFCO adult minimums (I, Se also maximums). Values can be filled from USDA
+FoodData Central with fdc_fill.py.
+
+Approximate tool - not veterinary advice. A home-made diet needs a
+vet-approved vitamin/mineral supplement.
 """
 
 import csv
@@ -44,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.28"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.28b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -78,8 +82,40 @@ NUTRIENTS = [
     ("epa_dha", "EPA + DHA", "mg"),
     ("base_meq", "Added alkali (e.g. bicarbonate)", "mEq"),
     ("p_bind", "Phosphate binding (est.)", "mg P"),
+    # ---- extended nutrients (optional check, off by default)
+    ("arg", "Arginine", "g"),
+    ("his", "Histidine", "g"),
+    ("ile", "Isoleucine", "g"),
+    ("leu", "Leucine", "g"),
+    ("lys", "Lysine", "g"),
+    ("met", "Methionine", "g"),
+    ("met_cys", "Methionine + cystine", "g"),
+    ("phe", "Phenylalanine", "g"),
+    ("phe_tyr", "Phenylalanine + tyrosine", "g"),
+    ("thr", "Threonine", "g"),
+    ("trp", "Tryptophan", "g"),
+    ("val", "Valine", "g"),
+    ("la", "Linoleic acid", "g"),
+    ("fe", "Iron", "mg"),
+    ("cu", "Copper", "mg"),
+    ("mn", "Manganese", "mg"),
+    ("zn", "Zinc", "mg"),
+    ("i", "Iodine", "µg"),
+    ("se", "Selenium", "µg"),
 ]
 KEYS = [k for k, _, _ in NUTRIENTS]
+# Extended nutrients: essential amino acids, linoleic acid, trace minerals.
+# Stored like the others but only shown, scored and reported when the
+# "extended nutrients" option is on.
+EXT_KEYS = ["arg", "his", "ile", "leu", "lys", "met", "met_cys", "phe",
+            "phe_tyr", "thr", "trp", "val", "la", "fe", "cu", "mn", "zn",
+            "i", "se"]
+BASE_KEYS = [k for k in KEYS if k not in EXT_KEYS]
+
+
+def visible_keys(extended=False):
+    """Nutrient keys to show: all of them with the extended option on."""
+    return KEYS if extended else BASE_KEYS
 LABEL = {k: l for k, l, _ in NUTRIENTS}
 UNIT = {k: u for k, _, u in NUTRIENTS}
 # Keys that default to 0 (not "unknown") when absent from older files
@@ -111,7 +147,16 @@ AAFCO = {
 }
 WATER_SOLUBLE = ["b1", "b2", "b3", "b5", "b6", "b12", "folate"]
 # AAFCO adult maximum, per 1000 kcal ME (Ca 2.5% DM); Ca:P max 2:1
-AAFCO_MAX = {"ca": 6250, "vit_d": 750}
+# AAFCO adult maintenance minimums for the extended nutrients, per 1000 kcal
+# ME (AAFCO Dog Food Nutrient Profiles). Iodine and selenium in µg.
+AAFCO_EXT = {
+    "arg": 1.28, "his": 0.48, "ile": 0.95, "leu": 1.70, "lys": 1.58,
+    "met": 0.83, "met_cys": 1.63, "phe": 1.13, "phe_tyr": 1.85, "thr": 1.20,
+    "trp": 0.40, "val": 1.23, "la": 2.8,
+    "fe": 10, "cu": 1.83, "mn": 1.25, "zn": 20, "i": 250, "se": 80,
+}
+AAFCO.update(AAFCO_EXT)
+AAFCO_MAX = {"ca": 6250, "vit_d": 750, "i": 2750, "se": 500}
 # Nutrients added in a later version: filled in for built-in foods already
 # saved in an older library file
 NEW_KEYS = ("b5", "choline", "vit_d", "vit_e")
@@ -651,6 +696,11 @@ def score_amounts(g, vecs, ctx):
     if me > 0 and not {"fat", "protein", "carb", "fibre"} & unk:
         add("Fat % of calories", W["fat"], _band(fat_me / me, None, 0.55))
     add("Fibre (bulk)", W.get("fibre", 0), _band(per["fibre"], None, FIBRE_MAX))
+    if ctx.get("extended"):              # optional: amino acids, LA, trace
+        we = W.get("extended", W["micros"]) * 0.5
+        for k in EXT_KEYS:
+            add(LABEL[k], we, bandk(k, per[k], AAFCO[k],
+                                    AAFCO_MAX.get(k)))
     return sum(terms.values()), terms
 
 
@@ -1028,7 +1078,7 @@ def improvement_reasons(before, after, n=3):
 
 def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                   acid, k1000, renal_mode, stage_note, fat_frac, ranges=None,
-                  blood_note=""):
+                  blood_note="", extended=False):
     """Plain-language assessment notes for a recipe."""
     R = ranges or get_ranges()
     out = [f"{stage_name}: {stage_note}"]
@@ -1157,16 +1207,58 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
         out.append(f"• This recipe supplies {kcal:.0f} kcal = {pct:.0f}% of "
                    f"the estimated daily need ({need:.0f} kcal). "
                    f"Feed ≈ {need / kcal * mass:.0f} g/day to meet MER.")
-    missing = sorted({n for k in KEYS for n in miss[k]})
+    missing = sorted({n for k in BASE_KEYS for n in miss[k]})
     if missing:
         out.append("• Incomplete data for: " + ", ".join(missing) +
                    " – values marked ≥ are minimums. Shortfalls in those "
                    "nutrients are not scored (only excesses are certain).")
-    out += ["", "Not checked: trace minerals (Zn, Cu, Fe, I, Se), vitamin "
-            "K, biotin, essential fatty acids, amino-acid balance. A "
-            "home-made renal diet should be balanced by a vet "
-            "nutritionist. Never force-feed (food aversion)."]
+    if extended and k1000:
+        out += extended_notes(t, miss, k1000)
+        out += ["", "Not checked: vitamin K, biotin. Amino acids are "
+                "totals, not digestible amounts – plant proteins are less "
+                "digestible, so a value just above the minimum may not be "
+                "enough. A home-made renal diet should be balanced by a vet "
+                "nutritionist. Never force-feed (food aversion)."]
+    else:
+        out += ["", "Not checked: trace minerals (Zn, Cu, Fe, I, Se), "
+                "vitamin K, biotin, essential fatty acids, amino-acid "
+                "balance (turn on extended nutrients to check most of "
+                "these). A home-made renal diet should be balanced by a vet "
+                "nutritionist. Never force-feed (food aversion)."]
     return "\n".join(out)
+
+
+def extended_notes(t, miss, k1000):
+    """Notes for the optional amino-acid / linoleic acid / trace-mineral
+    check against AAFCO adult minimums (and I, Se maximums)."""
+    low, high, unknown = [], [], []
+    for k in EXT_KEYS:
+        v = t[k] * k1000
+        if miss[k]:
+            unknown.append(LABEL[k])
+            if k in AAFCO_MAX and v > AAFCO_MAX[k]:
+                high.append(f"{LABEL[k]} ≥{fmt(v)}")
+            continue
+        if v < AAFCO[k]:
+            low.append(f"{LABEL[k]} {fmt(v)} (min {AAFCO[k]:g})")
+        elif k in AAFCO_MAX and v > AAFCO_MAX[k]:
+            high.append(f"{LABEL[k]} {fmt(v)} (max {AAFCO_MAX[k]:g})")
+    out = []
+    if low:
+        out.append("• Below AAFCO minimum per 1000 kcal: " + ", ".join(low)
+                   + ". A balancing supplement or recipe change is needed.")
+    if high:
+        out.append("• Above AAFCO maximum per 1000 kcal: " + ", ".join(high)
+                   + ".")
+    if unknown:
+        names = sorted({n for k in EXT_KEYS for n in miss[k]})
+        out.append("• Extended nutrients not checked for lack of data: "
+                   + ", ".join(unknown) + " (missing in: "
+                   + ", ".join(names) + ").")
+    elif not low and not high:
+        out.append("• Amino acids, linoleic acid and trace minerals meet "
+                   "AAFCO adult minimums (totals, not digestible amounts).")
+    return out
 
 
 BRK_KEYS = [("kcal", "kcal"), ("protein", "protein"), ("fat", "fat"),
@@ -1260,7 +1352,8 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                            else "all targets met"))
     res["summary"] = summary
 
-    for k in KEYS:
+    extended = bool((sctx or {}).get("extended"))
+    for k in visible_keys(extended):
         if k in ("base_meq", "p_bind") and t[k] == 0:
             continue
         inc = "≥" if miss[k] else ""
@@ -1285,7 +1378,7 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     res["notes"] = assess_recipe(stage_name, recipe, db, t, miss, mass, kcal,
                                  need, capr, acid, k1000, renal_mode,
                                  stage_note, fat_me / me_sum, ranges,
-                                 (sctx or {}).get("blood_note", ""))
+                                 (sctx or {}).get("blood_note", ""), extended)
     return res
 
 
@@ -1627,13 +1720,15 @@ def adapt_from_bloods(b, current_stage="Stage 2"):
             "note": note}
 
 
-def build_score_context(sc, stage, need, bw=None):
+def build_score_context(sc, stage, need, bw=None, extended=False):
     """Scoring ctx from saved settings `sc` (optimiser run and/or blood
     adaptation). Saved aims/ranges only apply to the stage they were made
-    for. bw (kg) sets the EPA+DHA dose floor."""
+    for. bw (kg) sets the EPA+DHA dose floor; extended=True also checks
+    amino acids, linoleic acid and trace minerals."""
     sc = sc or {}
     same = sc.get("stage") == stage
     ctx = {"kcal_target": sc.get("kcal_override") or need, "bw": bw,
+           "extended": bool(extended),
            "renal": STAGES[stage][0] or bool(same and sc.get("renal_force")),
            "weights": {**OPT_WEIGHTS, **sc.get("weights", {})},
            "aims": (dict(sc["aims"]) if same and "aims" in sc
@@ -1729,6 +1824,9 @@ class IngredientDialog(tk.Toplevel):
         self.result = None
         item = item or {"name": "", "category": "food", "note": "",
                         "per100g": {k: None for k in KEYS}}
+        self.kept = dict(item["per100g"])      # values of hidden fields
+        ext_on = getattr(parent, "ext", None)
+        keys = visible_keys(bool(ext_on.get()) if ext_on else False)
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
 
@@ -1750,8 +1848,8 @@ class IngredientDialog(tk.Toplevel):
             row=3, column=0, columnspan=4, sticky="w", pady=(8, 2))
 
         self.entries = {}
-        half = (len(KEYS) + 1) // 2
-        for i, k in enumerate(KEYS):
+        half = (len(keys) + 1) // 2
+        for i, k in enumerate(keys):
             r, c = 4 + i % half, (i // half) * 2
             ttk.Label(frm, text=f"{LABEL[k]} ({UNIT[k]})").grid(
                 row=r, column=c, sticky="w", padx=(0, 4))
@@ -1776,7 +1874,7 @@ class IngredientDialog(tk.Toplevel):
         if not name:
             messagebox.showerror("Ingredient", "Name is required.", parent=self)
             return
-        vals = {}
+        vals = {k: self.kept.get(k) for k in KEYS}
         for k, e in self.entries.items():
             try:
                 vals[k] = to_float(e.get())
@@ -2376,6 +2474,7 @@ class OptimiseDialog(tk.Toplevel):
         self.renal = ctx0["renal"]
         self.ranges = ctx0.get("ranges", {})
         self.bw = ctx0.get("bw")
+        self.extended = ctx0.get("extended", False)
         R0 = get_ranges(ctx0)
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
@@ -2495,6 +2594,7 @@ class OptimiseDialog(tk.Toplevel):
         app = self.app
         try:
             ctx = {"kcal_target": float(self.kcal.get()), "bw": self.bw,
+                   "extended": self.extended,
                    "renal": self.renal, "ranges": dict(self.ranges),
                    "weights": {k: float(v.get()) for k, v in self.w.items()},
                    "aims": {k: to_float(v.get()) for k, v in
@@ -2734,6 +2834,10 @@ class App(tk.Tk):
                           state="readonly", width=26)
         cb.pack(side="left", padx=(2, 12))
         cb.bind("<<ComboboxSelected>>", lambda e: self.recalc())
+        self.ext = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top, variable=self.ext, command=self.recalc,
+                        text="Extended nutrients (amino acids, trace "
+                             "minerals)").pack(side="left", padx=(0, 12))
         for var in (self.bw, self.factor):
             var.trace_add("write", lambda *a: self.recalc())
         ttk.Button(top, text="Export results CSV",
@@ -2897,7 +3001,8 @@ class App(tk.Tk):
         n = self.selected_lib()
         if n:
             item = self.db[n]
-            unk = [LABEL[k] for k in KEYS if item["per100g"][k] is None]
+            unk = [LABEL[k] for k in visible_keys(self.ext.get())
+                   if item["per100g"][k] is None]
             txt = item.get("note", "")
             if unk:
                 txt += ("  " if txt else "") + "Unknown: " + ", ".join(unk)
@@ -3133,7 +3238,8 @@ class App(tk.Tk):
         """Scoring settings: last optimiser run / blood adaptation if for the
         same stage, else defaults."""
         return build_score_context(self.score_ctx, self.stage.get(),
-                                   self.current_mer(), self.current_bw())
+                                   self.current_mer(), self.current_bw(),
+                                   self.ext.get())
 
     def current_bw(self):
         try:

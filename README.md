@@ -29,11 +29,25 @@ scripts on first run.
   (140 mg × BW^0.75 a day) spread over the daily energy target.
 - Missing nutrient values are not treated as zero: totals are minimums, so
   shortfalls in those nutrients are not scored, only excesses.
+- Optional *extended nutrients* check (a toggle, off by default): essential
+  amino acids, linoleic acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) vs
+  AAFCO adult minimums, plus iodine and selenium maximums. Hidden from the
+  results and library editor unless switched on.
 - Daily energy need (MER = factor × 70 × BW^0.75) and scaling to body weight.
 - Optimiser: best amounts for chosen ingredients + suggested additions.
 - Generator: balanced recipes from the whole library, with protein and
   vegetable variety, optional fixed base (e.g. breakfast kibble).
 - Ingredient import (CSV/JSON), add from a pet-food label, save/load recipes.
+
+## Filling extended nutrients from USDA
+
+`fdc_fill.py` fills the extended nutrients in `renal_ingredients.json` from
+USDA FoodData Central. It needs a free API key
+(https://fdc.nal.usda.gov/api-key-signup). Run it (also from Spyder); it
+asks you to match each library food to an FDC food once (saved in
+`fdc_map.json`), then fills empty values only. Check matches are the same
+preparation (cooked vs raw). Commercial foods and supplements are skipped:
+use their labels. Iodine is rarely in FDC.
 
 ## Extra ingredients
 
