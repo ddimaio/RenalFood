@@ -16,7 +16,15 @@ import os
 import pandas as pd
 import streamlit as st
 
+import importlib
+
 import renal_diet_calc as rc
+
+# Streamlit keeps imported modules in memory between reruns, so after an
+# update the new app script can meet the old engine. Reload it if stale.
+ENGINE_VERSION = "2026.10.28"
+if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
+    rc = importlib.reload(rc)
 
 st.set_page_config(page_title="Renal Diet Calculator", page_icon="🐕",
                    layout="wide")
