@@ -70,6 +70,42 @@ input, select, textarea { font-size: 16px !important; }
 _DESK_CSS = '[class*="st-key-mob_"] { display: none !important; }'
 
 
+# Always-visible scroll bars on tables (the grid's own thin overlay bars
+# hide until you scroll, so wide tables look cut off). Chrome only honours
+# ::-webkit-scrollbar when scrollbar-width/-color are left at 'auto'.
+_TABLE_CSS = """
+[data-testid="stDataFrame"] .dvn-scroller,
+[data-testid="stDataEditor"] .dvn-scroller {
+  scrollbar-width: auto !important; scrollbar-color: auto !important; }
+[data-testid="stDataFrame"] .dvn-scroller::-webkit-scrollbar,
+[data-testid="stDataEditor"] .dvn-scroller::-webkit-scrollbar {
+  height: 12px; width: 12px; background: #eef1f5; }
+[data-testid="stDataFrame"] .dvn-scroller::-webkit-scrollbar-thumb,
+[data-testid="stDataEditor"] .dvn-scroller::-webkit-scrollbar-thumb {
+  background: #9aa4b2; border-radius: 6px; border: 3px solid #eef1f5; }
+[data-testid="stDataFrame"] .dvn-scroller::-webkit-scrollbar-thumb:hover,
+[data-testid="stDataEditor"] .dvn-scroller::-webkit-scrollbar-thumb:hover {
+  background: #6b7685; }
+[data-testid="stDataFrame"] .dvn-scroller::-webkit-scrollbar-corner,
+[data-testid="stDataEditor"] .dvn-scroller::-webkit-scrollbar-corner {
+  background: #eef1f5; }
+"""
+
+
+ROW_H, SCROLL_H = 35, 14
+
+
+def show_df(where, data, **kw):
+    """st.dataframe with room for the always-visible horizontal scroll bar
+    (otherwise it covers the last row)."""
+    df_ = data if isinstance(data, pd.DataFrame) else getattr(data, "data",
+                                                               data)  # Styler
+    if kw.get("height") is None:
+        kw["height"] = min(len(df_) + 1, 11) * ROW_H + 3   # Streamlit default
+    kw["height"] += SCROLL_H
+    return where.dataframe(data, **kw)
+
+
 def layout_css(mode):
     if mode == "Phone":
         css = _PHONE_CSS
@@ -78,7 +114,8 @@ def layout_css(mode):
     else:                                   # Auto: by screen width
         css = (f"@media (max-width: {PHONE_MAX}px) {{ {_PHONE_CSS} }}\n"
                f"@media (min-width: {PHONE_MAX + 1}px) {{ {_DESK_CSS} }}")
-    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    st.markdown(f"<style>{_TABLE_CSS}\n{css}</style>",
+                unsafe_allow_html=True)
 
 
 _SHORT = [("above NRC safe upper limit", "↑ max"), ("above renal range", "↑"),
@@ -385,13 +422,13 @@ with tab_rec:
             sm = pd.DataFrame(a["summary"],
                               columns=["Summary", "Unit", "Value", "Note"])
             with view("desk", "comp"):
-                st.dataframe(sm, hide_index=True, **FULL)
-                st.dataframe(colour(comp), hide_index=True, **FULL,
+                show_df(st, sm, hide_index=True, **FULL)
+                show_df(st, colour(comp), hide_index=True, **FULL,
                              height=h_comp)
             _m = view("mob", "comp")
             if _m:
                 with _m:
-                    st.dataframe(pd.DataFrame({
+                    show_df(st, pd.DataFrame({
                         "Summary": sm["Summary"],
                         "Value": [with_unit(v, u) + (f" · {n}" if n else "")
                                   for v, u, n in zip(sm["Value"], sm["Unit"],
@@ -400,7 +437,7 @@ with tab_rec:
                     rng = [r or (f"≥{m_}" if m_ else "")
                            for r, m_ in zip(comp["Renal range"],
                                             comp["AAFCO min"])]
-                    st.dataframe(colour(pd.DataFrame({
+                    show_df(st, colour(pd.DataFrame({
                         "Nutrient": [f"{n} ({u})" if u else n for n, u in
                                      zip(comp["Nutrient"], comp["Unit"])],
                         "/1000 kcal": comp["/1000 kcal"], "Target": rng,
@@ -412,11 +449,11 @@ with tab_rec:
                                "Desktop (sidebar).")
         with bt:
             with view("desk", "brk"):
-                st.dataframe(brk, hide_index=True, **FULL)
+                show_df(st, brk, hide_index=True, **FULL)
             _m = view("mob", "brk")
             if _m:
                 with _m:
-                    st.dataframe(brk[["Ingredient", "g", "kcal", "P mg",
+                    show_df(st, brk[["Ingredient", "g", "kcal", "P mg",
                                       "% of P"]], hide_index=True, **FULL)
             st.caption("'?' = value unknown for that ingredient"
                        + ("; '≈' = AAFCO minimum assumed (complete food). "
@@ -482,7 +519,7 @@ with tab_blood:
                        if a["renal_force"] else ""))
         if a["findings"]:
             with view("desk", "findings"):
-                st.dataframe(pd.DataFrame(a["findings"], columns=[
+                show_df(st, pd.DataFrame(a["findings"], columns=[
                     "Test", "Value", "Reference / target", "Finding",
                     "Change to targets"]), hide_index=True, **FULL)
             _m = view("mob", "findings")
@@ -498,7 +535,7 @@ with tab_blood:
                                                  "Default", "Adapted"])
         changed = [r1 != r2 for r1, r2 in zip(ch["Default"], ch["Adapted"])]
         with view("desk", "changes"):
-            st.dataframe(ch.style.apply(
+            show_df(st, ch.style.apply(
                 lambda r: ["font-weight: 600; color: #b36b00"
                            if changed[r.name] else ""] * len(r), axis=1),
                 hide_index=True, **FULL)
@@ -666,14 +703,14 @@ with tab_opt:
                 st.markdown("**Optimised daily amounts**")
                 tb = recipe_table(r["names"], g)
                 tb.insert(1, "was g", [round(x, 1) for x in r["x0"]])
-                st.dataframe(tb.drop(columns=[""]), hide_index=True,
+                show_df(st, tb.drop(columns=[""]), hide_index=True,
                              **FULL)
                 st.button("Apply optimised amounts", type="primary",
                           key="o_apply",
                           on_click=apply_recipe,
                           args=(r["names"], g, s, "Optimised recipe", ctx))
             with oc2:
-                st.dataframe(key_values(r["names"], g), hide_index=True,
+                show_df(st, key_values(r["names"], g), hide_index=True,
                              **FULL)
                 st.caption("Remaining gaps: " + gaps(terms))
 
@@ -698,9 +735,9 @@ with tab_opt:
                 st.markdown(f"**Best combination** (adds {', '.join(added)})"
                             f" → score **{cs:.3f}**")
                 cc = st.columns(2)
-                cc[0].dataframe(recipe_table(cn, cg, added), hide_index=True,
+                show_df(cc[0], recipe_table(cn, cg, added), hide_index=True,
                                 **FULL)
-                cc[1].dataframe(key_values(cn, cg), hide_index=True,
+                show_df(cc[1], key_values(cn, cg), hide_index=True,
                                 **FULL)
                 cc[1].caption("Remaining gaps: " + gaps(ct_))
                 st.button("Apply best combination", key="o_combo",
@@ -802,7 +839,7 @@ with tab_gen:
                                  ("protein", "starch", "veg")))
             with st.expander(title, expanded=(i == 0)):
                 cc = st.columns([3, 2])
-                cc[0].dataframe(pd.DataFrame({
+                show_df(cc[0], pd.DataFrame({
                     "Ingredient": names,
                     "Role": [rc.ingredient_role(db[n]) for n in names],
                     "g/day": [round(x, 1) for x in g],

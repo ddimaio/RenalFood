@@ -2936,6 +2936,30 @@ class ResultsWindow(tk.Toplevel):
         self.apply(self.names + [c], g, s, f"Optimised + {c}")
 
 
+def scrolled_tree(parent, **kw):
+    """Treeview with vertical + horizontal scrollbars (grid in its own
+    frame) and Shift+wheel for sideways scrolling. Returns (frame, tree)."""
+    box = ttk.Frame(parent)
+    tree = ttk.Treeview(box, **kw)
+    vs = ttk.Scrollbar(box, orient="vertical", command=tree.yview)
+    hs = ttk.Scrollbar(box, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=vs.set, xscrollcommand=hs.set)
+    tree.grid(row=0, column=0, sticky="nsew")
+    vs.grid(row=0, column=1, sticky="ns")
+    hs.grid(row=1, column=0, sticky="ew")
+    box.rowconfigure(0, weight=1)
+    box.columnconfigure(0, weight=1)
+
+    def side(e):
+        step = -1 if (getattr(e, "delta", 0) > 0 or e.num == 4) else 1
+        tree.xview_scroll(step * 3, "units")
+        return "break"
+    tree.bind("<Shift-MouseWheel>", side)          # Windows / macOS
+    tree.bind("<Shift-Button-4>", side)            # Linux
+    tree.bind("<Shift-Button-5>", side)
+    return box, tree
+
+
 class App(tk.Tk):
     RES_COLS = [("nutrient", "Nutrient", 230), ("unit", "Unit", 90),
                 ("total", "Recipe total", 170), ("per100", "/100 g fed", 95),
@@ -3045,14 +3069,15 @@ class App(tk.Tk):
         rec = ttk.LabelFrame(left, text="Recipe (double-click to change grams)",
                              padding=4)
         rec.pack(fill="both", expand=True, pady=(6, 0))
-        self.rec_tree = ttk.Treeview(rec, columns=("g", "kcal"), height=10)
+        rtbox, self.rec_tree = scrolled_tree(rec, columns=("g", "kcal"),
+                                             height=10)
         self.rec_tree.heading("#0", text="Ingredient")
         self.rec_tree.heading("g", text="g")
         self.rec_tree.heading("kcal", text="kcal")
-        self.rec_tree.column("#0", width=200, stretch=True)
+        self.rec_tree.column("#0", width=200, minwidth=120, stretch=True)
         self.rec_tree.column("g", width=60, anchor="e", stretch=False)
         self.rec_tree.column("kcal", width=60, anchor="e", stretch=False)
-        self.rec_tree.pack(fill="both", expand=True)
+        rtbox.pack(fill="both", expand=True)
         self.rec_tree.bind("<Double-Button-1>", lambda e: self.edit_amount())
         r4 = ttk.Frame(rec)
         r4.pack(fill="x", pady=3)
@@ -3085,13 +3110,10 @@ class App(tk.Tk):
         self.tabs.add(brk, text="Ingredient breakdown")
 
         self.brk_cols = list(self.BRK_COLS)   # changes with extended mode
-        self.brk = ttk.Treeview(brk, show="headings")
-        bx = ttk.Scrollbar(brk, orient="horizontal", command=self.brk.xview)
-        self.brk.configure(xscrollcommand=bx.set)
+        bbox, self.brk = scrolled_tree(brk, show="headings")
         self._set_brk_cols(self.brk_cols)
         self.brk.tag_configure("head", background="#eef2f7")
-        self.brk.pack(fill="both", expand=True)
-        bx.pack(fill="x")
+        bbox.pack(fill="both", expand=True)
         ttk.Label(brk, foreground="#555", text="What each ingredient "
                   "contributes to the recipe. '?' = value unknown for that "
                   "ingredient; '≈' = AAFCO minimum assumed (complete "
@@ -3099,17 +3121,18 @@ class App(tk.Tk):
         self._tree_copy(self.brk, self.brk_cols)
 
         cols = [c for c, _, _ in self.RES_COLS]
-        self.res = ttk.Treeview(comp, columns=cols, show="headings",
-                                height=24)
+        rbox, self.res = scrolled_tree(comp, columns=cols, show="headings",
+                                       height=24)
         for c, t, w in self.RES_COLS:
             self.res.heading(c, text=t.replace("\n", " "))
-            self.res.column(c, width=w, anchor="w" if c in (
-                "nutrient", "status", "unit") else "e")
+            self.res.column(c, width=w, minwidth=40, stretch=False,
+                            anchor="w" if c in ("nutrient", "status", "unit")
+                            else "e")
         self.res.tag_configure("ok", foreground="#1b7a1b")
         self.res.tag_configure("warn", foreground="#b36b00")
         self.res.tag_configure("bad", foreground="#c0392b")
         self.res.tag_configure("head", background="#eef2f7")
-        self.res.pack(fill="both", expand=True)
+        rbox.pack(fill="both", expand=True)
         nb = ttk.LabelFrame(right, text="Assessment & notes", padding=4)
         nb.pack(fill="both", expand=False, pady=(6, 0))
         self.notes = tk.Text(nb, height=13, wrap="word", font=(
