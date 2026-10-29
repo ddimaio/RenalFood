@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.28c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -572,6 +572,9 @@ WEIGHT_LABELS = {"energy": "Energy", "phosphorus": "Phosphorus",
                  "vitamins": "Vitamin minimums",
                  "fat": "Fat ≤55% kcal", "fibre": "Fibre ≤15 g/1000kcal",
                  "aim": "Pull to aims", "acid": "Acid load (PRAL)"}
+# Optional daily food limit (g/day, a dog with a small appetite): penalty
+# weight for exceeding it. Same priority as hitting the energy target.
+FOOD_MAX_WEIGHT = 10.0
 # Practical bulk limit (app default, not a published renal target): total
 # dietary fibre per 1000 kcal. Stops the optimiser filling up on vegetables.
 FIBRE_MAX = 15.0
@@ -659,6 +662,9 @@ def score_amounts(g, vecs, ctx):
 
     tgt = ctx["kcal_target"]
     add("Energy", W["energy"], ((kcal - tgt) / tgt) ** 2)
+    if ctx.get("max_g"):                 # small appetite: daily food limit
+        add("Food amount", FOOD_MAX_WEIGHT,
+            _band(sum(gi for gi in g if gi > 0), None, ctx["max_g"]))
     # phosphorus net of any (locked) binder
     p_eff = max(0.0, per["p"] - per["p_bind"])
     if ctx["renal"]:
@@ -1306,6 +1312,16 @@ def breakdown_rows(recipe, db, mass, t):
     return rows
 
 
+def food_limit_status(grams, max_g):
+    """Status text for the daily amount against the food limit."""
+    if not max_g or grams is None:
+        return ""
+    if grams <= max_g:
+        return f"within the {max_g:g} g/day limit"
+    return (f"{grams - max_g:.0f} g over the {max_g:g} g/day limit – make it "
+            "more energy-dense (less vegetable, a little more oil)")
+
+
 def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     """Everything the results screens show, independent of the GUI.
     Returns dict: mass, totals, missing, summary [(name, unit, value,
@@ -1350,7 +1366,9 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
          fmt(acid * k1000) if k1000 else "–", ""),
         ("Energy requirement (MER)", "kcal/day", fmt(need), ""),
         ("Recipe needed to meet MER", "g/day",
-         fmt(need / kcal * mass) if kcal > 0 and need else "–", ""),
+         fmt(need / kcal * mass) if kcal > 0 and need else "–",
+         food_limit_status(need / kcal * mass if kcal > 0 and need else None,
+                           (sctx or {}).get("max_g"))),
     ]
     if sctx and sctx["kcal_target"] > 0:
         names = [n for n, g in recipe if n in db]
@@ -1732,15 +1750,17 @@ def adapt_from_bloods(b, current_stage="Stage 2"):
             "note": note}
 
 
-def build_score_context(sc, stage, need, bw=None, extended=False):
+def build_score_context(sc, stage, need, bw=None, extended=False,
+                        max_g=None):
     """Scoring ctx from saved settings `sc` (optimiser run and/or blood
     adaptation). Saved aims/ranges only apply to the stage they were made
     for. bw (kg) sets the EPA+DHA dose floor; extended=True also checks
-    amino acids, linoleic acid and trace minerals."""
+    amino acids, linoleic acid and trace minerals; max_g (g/day) limits
+    the daily amount of food."""
     sc = sc or {}
     same = sc.get("stage") == stage
     ctx = {"kcal_target": sc.get("kcal_override") or need, "bw": bw,
-           "extended": bool(extended),
+           "extended": bool(extended), "max_g": max_g or None,
            "renal": STAGES[stage][0] or bool(same and sc.get("renal_force")),
            "weights": {**OPT_WEIGHTS, **sc.get("weights", {})},
            "aims": (dict(sc["aims"]) if same and "aims" in sc
@@ -2487,6 +2507,7 @@ class OptimiseDialog(tk.Toplevel):
         self.ranges = ctx0.get("ranges", {})
         self.bw = ctx0.get("bw")
         self.extended = ctx0.get("extended", False)
+        self.max_g = ctx0.get("max_g")
         R0 = get_ranges(ctx0)
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
@@ -2606,7 +2627,7 @@ class OptimiseDialog(tk.Toplevel):
         app = self.app
         try:
             ctx = {"kcal_target": float(self.kcal.get()), "bw": self.bw,
-                   "extended": self.extended,
+                   "extended": self.extended, "max_g": self.max_g,
                    "renal": self.renal, "ranges": dict(self.ranges),
                    "weights": {k: float(v.get()) for k, v in self.w.items()},
                    "aims": {k: to_float(v.get()) for k, v in
@@ -2840,6 +2861,10 @@ class App(tk.Tk):
         self.factor = tk.StringVar(value="1.6")
         ttk.Entry(top, textvariable=self.factor, width=5).pack(side="left",
                                                                padx=(2, 12))
+        ttk.Label(top, text="Max food (g/day)").pack(side="left")
+        self.max_g = tk.StringVar(value="")
+        ttk.Entry(top, textvariable=self.max_g, width=6).pack(side="left",
+                                                              padx=(2, 12))
         ttk.Label(top, text="IRIS stage").pack(side="left")
         self.stage = tk.StringVar(value="Stage 2")
         cb = ttk.Combobox(top, textvariable=self.stage, values=list(STAGES),
@@ -2850,7 +2875,7 @@ class App(tk.Tk):
         ttk.Checkbutton(top, variable=self.ext, command=self.recalc,
                         text="Extended nutrients (amino acids, trace "
                              "minerals)").pack(side="left", padx=(0, 12))
-        for var in (self.bw, self.factor):
+        for var in (self.bw, self.factor, self.max_g):
             var.trace_add("write", lambda *a: self.recalc())
         ttk.Button(top, text="Export results CSV",
                    command=self.export_results).pack(side="right")
@@ -3191,6 +3216,7 @@ class App(tk.Tk):
                                             initialfile="recipe.json")
         if path:
             d = {"items": self.recipe, "bw": self.bw.get(),
+                 "max_g": self.max_g.get(),
                  "factor": self.factor.get(), "stage": self.stage.get(),
                  "note": self.recipe_note}
             if self.score_ctx:
@@ -3213,6 +3239,7 @@ class App(tk.Tk):
         self.recipe = [[n, float(g)] for n, g in d.get("items", [])
                        if n in self.db]
         self.bw.set(d.get("bw", self.bw.get()))
+        self.max_g.set(d.get("max_g", self.max_g.get()) or "")
         self.factor.set(d.get("factor", self.factor.get()))
         if d.get("stage") in STAGES:
             self.stage.set(d["stage"])
@@ -3251,7 +3278,15 @@ class App(tk.Tk):
         same stage, else defaults."""
         return build_score_context(self.score_ctx, self.stage.get(),
                                    self.current_mer(), self.current_bw(),
-                                   self.ext.get())
+                                   self.ext.get(), self.current_max_g())
+
+    def current_max_g(self):
+        """Daily food limit in g, or None (blank / invalid = no limit)."""
+        try:
+            v = to_float(self.max_g.get())
+        except ValueError:
+            return None
+        return v if v and v > 0 else None
 
     def current_bw(self):
         try:

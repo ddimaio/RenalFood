@@ -33,6 +33,9 @@ scripts on first run.
   amino acids, linoleic acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) vs
   AAFCO adult minimums, plus iodine and selenium maximums. Hidden from the
   results and library editor unless switched on.
+- Optional daily food limit (g/day) for a small appetite: the optimiser
+  and generator then favour energy-dense recipes (less vegetable, more oil)
+  that fit in that amount.
 - Daily energy need (MER = factor × 70 × BW^0.75) and scaling to body weight.
 - Optimiser: best amounts for chosen ingredients + suggested additions.
 - Generator: balanced recipes from the whole library, with protein and

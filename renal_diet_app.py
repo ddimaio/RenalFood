@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.28c"
+ENGINE_VERSION = "2026.10.29"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -134,7 +134,7 @@ for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
                  "applied": None, "score_ctx": None, "opt_result": None,
                  "gen_result": None, "bw": 6.0, "factor": 1.6,
                  "stage": "Stage 2", "lib_ver": 0, "tgt_ver": 0,
-                 "blood_eval": None, "ext": False}.items():
+                 "blood_eval": None, "ext": False, "max_g": 0.0}.items():
     ss.setdefault(key, val)
 db = ss.db
 
@@ -150,7 +150,7 @@ def score_context(kcal=None):
     """Last optimiser/generator settings or blood adaptation for this stage,
     else defaults."""
     ctx = rc.build_score_context(ss.score_ctx, ss.stage, need_now(), ss.bw,
-                                 ss.ext)
+                                 ss.ext, ss.max_g or None)
     if kcal:
         ctx["kcal_target"] = kcal
     return ctx
@@ -208,6 +208,7 @@ def load_recipe_cb():
     set_recipe([(n, float(g)) for n, g in d.get("items", []) if n in db])
     try:
         ss.bw = float(d.get("bw", ss.bw))
+        ss.max_g = float(d.get("max_g") or 0.0)
         ss.factor = float(d.get("factor", ss.factor))
     except ValueError:
         pass
@@ -236,6 +237,11 @@ with st.sidebar:
                     help="≈1.6 neutered adult, 1.8 intact, 1.2–1.4 less "
                          "active / weight-gain prone. Adjust to keep weight "
                          "stable.")
+    st.number_input("Max food per day (g, 0 = no limit)", 0.0, 5000.0,
+                    step=10.0, key="max_g",
+                    help="For a small appetite: the optimiser and generator "
+                         "then prefer energy-dense recipes that fit in this "
+                         "amount.")
     st.selectbox("IRIS stage", list(rc.STAGES), key="stage")
     st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal")
     st.caption(rc.STAGES[ss.stage][1])
@@ -315,6 +321,7 @@ with tab_rec:
 
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
+                       "max_g": str(ss.max_g),
                        "factor": str(ss.factor), "stage": ss.stage,
                        "note": ss.recipe_note}
             if ss.score_ctx:
@@ -581,6 +588,7 @@ with tab_opt:
         if st.button("Run optimisation", type="primary", key="o_run"):
             ctx = {"kcal_target": o_kcal, "bw": ctx0.get("bw"),
                    "extended": ctx0.get("extended", False),
+                   "max_g": ctx0.get("max_g"),
                    "renal": ctx0["renal"],
                    "ranges": dict(ctx0.get("ranges", {})),
                    "weights": weights, "aims": {k: v for k, v in
