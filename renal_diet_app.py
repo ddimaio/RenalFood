@@ -303,6 +303,47 @@ def set_recipe(recipe):
     ss.rec_ver += 1                      # rebuild the editor widget
 
 
+# ---- undo / redo of recipe changes (this session)
+HIST_MAX = 50
+ss.setdefault("hist", [])
+ss.setdefault("hist_pos", -1)
+
+
+def _snap():
+    return {"recipe": [list(r) for r in ss.recipe], "note": ss.recipe_note,
+            "applied": ss.applied}
+
+
+def record_history():
+    """Remember the recipe if it changed since the current history point."""
+    h, p = ss.hist, ss.hist_pos
+    if p >= 0 and h[p]["recipe"] == ss.recipe:
+        return
+    del h[p + 1:]                         # a new change drops the redo part
+    h.append(_snap())
+    if len(h) > HIST_MAX:
+        del h[0]
+    ss.hist_pos = len(h) - 1
+
+
+def _restore(pos):
+    snap = ss.hist[pos]
+    ss.hist_pos = pos
+    set_recipe(snap["recipe"])
+    ss.recipe_note = snap["note"]
+    ss.applied = snap["applied"]
+
+
+def undo():
+    if ss.hist_pos > 0:
+        _restore(ss.hist_pos - 1)
+
+
+def redo():
+    if ss.hist_pos < len(ss.hist) - 1:
+        _restore(ss.hist_pos + 1)
+
+
 def apply_recipe(names, g, score, label, ctx):
     set_recipe([(n, a) for n, a in zip(names, g) if a >= 0.1])
     ss.score_ctx = rc.store_score_context(ss.score_ctx, ctx, ss.stage,
@@ -438,6 +479,14 @@ with tab_rec:
         ss.recipe = [[r.Ingredient, float(r.g)] for r in ed.itertuples()
                      if isinstance(r.Ingredient, str) and r.Ingredient in db
                      and pd.notna(r.g)]
+        record_history()
+        uc = st.columns([1, 1, 3])
+        uc[0].button("↶ Undo", key="undo", on_click=undo,
+                     disabled=ss.hist_pos <= 0, **FULL,
+                     help="Undo the last recipe change (applied results, "
+                          "edits, scaling, loading).")
+        uc[1].button("↷ Redo", key="redo", on_click=redo,
+                     disabled=ss.hist_pos >= len(ss.hist) - 1, **FULL)
         st.caption("Add a row at the bottom of the table; select rows and "
                    "press Delete to remove them.")
 

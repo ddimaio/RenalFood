@@ -4141,6 +4141,7 @@ class App(tk.Tk):
         self.score_ctx = None       # settings from the last optimiser run
         self.recipe_note = ""       # e.g. "Optimised recipe – score 0.29"
         self.applied_recipe = None  # snapshot of the applied recipe
+        self.hist, self.hist_pos = [], -1   # undo / redo of recipe changes
         self.bloods = {}            # last blood results entered
         self._build()
         self.refresh_list()
@@ -4260,6 +4261,17 @@ class App(tk.Tk):
                          ("Save recipe", self.save_recipe),
                          ("Load recipe", self.load_recipe)]:
             ttk.Button(r4, text=txt, command=cmd).pack(side="left", padx=1)
+        r5 = ttk.Frame(rec)
+        r5.pack(fill="x", pady=(2, 0))
+        self.undo_btn = ttk.Button(r5, text="Undo (Ctrl+Z)",
+                                   command=self.undo)
+        self.undo_btn.pack(side="left", padx=1)
+        self.redo_btn = ttk.Button(r5, text="Redo (Ctrl+Y)",
+                                   command=self.redo)
+        self.redo_btn.pack(side="left", padx=1)
+        self.bind_all("<Control-z>", lambda e: self.undo())
+        self.bind_all("<Control-y>", lambda e: self.redo())
+        self.bind_all("<Control-Z>", lambda e: self.redo())
 
         # ---- right: results
         right = ttk.Frame(pw, padding=4)
@@ -4514,7 +4526,52 @@ class App(tk.Tk):
             self.recipe.append([n, g])
         self.refresh_recipe()
 
+    def record_history(self):
+        h, p = self.hist, self.hist_pos
+        cur = [list(r) for r in self.recipe]
+        if p >= 0 and h[p]["recipe"] == cur:
+            return
+        if not h and cur:                # start point: the empty recipe
+            h.append({"recipe": [], "note": "", "applied": None})
+            p = 0
+        del h[p + 1:]
+        h.append({"recipe": cur, "note": self.recipe_note,
+                  "applied": self.applied_recipe})
+        if len(h) > 50:
+            del h[0]
+        self.hist_pos = len(h) - 1
+
+    def _restore(self, pos):
+        snap = self.hist[pos]
+        self.hist_pos = pos
+        self.recipe = [list(r) for r in snap["recipe"]]
+        self.recipe_note = snap["note"]
+        self.applied_recipe = snap["applied"]
+        self.refresh_recipe()
+
+    def undo(self):
+        if isinstance(self.focus_get(), (tk.Entry, ttk.Entry, tk.Text)):
+            return                  # let text fields keep their own undo
+        if self.hist_pos > 0:
+            self._restore(self.hist_pos - 1)
+
+    def redo(self):
+        if isinstance(self.focus_get(), (tk.Entry, ttk.Entry, tk.Text)):
+            return
+        if self.hist_pos < len(self.hist) - 1:
+            self._restore(self.hist_pos + 1)
+
+    def _update_undo_buttons(self):
+        if hasattr(self, "undo_btn"):
+            self.undo_btn.state(["!disabled"] if self.hist_pos > 0
+                                else ["disabled"])
+            self.redo_btn.state(["!disabled"]
+                                if self.hist_pos < len(self.hist) - 1
+                                else ["disabled"])
+
     def refresh_recipe(self):
+        self.record_history()
+        self._update_undo_buttons()
         self.rec_tree.delete(*self.rec_tree.get_children())
         for i, (n, g) in enumerate(self.recipe):
             kc = self.db[n]["per100g"]["kcal"] if n in self.db else None
