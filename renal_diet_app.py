@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29n"
+ENGINE_VERSION = "2026.10.29o"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -753,7 +753,8 @@ with tab_opt:
                     singles, combo = [], None
                 ss.opt_result = {"ctx": ctx, "names": names, "x0": x0,
                                  "before": before[0], "base": base,
-                                 "singles": singles, "combo": combo}
+                                 "singles": singles, "combo": combo,
+                                 "bounds": bounds, "manual": None}
 
         r = ss.opt_result
         if r:
@@ -838,6 +839,84 @@ with tab_opt:
                           on_click=apply_recipe,
                           args=(cn, cg, cs, "Optimised + " + ", ".join(added),
                                 ctx))
+
+            # ---- user's own additions
+            if r.get("bounds") is not None:
+                st.markdown("**Add your own ingredients** – any library "
+                            "ingredient; everything is re-optimised")
+                has_combo = bool(r["combo"] and r["combo"][4])
+                start = st.radio("Start from", ["Optimised recipe",
+                                                "Best combination"],
+                                 horizontal=True, key="o_man_start") \
+                    if has_combo else "Optimised recipe"
+                if start == "Best combination":
+                    base_n, base_g, base_s = (r["combo"][0], r["combo"][1],
+                                              r["combo"][2])
+                else:
+                    base_n, base_g, base_s = r["names"], g, s
+                opts = [n for n in names_all if n not in base_n
+                        and db[n]["per100g"]["kcal"] is not None]
+                sel = st.multiselect("Ingredients to add", opts,
+                                     key="o_man_sel")
+                if sel:
+                    med = st.data_editor(
+                        pd.DataFrame({
+                            "Ingredient": sel,
+                            "Min g": pd.Series([None] * len(sel),
+                                               dtype="float"),
+                            "Max g": pd.Series([None] * len(sel),
+                                               dtype="float")}),
+                        hide_index=True, **FULL, disabled=["Ingredient"],
+                        key="o_man_ed_" + str(abs(hash(tuple(sel)))),
+                        column_config={
+                            "Min g": st.column_config.NumberColumn(
+                                "Min g", min_value=0.0, format="%g",
+                                help="Blank = 0. Min = Max fixes the "
+                                     "amount."),
+                            "Max g": st.column_config.NumberColumn(
+                                "Max g", min_value=0.0, format="%g",
+                                help="Blank = default limit")})
+                    st.caption("Leave both blank to let the optimiser choose "
+                               "the amount (it may choose 0 g if the "
+                               "ingredient does not help). Set Min g to make "
+                               "sure it is included; Min = Max for an exact "
+                               "amount.")
+                    if st.button("Re-optimise with these", key="o_man_run"):
+                        adds = [(rw["Ingredient"],
+                                 None if pd.isna(rw["Min g"])
+                                 else float(rw["Min g"]),
+                                 None if pd.isna(rw["Max g"])
+                                 else float(rw["Max g"]))
+                                for _, rw in med.iterrows()]
+                        bad = [a for a, lo, hi in adds if lo is not None
+                               and hi is not None and lo > hi]
+                        if bad:
+                            st.error("Min g is larger than Max g for: "
+                                     + ", ".join(bad))
+                        else:
+                            bb = list(r["bounds"]) + [
+                                (*rc.default_bounds(db[n],
+                                                    ctx["kcal_target"]),
+                                 False) for n in base_n[len(r["names"]):]]
+                            with st.spinner("Optimising…"):
+                                r["manual"] = (base_s,) + rc.add_manual(
+                                    base_n, db, bb, base_g, ctx, adds)
+                man = r.get("manual")
+                if man:
+                    ms0, mn, mg, ms, mt = man
+                    new = [n for n in mn if n not in r["names"]]
+                    st.markdown(f"**With your additions** → score "
+                                f"**{ms:.3f}** (was {ms0:.3f})")
+                    cc = st.columns(2)
+                    show_df(cc[0], recipe_table(mn, mg, new), hide_index=True,
+                            **FULL)
+                    show_df(cc[1], key_values(mn, mg), hide_index=True,
+                            **FULL)
+                    cc[1].caption("Remaining gaps: " + gaps(mt))
+                    st.button("Apply this recipe", key="o_man_apply",
+                              type="primary", on_click=apply_recipe,
+                              args=(mn, mg, ms, "Optimised + own additions",
+                                    ctx))
 
 # ================================================================ GENERATE
 with tab_gen:

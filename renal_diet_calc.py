@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29n"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29o"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -971,6 +971,26 @@ def optimise(names, db, bounds, x0, ctx, use_scipy=True, max_evals=5000):
     g = [round(v, 1) if not bounds[i][2] else v for i, v in enumerate(g)]
     sc, terms = score_amounts(g, vecs, ctx)
     return g, sc, terms
+
+
+def add_manual(names, db, bounds, grams, ctx, additions):
+    """Add ingredients chosen by the user to an optimised recipe and
+    re-optimise everything. additions: [(name, min_g, max_g)] - None =
+    default bound; min = max fixes the amount. Returns (names, grams,
+    score, terms)."""
+    n2, b2, x2 = list(names), list(bounds), list(grams)
+    for n, lo, hi in additions:
+        if n in n2 or n not in db:
+            continue
+        dlo, dhi = default_bounds(db[n], ctx["kcal_target"])
+        lo = dlo if lo is None else float(lo)
+        hi = max(dhi, lo) if hi is None else float(hi)
+        hi = max(hi, lo)
+        n2.append(n)
+        b2.append((lo, hi, lo == hi))
+        x2.append(lo)
+    g, s, t = optimise(n2, db, b2, x2, ctx)
+    return n2, g, s, t
 
 
 def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
@@ -3207,14 +3227,17 @@ class OptimiseDialog(tk.Toplevel):
             if self.winfo_exists():
                 self.run_btn.state(["!disabled"])
                 self.status.config(text="Done.")
-        ResultsWindow(app, ctx, names, x0, before, base, singles, combo)
+        ResultsWindow(app, ctx, names, x0, before, base, singles, combo,
+                      bounds)
 
 
 class ResultsWindow(tk.Toplevel):
-    def __init__(self, app, ctx, names, x0, before, base, singles, combo):
+    def __init__(self, app, ctx, names, x0, before, base, singles, combo,
+                 bounds=None, title="Optimisation results"):
         super().__init__(app)
         self.app = app
-        self.title("Optimisation results")
+        self.bounds = bounds
+        self.title(title)
         self.geometry("980x760")
         self.names, self.base, self.singles, self.combo = (names, base,
                                                            singles, combo)
@@ -3253,6 +3276,94 @@ class ResultsWindow(tk.Toplevel):
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
         ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
             self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
+
+        if bounds is not None:
+            mf = ttk.LabelFrame(self, padding=6,
+                                text="Add your own ingredients and "
+                                     "re-optimise (min = max fixes the "
+                                     "amount; blank = default)")
+            mf.pack(fill="x", padx=8, pady=(0, 8))
+            r = ttk.Frame(mf)
+            r.pack(fill="x")
+            self.m_pick = ttk.Combobox(
+                r, width=40, values=sorted(
+                    (n for n in app.db if n not in names
+                     and app.db[n]["per100g"]["kcal"] is not None),
+                    key=str.lower))
+            self.m_pick.pack(side="left")
+            ttk.Label(r, text=" min g").pack(side="left")
+            self.m_lo = tk.StringVar()
+            ttk.Entry(r, textvariable=self.m_lo, width=6).pack(side="left")
+            ttk.Label(r, text=" max g").pack(side="left")
+            self.m_hi = tk.StringVar()
+            ttk.Entry(r, textvariable=self.m_hi, width=6).pack(side="left")
+            ttk.Button(r, text="Add", command=self.add_manual).pack(
+                side="left", padx=4)
+            ttk.Button(r, text="Remove selected",
+                       command=self.remove_manual).pack(side="left")
+            self.start = tk.StringVar(value="optimised")
+            if combo and combo[4]:
+                ttk.Label(r, text="   start from").pack(side="left")
+                ttk.Combobox(r, textvariable=self.start, width=12,
+                             state="readonly",
+                             values=("optimised", "best combination")).pack(
+                    side="left")
+            self.manual = {}
+            self.m_list = tk.Listbox(mf, height=3, exportselection=False)
+            self.m_list.pack(fill="x", pady=4)
+            ttk.Button(mf, text="Re-optimise with these",
+                       command=self.run_manual).pack(anchor="w")
+
+    def add_manual(self):
+        n = self.m_pick.get().strip()
+        if n not in self.app.db:
+            messagebox.showerror("Add ingredient", "Pick an ingredient from "
+                                 "the list.", parent=self)
+            return
+        try:
+            lo, hi = to_float(self.m_lo.get()), to_float(self.m_hi.get())
+        except ValueError:
+            messagebox.showerror("Add ingredient", "Min/max must be numbers.",
+                                 parent=self)
+            return
+        if lo is not None and hi is not None and lo > hi:
+            messagebox.showerror("Add ingredient", "Min is larger than max.",
+                                 parent=self)
+            return
+        self.manual[n] = (lo, hi)
+        self.m_pick.set("")
+        self.m_lo.set("")
+        self.m_hi.set("")
+        self.m_list.delete(0, "end")
+        for k, (a, b) in self.manual.items():
+            self.m_list.insert("end", f"{k}  –  min "
+                               f"{'default' if a is None else f'{a:g} g'}, max "
+                               f"{'default' if b is None else f'{b:g} g'}")
+
+    def remove_manual(self):
+        for i in reversed(self.m_list.curselection()):
+            self.manual.pop(list(self.manual)[i], None)
+            self.m_list.delete(i)
+
+    def run_manual(self):
+        if not self.manual:
+            messagebox.showinfo("Add ingredient", "Add at least one "
+                                "ingredient first.", parent=self)
+            return
+        if self.start.get() == "best combination" and self.combo:
+            cn, cg, cs = self.combo[0], self.combo[1], self.combo[2]
+            extra = cn[len(self.names):]
+            cb = list(self.bounds) + [
+                (*default_bounds(self.app.db[n], self.ctx["kcal_target"]),
+                 False) for n in extra]
+        else:
+            cn, cg, cs = self.names, self.base[0], self.base[1]
+            cb = list(self.bounds)
+        adds = [(n, lo, hi) for n, (lo, hi) in self.manual.items()]
+        n2, g2, s2, t2 = add_manual(cn, self.app.db, cb, cg, self.ctx, adds)
+        x0 = list(cg) + [0.0] * (len(n2) - len(cn))
+        ResultsWindow(self.app, self.ctx, n2, x0, (cs,), (g2, s2, t2), [],
+                      None, None, title="Optimised with your additions")
 
     def report(self, ctx, x0, before):
         db = self.app.db
