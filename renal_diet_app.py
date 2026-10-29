@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29u"
+ENGINE_VERSION = "2026.10.29v"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -788,6 +788,12 @@ with tab_opt:
                                    "supplement…) and all amounts are "
                                    "re-optimised. Unticked foods below are "
                                    "not used.")
+        do_rem = st.checkbox("Test removals (leave each ingredient out in "
+                             "turn)", True, key="o_rem",
+                             help="Lists ingredients the recipe does not "
+                                  "need: taking them out (all other amounts "
+                                  "re-optimised) improves the score or costs "
+                                  "under 1 %.")
         max_add = st.slider("Max. additions to combine", 1, 6, 3,
                             key="o_max")
         cand_names = [n for n in names_all
@@ -860,11 +866,16 @@ with tab_opt:
                     subs = rc.suggest_substitutions(names, db, bounds, base,
                                                     ctx, pool_s, prog_s)
                     bar.empty()
+                rems = []
+                if do_rem:
+                    with st.spinner("Testing removals…"):
+                        rems = rc.suggest_removals(names, db, bounds, base,
+                                                   ctx)
                 ss.opt_result = {"ctx": ctx, "names": names, "x0": x0,
                                  "before": before[0], "base": base,
                                  "singles": singles, "combo": combo,
                                  "bounds": bounds, "manual": None,
-                                 "subs": subs}
+                                 "subs": subs, "rems": rems}
 
         r = ss.opt_result
         if r:
@@ -958,6 +969,22 @@ with tab_opt:
             elif r["combo"] is not None:
                 st.info("No single library ingredient improved the score by "
                         "≥2%.")
+            if r.get("rems"):
+                st.markdown("**Suggested removals** – the recipe does as well "
+                            "or better without these (other amounts "
+                            "re-optimised)")
+                for i, (rm_n, rn, rg, rs, rt) in enumerate(r["rems"][:10]):
+                    ch = (rs / s - 1) * 100 if s > 0 else 0
+                    cc = st.columns([5, 1])
+                    cc[0].write(f"{i + 1}. **− {rm_n}** → score {rs:.3f} "
+                                f"({ch:+.0f}%)")
+                    cc[1].button("Apply", key=f"o_rem_{i}",
+                                 on_click=apply_recipe,
+                                 args=(rn, rg, rs, f"Optimised − {rm_n}",
+                                       ctx))
+            elif r.get("rems") is not None and st.session_state.get("o_rem"):
+                st.caption("Every ingredient is needed: removing any of them "
+                           "makes the score >1 % worse.")
             if r.get("subs"):
                 st.markdown("**Suggested substitutions** – one ingredient "
                             "swapped for another of the same type, all "
@@ -994,8 +1021,8 @@ with tab_opt:
 
             # ---- user's own additions
             if r.get("bounds") is not None:
-                st.markdown("**Add your own ingredients** – any library "
-                            "ingredient; everything is re-optimised")
+                st.markdown("**Add or remove ingredients yourself** – any "
+                            "library ingredient; everything is re-optimised")
                 has_combo = bool(r["combo"] and r["combo"][4])
                 start = st.radio("Start from", ["Optimised recipe",
                                                 "Best combination"],
@@ -1008,8 +1035,12 @@ with tab_opt:
                     base_n, base_g, base_s = r["names"], g, s
                 opts = [n for n in names_all if n not in base_n
                         and db[n]["per100g"]["kcal"] is not None]
+                rem_sel = st.multiselect("Ingredients to remove",
+                                         [n for n in base_n],
+                                         key="o_man_rem")
                 sel = st.multiselect("Ingredients to add", opts,
                                      key="o_man_sel")
+                med = None
                 if sel:
                     med = st.data_editor(
                         pd.DataFrame({
@@ -1033,13 +1064,15 @@ with tab_opt:
                                "ingredient does not help). Set Min g to make "
                                "sure it is included; Min = Max for an exact "
                                "amount.")
-                    if st.button("Re-optimise with these", key="o_man_run"):
+                if (sel or rem_sel) and st.button("Re-optimise with these",
+                                                  key="o_man_run"):
                         adds = [(rw["Ingredient"],
                                  None if pd.isna(rw["Min g"])
                                  else float(rw["Min g"]),
                                  None if pd.isna(rw["Max g"])
                                  else float(rw["Max g"]))
-                                for _, rw in med.iterrows()]
+                                for _, rw in med.iterrows()] \
+                            if med is not None else []
                         bad = [a for a, lo, hi in adds if lo is not None
                                and hi is not None and lo > hi]
                         if bad:
@@ -1050,15 +1083,23 @@ with tab_opt:
                                 (*rc.default_bounds(db[n],
                                                     ctx["kcal_target"]),
                                  False) for n in base_n[len(r["names"]):]]
-                            with st.spinner("Optimising…"):
-                                r["manual"] = (base_s,) + rc.add_manual(
-                                    base_n, db, bb, base_g, ctx, adds)
+                            if len(rem_sel) >= len(base_n) and not adds:
+                                st.error("That would remove everything.")
+                            else:
+                                with st.spinner("Optimising…"):
+                                    r["manual"] = (base_s,) + \
+                                        rc.remove_and_add(base_n, db, bb,
+                                                          base_g, ctx,
+                                                          rem_sel, adds)
                 man = r.get("manual")
                 if man:
                     ms0, mn, mg, ms, mt = man
                     new = [n for n in mn if n not in r["names"]]
-                    st.markdown(f"**With your additions** → score "
-                                f"**{ms:.3f}** (was {ms0:.3f})")
+                    gone = [n for n in r["names"] if n not in mn]
+                    st.markdown(f"**With your changes** → score "
+                                f"**{ms:.3f}** (was {ms0:.3f})"
+                                + (f" · removed: {', '.join(gone)}"
+                                   if gone else ""))
                     cc = st.columns(2)
                     show_df(cc[0], recipe_table(mn, mg, new), hide_index=True,
                             **FULL)
@@ -1067,7 +1108,7 @@ with tab_opt:
                     cc[1].caption("Remaining gaps: " + gaps(mt))
                     st.button("Apply this recipe", key="o_man_apply",
                               type="primary", on_click=apply_recipe,
-                              args=(mn, mg, ms, "Optimised + own additions",
+                              args=(mn, mg, ms, "Optimised + own changes",
                                     ctx))
 
 # ================================================================ GENERATE

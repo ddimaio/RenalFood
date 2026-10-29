@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29u"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29v"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1316,6 +1316,44 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         cur_g, cur_s, cur_t = best[1], best[2], best[3]
         added.append(best[0])
     return base, singles, (cur_n, cur_g, cur_s, cur_t, added)
+
+
+def suggest_removals(names, db, bounds, base, ctx, progress=None,
+                     tolerance=0.01):
+    """Remove each free (unlocked) ingredient in turn and re-optimise the
+    rest. Returns [(removed, names, grams, score, terms)] where the score
+    improves or gets at most `tolerance` (1 %) worse - i.e. the ingredient
+    is not needed - best first."""
+    g0, s0, _ = base
+    out = []
+    idx = [i for i, n in enumerate(names)
+           if not bounds[i][2] and db[n]["category"] != "binder"]
+    if len(names) < 2:
+        return out
+    for j, i in enumerate(idx):
+        if progress:
+            progress(j, len(idx), names[i])
+        nn = names[:i] + names[i + 1:]
+        bb = bounds[:i] + bounds[i + 1:]
+        x0 = list(g0[:i]) + list(g0[i + 1:])
+        g, sc, t = optimise(nn, db, bb, x0, ctx)
+        if sc <= s0 * (1 + tolerance) + 1e-6:
+            out.append((names[i], nn, g, sc, t))
+    out.sort(key=lambda r: r[3])
+    return out
+
+
+def remove_and_add(names, db, bounds, grams, ctx, remove=(), additions=()):
+    """Remove ingredients (and optionally add others, see add_manual) and
+    re-optimise. Returns (names, grams, score, terms)."""
+    keep = [i for i, n in enumerate(names) if n not in set(remove)]
+    n2 = [names[i] for i in keep]
+    b2 = [bounds[i] for i in keep]
+    g2 = [grams[i] for i in keep]
+    if additions:
+        return add_manual(n2, db, b2, g2, ctx, additions)
+    g, sc, t = optimise(n2, db, b2, g2, ctx)
+    return n2, g, sc, t
 
 
 def suggest_substitutions(names, db, bounds, base, ctx, candidates,
@@ -3501,6 +3539,9 @@ class OptimiseDialog(tk.Toplevel):
         self.do_subs = tk.BooleanVar(value=True)
         ttk.Checkbutton(row, text="Test substitutions (same type)",
                         variable=self.do_subs).pack(side="left", padx=(8, 0))
+        self.do_rem = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row, text="Test removals",
+                        variable=self.do_rem).pack(side="left", padx=(8, 0))
         ttk.Label(row, text="   max. to combine").pack(side="left")
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
@@ -3600,21 +3641,28 @@ class OptimiseDialog(tk.Toplevel):
                 subs = suggest_substitutions(
                     names, app.db, bounds, base, ctx, pool_s,
                     lambda i, t, nm: progress(i, t, "swap " + nm))
+            rems = []
+            if self.do_rem.get():
+                rems = suggest_removals(
+                    names, app.db, bounds, base, ctx,
+                    lambda i, t, nm: progress(i, t, "without " + nm))
         finally:
             if self.winfo_exists():
                 self.run_btn.state(["!disabled"])
                 self.status.config(text="Done.")
         ResultsWindow(app, ctx, names, x0, before, base, singles, combo,
-                      bounds, subs=subs)
+                      bounds, subs=subs, rems=rems)
 
 
 class ResultsWindow(tk.Toplevel):
     def __init__(self, app, ctx, names, x0, before, base, singles, combo,
-                 bounds=None, title="Optimisation results", subs=()):
+                 bounds=None, title="Optimisation results", subs=(),
+                 rems=()):
         super().__init__(app)
         self.app = app
         self.bounds = bounds
         self.subs = list(subs or [])
+        self.rems = list(rems or [])
         self.title(title)
         self.geometry("980x760")
         self.names, self.base, self.singles, self.combo = (names, base,
@@ -3651,6 +3699,13 @@ class ResultsWindow(tk.Toplevel):
                         textvariable=self.pick).pack(side="left")
             ttk.Button(b, text="Apply", command=self.apply_single).pack(
                 side="left", padx=4)
+        if self.rems:
+            ttk.Label(b, text="  Removal #").pack(side="left")
+            self.pick_r = tk.StringVar(value="1")
+            ttk.Spinbox(b, from_=1, to=min(10, len(self.rems)), width=4,
+                        textvariable=self.pick_r).pack(side="left")
+            ttk.Button(b, text="Apply", command=self.apply_rem).pack(
+                side="left", padx=4)
         if self.subs:
             ttk.Label(b, text="  Substitution #").pack(side="left")
             self.pick_s = tk.StringVar(value="1")
@@ -3664,7 +3719,7 @@ class ResultsWindow(tk.Toplevel):
 
         if bounds is not None:
             mf = ttk.LabelFrame(self, padding=6,
-                                text="Add your own ingredients and "
+                                text="Add or remove ingredients and "
                                      "re-optimise (min = max fixes the "
                                      "amount; blank = default)")
             mf.pack(fill="x", padx=8, pady=(0, 8))
@@ -3693,11 +3748,35 @@ class ResultsWindow(tk.Toplevel):
                              state="readonly",
                              values=("optimised", "best combination")).pack(
                     side="left")
+            r2 = ttk.Frame(mf)
+            r2.pack(fill="x", pady=(4, 0))
+            ttk.Label(r2, text="Remove").pack(side="left")
+            self.m_rm_pick = ttk.Combobox(r2, width=40, state="readonly",
+                                          values=list(names))
+            self.m_rm_pick.pack(side="left", padx=4)
+            ttk.Button(r2, text="Remove from recipe",
+                       command=self.add_removal).pack(side="left")
             self.manual = {}
+            self.manual_rm = []
             self.m_list = tk.Listbox(mf, height=3, exportselection=False)
             self.m_list.pack(fill="x", pady=4)
             ttk.Button(mf, text="Re-optimise with these",
                        command=self.run_manual).pack(anchor="w")
+
+    def add_removal(self):
+        n = self.m_rm_pick.get().strip()
+        if n and n not in self.manual_rm:
+            self.manual_rm.append(n)
+            self._refresh_manual()
+
+    def _refresh_manual(self):
+        self.m_list.delete(0, "end")
+        for n in self.manual_rm:
+            self.m_list.insert("end", f"REMOVE  {n}")
+        for k, (a, b) in self.manual.items():
+            self.m_list.insert("end", f"{k}  –  min "
+                               f"{'default' if a is None else f'{a:g} g'}, max "
+                               f"{'default' if b is None else f'{b:g} g'}")
 
     def add_manual(self):
         n = self.m_pick.get().strip()
@@ -3719,21 +3798,22 @@ class ResultsWindow(tk.Toplevel):
         self.m_pick.set("")
         self.m_lo.set("")
         self.m_hi.set("")
-        self.m_list.delete(0, "end")
-        for k, (a, b) in self.manual.items():
-            self.m_list.insert("end", f"{k}  –  min "
-                               f"{'default' if a is None else f'{a:g} g'}, max "
-                               f"{'default' if b is None else f'{b:g} g'}")
+        self._refresh_manual()
 
     def remove_manual(self):
-        for i in reversed(self.m_list.curselection()):
-            self.manual.pop(list(self.manual)[i], None)
-            self.m_list.delete(i)
+        nr = len(self.manual_rm)
+        keys = list(self.manual)
+        for i in sorted(self.m_list.curselection(), reverse=True):
+            if i < nr:
+                self.manual_rm.pop(i)
+            else:
+                self.manual.pop(keys[i - nr], None)
+        self._refresh_manual()
 
     def run_manual(self):
-        if not self.manual:
-            messagebox.showinfo("Add ingredient", "Add at least one "
-                                "ingredient first.", parent=self)
+        if not self.manual and not self.manual_rm:
+            messagebox.showinfo("Add ingredient", "Add or remove at least "
+                                "one ingredient first.", parent=self)
             return
         if self.start.get() == "best combination" and self.combo:
             cn, cg, cs = self.combo[0], self.combo[1], self.combo[2]
@@ -3745,10 +3825,16 @@ class ResultsWindow(tk.Toplevel):
             cn, cg, cs = self.names, self.base[0], self.base[1]
             cb = list(self.bounds)
         adds = [(n, lo, hi) for n, (lo, hi) in self.manual.items()]
-        n2, g2, s2, t2 = add_manual(cn, self.app.db, cb, cg, self.ctx, adds)
-        x0 = list(cg) + [0.0] * (len(n2) - len(cn))
+        if len(self.manual_rm) >= len(cn) and not adds:
+            messagebox.showerror("Remove", "That would remove everything.",
+                                 parent=self)
+            return
+        n2, g2, s2, t2 = remove_and_add(cn, self.app.db, cb, cg, self.ctx,
+                                        self.manual_rm, adds)
+        was = dict(zip(cn, cg))
+        x0 = [was.get(n, 0.0) for n in n2]
         ResultsWindow(self.app, self.ctx, n2, x0, (cs,), (g2, s2, t2), [],
-                      None, None, title="Optimised with your additions")
+                      None, None, title="Optimised with your changes")
 
     def report(self, ctx, x0, before):
         db = self.app.db
@@ -3797,6 +3883,14 @@ class ResultsWindow(tk.Toplevel):
         elif self.combo is not None:
             L.append("\nNo single library ingredient improved the score by "
                      "≥2%.")
+
+        if self.rems:
+            L.append("\nSUGGESTED REMOVALS – the recipe does as well or "
+                     "better without these (other amounts re-optimised)")
+            for i, (rn_, nn, gg, ss, tt) in enumerate(self.rems[:10],
+                                                      start=1):
+                ch = (ss / s - 1) * 100 if s > 0 else 0
+                L.append(f"  {i:>2}. - {rn_}  score {ss:.3f} ({ch:+.0f}%)")
 
         if self.subs:
             L.append("\nSUGGESTED SUBSTITUTIONS – one ingredient swapped for "
@@ -3857,6 +3951,13 @@ class ResultsWindow(tk.Toplevel):
 
     def apply(self, names, g, score, label):
         self.app.apply_recipe(names, g, score, label, self.ctx, self)
+
+    def apply_rem(self):
+        try:
+            rn_, nn, gg, ss, tt = self.rems[int(self.pick_r.get()) - 1]
+        except (ValueError, IndexError):
+            return
+        self.apply(nn, gg, ss, f"Optimised - {rn_}")
 
     def apply_sub(self):
         try:
