@@ -229,7 +229,8 @@
    "epa_dha": 225.0,
    "base_meq": 0.0,
    "p_bind": 0.0
-  }
+  },
+  "assume_aafco": true
  },
  {
   "name": "Broccoli, boiled",
@@ -1409,7 +1410,8 @@
    "epa_dha": null,
    "base_meq": 0.0,
    "p_bind": 0.0
-  }
+  },
+  "assume_aafco": true
  },
  {
   "name": "Lentils, boiled",

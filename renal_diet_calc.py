@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -421,12 +421,55 @@ def load_db():
 
 def normalise(item):
     vals = item.get("per100g", {})
-    return {"name": str(item["name"]).strip(),
-            "category": item.get("category", "food"),
-            "note": item.get("note", ""),
-            "per100g": {k: (0.0 if (k in OPTIONAL_ZERO and k not in vals)
-                              else None if vals.get(k) is None
-                              else float(vals[k])) for k in KEYS}}
+    out = {"name": str(item["name"]).strip(),
+           "category": item.get("category", "food"),
+           "note": item.get("note", ""),
+           "per100g": {k: (0.0 if (k in OPTIONAL_ZERO and k not in vals)
+                             else None if vals.get(k) is None
+                             else float(vals[k])) for k in KEYS}}
+    if truthy(item.get("assume_aafco")):
+        out["assume_aafco"] = True
+    return out
+
+
+def truthy(v):
+    """Flag values from JSON, CSV or a table cell ('1', 'yes', True...)."""
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "y", "x")
+    return bool(v) and v == v           # NaN from pandas counts as False
+
+
+def assumed_value(item, k):
+    """For a complete commercial food flagged 'assume_aafco': the AAFCO
+    adult minimum for extended nutrient k, per 100 g of the food (AAFCO is
+    per 1000 kcal). None if not applicable or the energy is unknown."""
+    if not item.get("assume_aafco") or k not in EXT_KEYS:
+        return None
+    kcal = item["per100g"].get("kcal")
+    if not kcal:
+        return None
+    return AAFCO[k] * kcal / 1000.0
+
+
+def value(item, k):
+    """Per-100 g value used in calculations: the stored value, else the
+    AAFCO assumption for flagged complete foods, else None (unknown)."""
+    v = item["per100g"][k]
+    return assumed_value(item, k) if v is None else v
+
+
+def assumed_in(recipe, db):
+    """{nutrient: [ingredient names]} whose value is an AAFCO assumption."""
+    out = {k: [] for k in EXT_KEYS}
+    for name, grams in recipe:
+        item = db.get(name)
+        if item is None or grams <= 0:
+            continue
+        for k in EXT_KEYS:
+            if item["per100g"][k] is None and \
+                    assumed_value(item, k) is not None:
+                out[k].append(name)
+    return out
 
 
 def save_db(db):
@@ -453,7 +496,7 @@ def compute(recipe, db):
             continue
         mass += grams
         for k in KEYS:
-            v = item["per100g"][k]
+            v = value(item, k)
             if v is None:
                 missing[k].append(name)
             else:
@@ -606,7 +649,7 @@ def default_bounds(item, kcal_target=None):
 
 
 def _vec(item):
-    return [item["per100g"][k] for k in KEYS]   # unknown stays None
+    return [value(item, k) for k in KEYS]   # unknown stays None
 
 
 def _unknown(g, vecs):
@@ -1096,7 +1139,7 @@ def improvement_reasons(before, after, n=3):
 
 def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                   acid, k1000, renal_mode, stage_note, fat_frac, ranges=None,
-                  blood_note="", extended=False):
+                  blood_note="", extended=False, assumed=None):
     """Plain-language assessment notes for a recipe."""
     R = ranges or get_ranges()
     out = [f"{stage_name}: {stage_note}"]
@@ -1231,7 +1274,7 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                    " – values marked ≥ are minimums. Shortfalls in those "
                    "nutrients are not scored (only excesses are certain).")
     if extended and k1000:
-        out += extended_notes(t, miss, k1000)
+        out += extended_notes(t, miss, k1000, assumed)
         out += ["", "Not checked: vitamin K, biotin. Amino acids are "
                 "totals, not digestible amounts – plant proteins are less "
                 "digestible, so a value just above the minimum may not be "
@@ -1246,10 +1289,11 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
     return "\n".join(out)
 
 
-def extended_notes(t, miss, k1000):
+def extended_notes(t, miss, k1000, assumed=None):
     """Notes for the optional amino-acid / linoleic acid / trace-mineral
     check against AAFCO adult minimums (and I, Se maximums)."""
     low, high, unknown = [], [], []
+    assumed = assumed or {}
     for k in EXT_KEYS:
         v = t[k] * k1000
         if miss[k]:
@@ -1276,6 +1320,12 @@ def extended_notes(t, miss, k1000):
     elif not low and not high:
         out.append("• Amino acids, linoleic acid and trace minerals meet "
                    "AAFCO adult minimums (totals, not digestible amounts).")
+    a_names = sorted({n for k in EXT_KEYS for n in assumed.get(k, [])})
+    if a_names:
+        out.append("• Assumed to supply exactly the AAFCO minimum of the "
+                   "extended nutrients it has no values for (complete "
+                   "food): " + ", ".join(a_names) + ". Replace with real "
+                   "values from the manufacturer when available.")
     return out
 
 
@@ -1383,6 +1433,7 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     res["summary"] = summary
 
     extended = bool((sctx or {}).get("extended"))
+    assumed = assumed_in(recipe, db)
     for k in visible_keys(extended):
         if k in ("base_meq", "p_bind") and t[k] == 0:
             continue
@@ -1400,6 +1451,9 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
             st = (st + "; " if st else "") + f"data missing ({len(miss[k])})"
             if tag == "ok":
                 tag = "warn"
+        if assumed.get(k):
+            st = (st + "; " if st else "") + \
+                f"AAFCO min assumed ({len(assumed[k])})"
         res["rows"].append(((LABEL[k], UNIT[k], inc + fmt(t[k]),
                              inc + fmt(per100), inc + fmt(perdm),
                              inc + fmt(p1000), inc + fmt(pday), renal, aafco,
@@ -1408,7 +1462,8 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     res["notes"] = assess_recipe(stage_name, recipe, db, t, miss, mass, kcal,
                                  need, capr, acid, k1000, renal_mode,
                                  stage_note, fat_me / me_sum, ranges,
-                                 (sctx or {}).get("blood_note", ""), extended)
+                                 (sctx or {}).get("blood_note", ""), extended,
+                                 assumed)
     return res
 
 
@@ -1871,6 +1926,11 @@ class IngredientDialog(tk.Toplevel):
                                              "commercial food", "imported"])
         self.cat.set(item["category"])
         self.cat.grid(row=1, column=1, sticky="we", pady=2)
+        self.assume = tk.BooleanVar(value=bool(item.get("assume_aafco")))
+        ttk.Checkbutton(frm, variable=self.assume,
+                        text="Complete food: assume AAFCO minimums for "
+                             "missing extended nutrients").grid(
+            row=1, column=2, columnspan=2, sticky="w", padx=(8, 0))
         ttk.Label(frm, text="Note").grid(row=2, column=0, sticky="w")
         self.note = ttk.Entry(frm, width=40)
         self.note.insert(0, item.get("note", ""))
@@ -1916,7 +1976,8 @@ class IngredientDialog(tk.Toplevel):
                                      parent=self)
                 return
         self.result = {"name": name, "category": self.cat.get() or "food",
-                       "note": self.note.get().strip(), "per100g": vals}
+                       "note": self.note.get().strip(), "per100g": vals,
+                       "assume_aafco": self.assume.get()}
         self.destroy()
 
 
@@ -3043,6 +3104,10 @@ class App(tk.Tk):
             txt = item.get("note", "")
             if unk:
                 txt += ("  " if txt else "") + "Unknown: " + ", ".join(unk)
+            if item.get("assume_aafco"):
+                txt += ("  " if txt else "") + ("Complete food: AAFCO "
+                                                "minimums assumed for missing "
+                                                "extended nutrients.")
             self.note_lbl.config(text=txt)
 
     def _store(self, item, old_name=None):
@@ -3115,7 +3180,9 @@ class App(tk.Tk):
                                       "category": (row.get("category") or
                                                    "imported").strip(),
                                       "note": (row.get("note") or "").strip(),
-                                      "per100g": per})
+                                      "per100g": per,
+                                      "assume_aafco":
+                                          row.get("assume_aafco", "")})
             new = sum(1 for i in items if i["name"] not in self.db)
             for i in items:
                 self.db[str(i["name"]).strip()] = normalise(i)
@@ -3134,14 +3201,15 @@ class App(tk.Tk):
             return
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["name", "category", "note"] + KEYS)
+            w.writerow(["name", "category", "note"] + KEYS +
+                       ["assume_aafco"])
             w.writerow(["# units per 100 g ->", "", ""] +
-                       [UNIT[k] for k in KEYS])
+                       [UNIT[k] for k in KEYS] + ["1 = complete food"])
             ex = self.db.get("Lentils, boiled")
             if ex:
                 w.writerow([ex["name"] + " (example)", ex["category"], ""] +
                            ["" if ex["per100g"][k] is None else
-                            ex["per100g"][k] for k in KEYS])
+                            ex["per100g"][k] for k in KEYS] + [""])
         messagebox.showinfo("Template", "Template saved. Delete the units "
                             "row and example before importing (rows whose "
                             "name starts with '#' are skipped anyway).")
@@ -3153,12 +3221,14 @@ class App(tk.Tk):
             return
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["name", "category", "note"] + KEYS)
+            w.writerow(["name", "category", "note"] + KEYS +
+                       ["assume_aafco"])
             for n in sorted(self.db, key=str.lower):
                 it = self.db[n]
                 w.writerow([n, it["category"], it.get("note", "")] +
                            ["" if it["per100g"][k] is None else
-                            it["per100g"][k] for k in KEYS])
+                            it["per100g"][k] for k in KEYS] +
+                           [1 if it.get("assume_aafco") else ""])
 
     # ---------------- recipe actions
     def add_to_recipe(self):

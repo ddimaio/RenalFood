@@ -30,6 +30,7 @@
    "epa_dha": 225,
    "base_meq": 0,
    "p_bind": 0
-  }
+  },
+  "assume_aafco": true
  }
 ]

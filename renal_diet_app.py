@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29"
+ENGINE_VERSION = "2026.10.29b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -835,14 +835,20 @@ with tab_lib:
         row = {"name": n, "category": it["category"],
                "note": it.get("note", "")}
         row.update({k: it["per100g"][k] for k in rc.KEYS})
+        row["assume_aafco"] = bool(it.get("assume_aafco"))
         lib_rows.append(row)
     full_df = pd.DataFrame(lib_rows)        # all columns, for export
-    ldf = full_df[["name", "category", "note"] + lib_keys]
+    flag_col = ["assume_aafco"] if ss.ext else []   # extended mode only
+    ldf = full_df[["name", "category", "note"] + flag_col + lib_keys]
     cfg = {"category": st.column_config.SelectboxColumn(
         "category", options=["food", "supplement", "binder",
                              "commercial food", "imported"])}
     cfg.update({k: st.column_config.NumberColumn(
         f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in lib_keys})
+    cfg["assume_aafco"] = st.column_config.CheckboxColumn(
+        "Complete food (assume AAFCO)",
+        help="Missing extended nutrients are assumed to be at the AAFCO "
+             "adult minimum (complete commercial foods only).")
     _m = view("mob", "libnote")
     if _m:
         with _m:
@@ -868,10 +874,12 @@ with tab_lib:
                    for k in rc.KEYS}
             per.update({k: (None if pd.isna(rw[k]) else float(rw[k]))
                         for k in lib_keys})
+            flag = (rw["assume_aafco"] if "assume_aafco" in rw
+                    else bool(orig and orig.get("assume_aafco")))
             new_db[nm] = rc.normalise({
                 "name": nm, "category": rw["category"] or "food",
                 "note": rw["note"] if pd.notna(rw["note"]) else "",
-                "per100g": per})
+                "per100g": per, "assume_aafco": flag})
         ss.db = new_db
         rc.save_db(new_db)
         ss.lib_ver += 1
@@ -884,9 +892,9 @@ with tab_lib:
                           mime="text/csv")
     tmpl = io.StringIO()
     wt = csv.writer(tmpl)
-    wt.writerow(["name", "category", "note"] + rc.KEYS)
+    wt.writerow(["name", "category", "note"] + rc.KEYS + ["assume_aafco"])
     wt.writerow(["# units per 100 g ->", "", ""] +
-                [rc.UNIT[k] for k in rc.KEYS])
+                [rc.UNIT[k] for k in rc.KEYS] + ["1 = complete food"])
     lc[2].download_button("⬇️ CSV template", tmpl.getvalue(),
                           file_name="ingredients_template.csv",
                           mime="text/csv")
@@ -915,7 +923,8 @@ with tab_lib:
                     items.append({"name": nm, "category":
                                   (row.get("category") or "imported").strip(),
                                   "note": (row.get("note") or "").strip(),
-                                  "per100g": per})
+                                  "per100g": per,
+                                  "assume_aafco": row.get("assume_aafco", "")})
             new = sum(1 for i in items if i["name"] not in db)
             for i in items:
                 db[str(i["name"]).strip()] = rc.normalise(i)

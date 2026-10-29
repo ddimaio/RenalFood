@@ -33,6 +33,10 @@ scripts on first run.
   amino acids, linoleic acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) vs
   AAFCO adult minimums, plus iodine and selenium maximums. Hidden from the
   results and library editor unless switched on.
+  A complete commercial food without these values can be flagged
+  *Complete food (assume AAFCO)*: its missing extended nutrients are then
+  taken as exactly the AAFCO adult minimum per 1000 kcal of that food, so
+  the rest of the recipe can still be checked (shown as "assumed").
 - Optional daily food limit (g/day) for a small appetite: the optimiser
   and generator then favour energy-dense recipes (less vegetable, more oil)
   that fit in that amount.
