@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29h"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29i"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1036,8 +1036,9 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     by = {r: [n for n in pool if roles[n] == r and n not in base_names]
           for r in ROLES}
     filled = {roles[n] for n in fo_names}        # roles covered by forced
+    # n_veg is exact: with 0 vegetables the base has none either
     groups = [by[r] for r in ("protein", "starch", "veg")
-              if by[r] and r not in filled]
+              if by[r] and r not in filled and (r != "veg" or n_veg > 0)]
     if not groups and not fo_names:
         groups = [[n for n in pool if n not in base_names
                    and roles[n] not in ("binder", "supplement")]]
@@ -1173,9 +1174,11 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             room_f, room_x = n_foods() < max_ing, n_extras() < max_extra
             if not (room_f or room_x):
                 break
+            veg_full = len(vegs(cur_n)) >= n_veg   # vegetables: exact count
             best = try_add(cur_n, cur_b, cur_g,
                            [c for c in extra_pool if allowed(c) and
-                            (room_x if is_extra(c) else room_f)])
+                            (room_x if is_extra(c) else room_f) and
+                            not (veg_full and roles.get(c) == "veg")])
             if best is None or best[1] > cur_s * 0.97:
                 break
             cur_n.append(best[0])
@@ -2479,7 +2482,8 @@ class GeneratorDialog(tk.Toplevel):
 
         r1 = ttk.Frame(frm)
         r1.pack(fill="x", pady=(6, 0))
-        ttk.Label(r1, text="Vegetables per recipe").pack(side="left")
+        ttk.Label(r1, text="Vegetables per recipe (non-starchy; potato "
+                           "= starch)").pack(side="left")
         self.n_veg = tk.StringVar(value="2")
         ttk.Spinbox(r1, from_=0, to=4, textvariable=self.n_veg,
                     width=4).pack(side="left", padx=4)
@@ -2715,7 +2719,8 @@ class GenResultsWindow(tk.Toplevel):
                 kc = (db[n]["per100g"]["kcal"] or 0) * a / 100
                 tag = ("  (fixed)" if j < n_fixed else
                        "  (forced)" if n in self.forced else "")
-                L.append(f"  {n:<{w}} {a:>7.1f} g  {kc:>5.0f} kcal{tag}")
+                L.append(f"  {n:<{w}} {a:>7.1f} g  {kc:>5.0f} kcal"
+                         f"  [{ingredient_role(db[n])}]{tag}")
             capr = per["ca"] / per["p"] if per["p"] else 0
             L.append(f"  per 1000 kcal: protein {per['protein']:.0f} g, "
                      f"P {max(0, per['p'] - per['p_bind']):.0f} mg, "

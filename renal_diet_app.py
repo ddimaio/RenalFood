@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29h"
+ENGINE_VERSION = "2026.10.29i"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -787,7 +787,12 @@ with tab_gen:
     gmax = g3.slider("Max. foods each", 3, 9, 6, key="g_max",
                      help="Salt, supplements and oils are extra (up to 3).")
     v1, v2, v3 = st.columns(3)
-    gveg = v1.slider("Vegetables per recipe", 0, 4, 2, key="g_veg")
+    gveg = v1.slider("Vegetables per recipe", 0, 4, 2, key="g_veg",
+                     help="Exact number of non-starchy vegetables (incl. "
+                          "mushrooms and low-calorie fruit such as apple). "
+                          "Potato, sweet potato and banana count as starch; "
+                          "peas and chickpeas as 'other' – see the Role "
+                          "column in the results.")
     guse = v2.slider("Same vegetable in max. … recipes", 1, 10, 2,
                      key="g_use")
     gmin = v3.number_input("Min. g per vegetable", 0.0, 500.0,
