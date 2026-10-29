@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29v"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29x"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -602,6 +602,25 @@ def delete_reference(name):
     save_references([r for r in load_references() if r["name"] != name])
 
 
+def reference_score(ref, ctx):
+    """Score a reference diet with the usual criteria (ctx without
+    reference matching), fed at the energy target as the only food. It is
+    treated as a complete food: undeclared extended nutrients and Na/K/Mg
+    at the AAFCO minimum; other undeclared values unknown. Returns
+    (score, terms, grams/day)."""
+    c = {k: v for k, v in ctx.items() if k != "ref_match"}
+    item = normalise({"name": ref["name"], "category": "commercial food",
+                      "per100g": {k: v for k, v in ref["per100g"].items()
+                                  if k in KEYS},
+                      "assume_aafco": True})
+    kc = item["per100g"]["kcal"] or 0
+    if kc <= 0:
+        return None, {}, 0.0
+    g = c["kcal_target"] * 100.0 / kc
+    sc, terms = score_amounts([g], [_vec(item)], c)
+    return sc, terms, g
+
+
 def reference_rows(totals, ref, missing=None, extended=True):
     """Compare a recipe (totals per day) with a reference diet, both per
     1000 kcal. missing: {key: [ingredients without data]} marks recipe
@@ -842,6 +861,11 @@ try:
     from scipy.optimize import minimize as _sp_minimize
 except Exception:                     # scipy is optional
     _sp_minimize = None
+try:
+    from scipy.optimize import lsq_linear as _sp_lsq
+    import numpy as _np
+except Exception:
+    _sp_lsq = _np = None
 
 KI = {k: i for i, k in enumerate(KEYS)}
 OPT_WEIGHTS = {"energy": 10.0, "phosphorus": 5.0, "protein": 4.0,
@@ -965,6 +989,7 @@ def _upper(g, vecs, per, kcal, unk):
 
 REF_MATCH_W = {"protein": 3, "fat": 2, "p": 3, "ca": 2, "na": 2, "k": 2,
                "fibre": 1, "carb": 1}       # others 1 (0.5 if extended key)
+REF_LOWER_W = 0.25   # label gives only ADDED amounts: a soft minimum
 
 
 def reference_targets(ref, extended=False):
@@ -995,16 +1020,19 @@ def reference_context(ctx, ref, mode="match"):
 
 
 def _ref_terms(per, unk, targets):
+    # unk kept for the call signature; see the comment below
     terms = {}
     for k, (rv, lower_only) in targets.items():
         if rv <= 0:
             continue
         v = per[k]
-        if lower_only or k in unk:       # only a shortfall/excess is certain
-            d = _band(v, rv, None) if lower_only else _band(v, None, rv)
-        else:
-            d = ((v - rv) / rv) ** 2
+        if lower_only:                   # label gives only added amounts
+            d = _band(v, rv, None)
+        else:                            # unknown values count as 0 here:
+            d = ((v - rv) / rv) ** 2     # missing data must not look ideal
         w = REF_MATCH_W.get(k, 0.5 if k in EXT_KEYS else 1.0)
+        if lower_only:
+            w *= REF_LOWER_W
         if d > 0:
             terms[f"vs ref: {LABEL[k]}"] = w * d
     return terms
@@ -1282,8 +1310,15 @@ def add_manual(names, db, bounds, grams, ctx, additions):
 def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
                       progress=None):
     """Optimise the chosen set, then test each candidate as an addition and
-    build a greedy best combination of up to max_add additions."""
-    base = optimise(names, db, bounds, x0, ctx)
+    build a greedy best combination of up to max_add additions. With a
+    reference-match objective the amounts and the combination come from
+    match_reference() (least squares over the whole candidate list)."""
+    if ctx.get("ref_match"):
+        mb = match_reference(names, db, bounds, x0, ctx, (), 0)
+        b0 = optimise(names, db, bounds, x0, ctx)
+        base = (mb[1], mb[2], mb[3]) if mb[2] < b0[1] else b0
+    else:
+        base = optimise(names, db, bounds, x0, ctx)
     singles = []
     for idx, c in enumerate(candidates):
         if progress:
@@ -1315,7 +1350,125 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         cur_n, cur_b = cur_n + [best[0]], cur_b + [(lo, hi, False)]
         cur_g, cur_s, cur_t = best[1], best[2], best[3]
         added.append(best[0])
+    if ctx.get("ref_match"):
+        mr = match_reference(names, db, bounds, list(base[0]), ctx,
+                             candidates, max_add)
+        if mr[2] < cur_s:
+            cur_n, cur_g, cur_s, cur_t, added = mr
     return base, singles, (cur_n, cur_g, cur_s, cur_t, added)
+
+
+def _lsq_match(names, db, bounds, x0, ctx, lower_active=()):
+    """Bounded linear least squares for the reference-match objective
+    (energy fixed at the target, so per-1000 kcal values are linear in the
+    grams). Returns (grams, cost) or None without scipy."""
+    if _sp_lsq is None:
+        return None
+    rm = ctx["ref_match"]
+    tgt = ctx["kcal_target"]
+    vecs = [_vec(db[n]) for n in names]
+    free = [i for i, (lo, hi, lk) in enumerate(bounds) if not lk]
+    if not free:
+        return None
+    fixed = [i for i in range(len(names)) if i not in free]
+    rows, rhs = [], []
+
+    def add_row(coef, target, w):
+        r_ = [coef[i] * w for i in free]
+        fx = sum(coef[i] * x0[i] for i in fixed)
+        rows.append(r_)
+        rhs.append((target - fx) * w)
+    kc = [(v[KI["kcal"]] or 0.0) / 100.0 for v in vecs]
+    add_row(kc, tgt, 30.0 / tgt)                       # energy: strong
+    if ctx.get("max_g"):
+        pass                                           # checked afterwards
+    for k, (rv, lower_only) in rm["targets"].items():
+        if rv <= 0 or (lower_only and k not in lower_active):
+            continue
+        w = REF_MATCH_W.get(k, 0.5 if k in EXT_KEYS else 1.0)
+        if lower_only:
+            w *= REF_LOWER_W
+        coef = [((v[KI[k]] or 0.0) / 100.0) * 1000.0 / tgt for v in vecs]
+        add_row(coef, rv, w ** 0.5 / rv)
+    A = _np.array(rows, dtype=float)
+    b = _np.array(rhs, dtype=float)
+    lo = _np.array([bounds[i][0] for i in free], dtype=float)
+    hi = _np.array([max(bounds[i][1], bounds[i][0] + 1e-9) for i in free],
+                   dtype=float)
+    try:
+        r = _sp_lsq(A, b, bounds=(lo, hi), method="bvls")
+    except Exception:
+        try:
+            r = _sp_lsq(A, b, bounds=(lo, hi))
+        except Exception:
+            return None
+    g = list(x0)
+    for j, i in enumerate(free):
+        g[i] = float(r.x[j])
+    for i in fixed:
+        g[i] = x0[i] if bounds[i][2] else 0.0
+    return g, float(r.cost)
+
+
+def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
+                    progress=None):
+    """Recipe as close as possible to ctx['ref_match'] (from
+    reference_context): least-squares amounts for the current ingredients,
+    then forward selection of up to max_add library foods (each step tries
+    every candidate), each result polished with optimise(). Returns
+    (names, grams, score, terms, added)."""
+    def solve(nn, bb, xx):
+        if _sp_lsq is None:
+            return optimise(nn, db, bb, xx, ctx)
+        active = set()
+        res = _lsq_match(nn, db, bb, xx, ctx)
+        for _ in range(3):              # switch on violated minimums
+            if res is None:
+                break
+            _, per, _ = per1000_from(res[0], [_vec(db[n]) for n in nn])
+            viol = {k for k, (rv, lw) in ctx["ref_match"]["targets"].items()
+                    if lw and per[k] < rv} - active
+            if not viol:
+                break
+            active |= viol
+            res = _lsq_match(nn, db, bb, xx, ctx, active)
+        start = res[0] if res else xx
+        g1 = optimise(nn, db, bb, start, ctx)
+        if res:
+            g2 = [min(bb[i][1], max(bb[i][0], round(v, 1)))
+                  if not bb[i][2] else v for i, v in enumerate(res[0])]
+            s2, t2 = score_amounts(g2, [_vec(db[n]) for n in nn], ctx)
+            if s2 < g1[1]:
+                return g2, s2, t2
+        return g1
+    cur_n, cur_b = list(names), list(bounds)
+    g, sc, t = solve(cur_n, cur_b, list(x0))
+    added = []
+    need = [k for k, (rv, lw) in ctx["ref_match"]["targets"].items()
+            if not lw]
+    # candidates must have data for the reference's main nutrients
+    pool = [c for c in candidates if c not in cur_n and c in db
+            and db[c]["category"] != "binder"
+            and db[c]["per100g"]["kcal"] is not None
+            and all(value(db[c], k) is not None for k in need)]
+    for step in range(max_add):
+        best = None
+        for j, c in enumerate(pool):
+            if c in cur_n:
+                continue
+            if progress:
+                progress(step * len(pool) + j, max_add * len(pool), c)
+            lo, hi = default_bounds(db[c], ctx["kcal_target"])
+            r = solve(cur_n + [c], cur_b + [(lo, hi, False)], g + [0.0])
+            if r[0][-1] >= 0.5 and (best is None or r[1] < best[1][1]):
+                best = (c, r, (lo, hi, False))
+        if best is None or best[1][1] > sc * 0.98:
+            break
+        c, (g, sc, t), b_ = best
+        cur_n.append(c)
+        cur_b.append(b_)
+        added.append(c)
+    return cur_n, g, sc, t, added
 
 
 def suggest_removals(names, db, bounds, base, ctx, progress=None,
@@ -3855,6 +4008,10 @@ class ResultsWindow(tk.Toplevel):
             for row in reference_rows(tot, ref, miss, ctx.get("extended")):
                 n_, u_, a_, b_, d_ = [str(x).replace("≥", ">=") for x in row]
                 L.append(f"  {n_:<26} {u_:<7} {a_:>10} {b_:>10} {d_:>7}")
+            c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
+            L.append(f"  Usual score (renal targets): reference "
+                     f"{reference_score(ref, c0)[0]:.3f}, this optimised "
+                     f"recipe {score_amounts(g, [_vec(db[n]) for n in names], c0)[0]:.3f}")
             if rm["only"]:
                 L.append("  (matching the reference only - renal targets are "
                          "not part of this score)")
@@ -4009,6 +4166,9 @@ class RefCompareWindow(tk.Toplevel):
             self.tree.heading(c, text=t)
             self.tree.column(c, width=w, anchor="w" if c in "nu" else "e")
         box.pack(fill="both", expand=True, pady=6)
+        self.score_lbl = ttk.Label(frm, wraplength=740, justify="left",
+                                   font=("TkDefaultFont", 10, "bold"))
+        self.score_lbl.pack(anchor="w", pady=(0, 4))
         self.note = ttk.Label(frm, foreground="#555", wraplength=740,
                               justify="left")
         self.note.pack(anchor="w")
@@ -4027,6 +4187,7 @@ class RefCompareWindow(tk.Toplevel):
     def fill(self):
         self.tree.delete(*self.tree.get_children())
         if not self.refs:
+            self.score_lbl.config(text="")
             self.note.config(text="No reference diets loaded - use Import "
                                   "(CSV template or JSON; an ingredient JSON "
                                   "also works).")
@@ -4040,6 +4201,16 @@ class RefCompareWindow(tk.Toplevel):
                                       self.app.ext.get()):
                 self.tree.insert("", "end", values=[
                     str(x).replace("≥", ">=") for x in row])
+        rsc, rterms, rg = reference_score(ref, self.app.score_context())
+        gaps = ", ".join(f"{k} ({v:.3f})" for k, v in
+                         sorted(rterms.items(), key=lambda kv: -kv[1])
+                         if v > 1e-3)[:200]
+        self.score_lbl.config(
+            text=(f"Usual score - reference: {rsc:.3f}   this recipe: "
+                  + (f"{a['score']:.3f}" if a.get("score") is not None
+                     else "-") + f"   (reference fed at {rg:.0f} g/day; "
+                  f"gaps: {gaps or 'none'}; undeclared EPA+DHA = 0)")
+            if rsc is not None else "")
         self.note.config(
             text="For comparison only - not an ingredient. '>=' = lower "
                  "bound: label gives only added amounts, or an ingredient's "

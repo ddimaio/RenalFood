@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29v"
+ENGINE_VERSION = "2026.10.29x"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -630,6 +630,27 @@ with tab_rec:
                         rc.reference_rows(t, ref, a["missing"], ss.ext),
                         columns=["Nutrient", "Unit", "Recipe /1000 kcal",
                                  "Reference /1000 kcal", "Difference"])
+                    rsc, rterms, rg = rc.reference_score(ref,
+                                                         score_context())
+                    if rsc is not None:
+                        sc_c = st.columns(2)
+                        sc_c[0].metric(
+                            "Reference score", f"{rsc:.3f}",
+                            help="The reference fed alone at your energy "
+                                 f"target ({rg:.0f} g/day), scored with the "
+                                 "same criteria as your recipe (stage, "
+                                 "blood adaptation, priorities). 0 = every "
+                                 "target met.")
+                        sc_c[1].metric("This recipe", f"{a['score']:.3f}"
+                                       if a["score"] is not None else "–")
+                        rg_ = [f"{k} ({v:.3f})" for k, v in
+                               sorted(rterms.items(), key=lambda kv: -kv[1])
+                               if v > 1e-3][:5]
+                        st.caption("Reference gaps: " + (", ".join(rg_) or
+                                   "none") + ". Undeclared EPA+DHA counts "
+                                   "as 0 (as for any complete food); "
+                                   "undeclared Na/K/Mg and trace minerals "
+                                   "at the AAFCO minimum.")
                     show_df(st, rdf, hide_index=True, **FULL,
                             height=35 * (len(rdf) + 1) + 3)
                     st.caption("For comparison only – not an ingredient. "
@@ -951,6 +972,14 @@ with tab_opt:
                             columns=["Nutrient", "Unit", "Recipe /1000 kcal",
                                      "Reference /1000 kcal", "Difference"]),
                             hide_index=True, **FULL)
+                        _rs = rc.reference_score(ref_o, ctx)[0]
+                        _os = rc.score_amounts(
+                            g, [rc._vec(db[n]) for n in r["names"]],
+                            {k: v for k, v in ctx.items()
+                             if k != "ref_match"})[0]
+                        st.caption(f"Usual score (renal targets): reference "
+                                   f"{_rs:.3f} · this optimised recipe "
+                                   f"{_os:.3f}")
                         if rm_["only"]:
                             st.caption("Matching the reference only: renal "
                                        "targets are not checked here – see "
