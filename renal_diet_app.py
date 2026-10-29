@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29b"
+ENGINE_VERSION = "2026.10.29c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -373,7 +373,7 @@ with tab_rec:
                 "AAFCO min", "Status"]
         comp = pd.DataFrame([v for v, _ in a["rows"]], columns=cols)
         tags = [tg for _, tg in a["rows"]]
-        bcols = [c for _, c, _ in rc.App.BRK_COLS]
+        bcols = [c for _, c, _ in a.get("breakdown_cols", rc.BRK_COLS)]
         brk = pd.DataFrame(a["breakdown"], columns=bcols)
         h_comp = 35 * (len(comp) + 1) + 3
 
@@ -418,7 +418,10 @@ with tab_rec:
                 with _m:
                     st.dataframe(brk[["Ingredient", "g", "kcal", "P mg",
                                       "% of P"]], hide_index=True, **FULL)
-            st.caption("'?' = value unknown for that ingredient.")
+            st.caption("'?' = value unknown for that ingredient"
+                       + ("; '≈' = AAFCO minimum assumed (complete food). "
+                          "All nutrients shown – scroll sideways."
+                          if ss.ext else "."))
 
         buf = io.StringIO()
         w = csv.writer(buf)

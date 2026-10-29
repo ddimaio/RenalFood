@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1332,10 +1332,37 @@ def extended_notes(t, miss, k1000, assumed=None):
 BRK_KEYS = [("kcal", "kcal"), ("protein", "protein"), ("fat", "fat"),
             ("p", "p"), ("ca", "ca"), ("na", "na"), ("k", "k"),
             ("epa", "epa_dha")]
+# Ingredient-breakdown columns: (id, heading, width px)
+BRK_COLS = [("ing", "Ingredient", 260), ("g", "g", 75),
+            ("pw", "% weight", 75), ("kcal", "kcal", 70),
+            ("pk", "% kcal", 70), ("protein", "Protein g", 85),
+            ("fat", "Fat g", 70), ("p", "P mg", 75), ("pp", "% of P", 70),
+            ("ca", "Ca mg", 75), ("na", "Na mg", 70), ("k", "K mg", 70),
+            ("epa", "EPA+DHA mg", 95)]
+_BRK_SHOWN = {k for _, k in BRK_KEYS}
 
 
-def breakdown_rows(recipe, db, mass, t):
-    """Per-ingredient contribution rows (strings) + TOTAL row."""
+def breakdown_extra_keys(extended=False):
+    """Nutrients added to the breakdown in extended mode: every other
+    nutrient (vitamins, minerals, amino acids, trace minerals...)."""
+    if not extended:
+        return []
+    return [k for k in KEYS if k not in _BRK_SHOWN
+            and k not in ("base_meq", "p_bind")]
+
+
+def breakdown_columns(extended=False):
+    """Breakdown columns: the standard ones, plus all other nutrients in
+    extended mode."""
+    return BRK_COLS + [(k, f"{LABEL[k]} {UNIT[k]}", 95)
+                       for k in breakdown_extra_keys(extended)]
+
+
+def breakdown_rows(recipe, db, mass, t, extended=False):
+    """Per-ingredient contribution rows (strings) + TOTAL row. In extended
+    mode every nutrient is included; '?' = unknown, '≈' = AAFCO minimum
+    assumed (complete food)."""
+    extra = breakdown_extra_keys(extended)
     rows = []
     for n, g in recipe:
         if n not in db or g <= 0:
@@ -1351,14 +1378,20 @@ def breakdown_rows(recipe, db, mass, t):
               if amt["kcal"] is not None and t["kcal"] else None)
         pp = (amt["p"] / t["p"] * 100
               if amt["p"] is not None and t["p"] else None)
-        rows.append((n, fmt(g), f"{g / mass * 100:.1f}", f(amt["kcal"]),
-                     "?" if pk is None else f"{pk:.0f}", f(amt["protein"]),
-                     f(amt["fat"]), f(amt["p"]),
-                     "?" if pp is None else f"{pp:.0f}",
-                     f(amt["ca"]), f(amt["na"]), f(amt["k"]), f(amt["epa"])))
-    rows.append(("TOTAL", fmt(mass), "100", fmt(t["kcal"]), "100",
-                 fmt(t["protein"]), fmt(t["fat"]), fmt(t["p"]), "100",
-                 fmt(t["ca"]), fmt(t["na"]), fmt(t["k"]), fmt(t["epa_dha"])))
+        row = (n, fmt(g), f"{g / mass * 100:.1f}", f(amt["kcal"]),
+               "?" if pk is None else f"{pk:.0f}", f(amt["protein"]),
+               f(amt["fat"]), f(amt["p"]),
+               "?" if pp is None else f"{pp:.0f}",
+               f(amt["ca"]), f(amt["na"]), f(amt["k"]), f(amt["epa"]))
+        for k in extra:
+            x = value(db[n], k)
+            row += ("?" if x is None else
+                    ("≈" if v[k] is None else "") + fmt(x * g / 100),)
+        rows.append(row)
+    total = ("TOTAL", fmt(mass), "100", fmt(t["kcal"]), "100",
+             fmt(t["protein"]), fmt(t["fat"]), fmt(t["p"]), "100",
+             fmt(t["ca"]), fmt(t["na"]), fmt(t["k"]), fmt(t["epa_dha"]))
+    rows.append(total + tuple(fmt(t[k]) for k in extra))
     return rows
 
 
@@ -1381,8 +1414,10 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
         renal_mode = sctx["renal"]
     ranges = get_ranges(sctx)
     mass, t, miss = compute(recipe, db)
+    extended = bool((sctx or {}).get("extended"))
     res = {"mass": mass, "totals": t, "missing": miss, "summary": [],
-           "rows": [], "breakdown": [], "score": None, "terms": {}}
+           "rows": [], "breakdown": [], "score": None, "terms": {},
+           "breakdown_cols": breakdown_columns(extended)}
     if mass <= 0:
         res["notes"] = ("Add ingredients to the recipe.\n\nStage guidance: "
                         + stage_note)
@@ -1432,7 +1467,6 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                            else "all targets met"))
     res["summary"] = summary
 
-    extended = bool((sctx or {}).get("extended"))
     assumed = assumed_in(recipe, db)
     for k in visible_keys(extended):
         if k in ("base_meq", "p_bind") and t[k] == 0:
@@ -1458,7 +1492,7 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                              inc + fmt(per100), inc + fmt(perdm),
                              inc + fmt(p1000), inc + fmt(pday), renal, aafco,
                              st), tag))
-    res["breakdown"] = breakdown_rows(recipe, db, mass, t)
+    res["breakdown"] = breakdown_rows(recipe, db, mass, t, extended)
     res["notes"] = assess_recipe(stage_name, recipe, db, t, miss, mass, kcal,
                                  need, capr, acid, k1000, renal_mode,
                                  stage_note, fat_me / me_sum, ranges,
@@ -2878,12 +2912,7 @@ class App(tk.Tk):
                 ("day", "Per day", 90), ("renal", "Renal range", 110),
                 ("aafco", "AAFCO min", 100), ("status", "Status", 260)]
 
-    BRK_COLS = [("ing", "Ingredient", 260), ("g", "g", 75),
-                ("pw", "% weight", 75), ("kcal", "kcal", 70),
-                ("pk", "% kcal", 70), ("protein", "Protein g", 85),
-                ("fat", "Fat g", 70), ("p", "P mg", 75), ("pp", "% of P", 70),
-                ("ca", "Ca mg", 75), ("na", "Na mg", 70), ("k", "K mg", 70),
-                ("epa", "EPA+DHA mg", 95)]
+    BRK_COLS = BRK_COLS
 
     def __init__(self):
         super().__init__()
@@ -3024,17 +3053,19 @@ class App(tk.Tk):
         self.tabs.add(comp, text="Composition")
         self.tabs.add(brk, text="Ingredient breakdown")
 
-        bcols = [c for c, _, _ in self.BRK_COLS]
-        self.brk = ttk.Treeview(brk, columns=bcols, show="headings")
-        for c, t, w in self.BRK_COLS:
-            self.brk.heading(c, text=t)
-            self.brk.column(c, width=w, anchor="w" if c == "ing" else "e")
+        self.brk_cols = list(self.BRK_COLS)   # changes with extended mode
+        self.brk = ttk.Treeview(brk, show="headings")
+        bx = ttk.Scrollbar(brk, orient="horizontal", command=self.brk.xview)
+        self.brk.configure(xscrollcommand=bx.set)
+        self._set_brk_cols(self.brk_cols)
         self.brk.tag_configure("head", background="#eef2f7")
         self.brk.pack(fill="both", expand=True)
+        bx.pack(fill="x")
         ttk.Label(brk, foreground="#555", text="What each ingredient "
                   "contributes to the recipe. '?' = value unknown for that "
-                  "ingredient.").pack(anchor="w", pady=2)
-        self._tree_copy(self.brk, self.BRK_COLS)
+                  "ingredient; '≈' = AAFCO minimum assumed (complete "
+                  "food).").pack(anchor="w", pady=2)
+        self._tree_copy(self.brk, self.brk_cols)
 
         cols = [c for c, _, _ in self.RES_COLS]
         self.res = ttk.Treeview(comp, columns=cols, show="headings",
@@ -3058,6 +3089,13 @@ class App(tk.Tk):
 
         # copy from the results table (tab-separated -> pastes into Excel)
         self._tree_copy(self.res, self.RES_COLS, with_notes=True)
+
+    def _set_brk_cols(self, cols):
+        self.brk["columns"] = [c for c, _, _ in cols]
+        for c, t, w in cols:
+            self.brk.heading(c, text=t)
+            self.brk.column(c, width=w, minwidth=40, stretch=False,
+                            anchor="w" if c == "ing" else "e")
 
     def _tree_copy(self, tree, cols, with_notes=False):
         menu = tk.Menu(tree, tearoff=0)
@@ -3338,7 +3376,7 @@ class App(tk.Tk):
         lines = [self.recipe_note] if self.recipe_note else []
         lines += ["Recipe (g/day)"] + [f"{n}\t{g:g}" for n, g in self.recipe]
         lines += [""] + self.tree_lines(self.res, self.RES_COLS, selected)
-        lines += [""] + self.tree_lines(self.brk, self.BRK_COLS)
+        lines += [""] + self.tree_lines(self.brk, self.brk_cols)
         if notes:
             lines += ["", self.notes.get("1.0", "end-1c")]
         to_clipboard(self, "\n".join(lines))
@@ -3432,6 +3470,9 @@ class App(tk.Tk):
         for values, tag in a["rows"]:
             self.res.insert("", "end", tags=(tag,) if tag else (),
                             values=values)
+        if a["breakdown_cols"] != self.brk_cols:
+            self.brk_cols[:] = a["breakdown_cols"]   # same list object
+            self._set_brk_cols(self.brk_cols)
         if a["mass"] > 0:
             for i, row in enumerate(a["breakdown"]):
                 last = i == len(a["breakdown"]) - 1
@@ -3458,7 +3499,7 @@ class App(tk.Tk):
             for n, g in self.recipe:
                 w.writerow([n, g])
             w.writerow([])
-            w.writerow([t for _, t, _ in self.BRK_COLS])
+            w.writerow([t for _, t, _ in self.brk_cols])
             for iid in self.brk.get_children():
                 w.writerow(self.brk.item(iid, "values"))
             w.writerow([])
