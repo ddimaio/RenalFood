@@ -109,6 +109,12 @@ template; blank = not declared; blank kcal is estimated from protein, fat,
 fibre, ash and moisture) or JSON (a reference diet, a list, or an ingredient
 JSON such as `imports/bonza_kibble.json`). Same-name entries are replaced.
 
+To change a recipe so it resembles a reference diet, choose the optimiser
+**Objective** "Match a reference diet" (energy target + closeness per 1000
+kcal, weighted most for protein and phosphorus) or "Renal targets +
+reference diet". Additions, substitutions and your own additions then work
+towards that objective, and the results show the recipe vs the reference.
+
 ## Remembered exclusions
 
 Foods you untick in the generator's list or the optimiser's suggested

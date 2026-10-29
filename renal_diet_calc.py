@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29s"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29t"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -934,7 +934,83 @@ def _upper(g, vecs, per, kcal, unk):
     return up
 
 
+REF_MATCH_W = {"protein": 3, "fat": 2, "p": 3, "ca": 2, "na": 2, "k": 2,
+               "fibre": 1, "carb": 1}       # others 1 (0.5 if extended key)
+
+
+def reference_targets(ref, extended=False):
+    """{key: (value per 1000 kcal, lower_bound_only)} from a reference."""
+    kr = ref["per100g"].get("kcal")
+    lo = set(ref.get("added_only", []))
+    out = {}
+    for k in KEYS:
+        v = ref["per100g"].get(k)
+        if v is None or not kr or k in ("kcal", "water", "base_meq",
+                                         "p_bind"):
+            continue
+        if k in EXT_KEYS and not extended:
+            continue
+        out[k] = (v * 1000.0 / kr, k in lo)
+    return out
+
+
+def reference_context(ctx, ref, mode="match"):
+    """Scoring context that pulls a recipe towards a reference diet.
+    mode 'match': energy + closeness to the reference only;
+    'both': the normal targets plus closeness to the reference."""
+    c = dict(ctx)
+    c["ref_match"] = {"name": ref["name"], "only": mode == "match",
+                      "targets": reference_targets(ref,
+                                                   ctx.get("extended"))}
+    return c
+
+
+def _ref_terms(per, unk, targets):
+    terms = {}
+    for k, (rv, lower_only) in targets.items():
+        if rv <= 0:
+            continue
+        v = per[k]
+        if lower_only or k in unk:       # only a shortfall/excess is certain
+            d = _band(v, rv, None) if lower_only else _band(v, None, rv)
+        else:
+            d = ((v - rv) / rv) ** 2
+        w = REF_MATCH_W.get(k, 0.5 if k in EXT_KEYS else 1.0)
+        if d > 0:
+            terms[f"vs ref: {LABEL[k]}"] = w * d
+    return terms
+
+
 def score_amounts(g, vecs, ctx):
+    """Penalty score for gram amounts g (0 = all targets met) and its
+    terms; with ctx['ref_match'] also (or only) the distance to a
+    reference diet."""
+    rm = ctx.get("ref_match")
+    if not rm:
+        return _score_targets(g, vecs, ctx)
+    kcal, per, _ = per1000_from(g, vecs)
+    if kcal <= 1e-6:
+        return 1e6, {"Energy": 1e6}
+    rt = _ref_terms(per, _unknown(g, vecs), rm["targets"])
+    if rm["only"]:
+        terms = {}
+        tgt = ctx["kcal_target"]
+        e = ctx["weights"]["energy"] * ((kcal - tgt) / tgt) ** 2
+        if e > 0:
+            terms["Energy"] = e
+        if ctx.get("max_g"):
+            fa = FOOD_MAX_WEIGHT * _band(sum(x for x in g if x > 0), None,
+                                         ctx["max_g"])
+            if fa > 0:
+                terms["Food amount"] = fa
+    else:
+        _, terms = _score_targets(g, vecs, ctx)
+        terms = dict(terms)
+    terms.update(rt)
+    return sum(terms.values()), terms
+
+
+def _score_targets(g, vecs, ctx):
     """Penalty score for gram amounts g (0 = all targets met) and its terms."""
     kcal, per, t = per1000_from(g, vecs)
     if kcal <= 1e-6:
@@ -3343,6 +3419,23 @@ class OptimiseDialog(tk.Toplevel):
                     row=0, column=c * 2 + 1, padx=6)
                 self.aims[k] = var
 
+        of = ttk.Frame(frm)
+        of.pack(fill="x", pady=(4, 0))
+        self.refs = load_references()
+        objs = ["Renal targets"] + (["Match a reference diet",
+                                     "Renal targets + reference diet"]
+                                    if self.refs else [])
+        ttk.Label(of, text="Objective").pack(side="left")
+        self.obj = ttk.Combobox(of, state="readonly", width=30, values=objs)
+        self.obj.current(0)
+        self.obj.pack(side="left", padx=4)
+        ttk.Label(of, text="reference").pack(side="left")
+        self.ref_pick = ttk.Combobox(of, state="readonly", width=40,
+                                     values=[r["name"] for r in self.refs])
+        if self.refs:
+            self.ref_pick.current(0)
+        self.ref_pick.pack(side="left", padx=4)
+
         sf = ttk.LabelFrame(frm, text="Suggest additional ingredients",
                             padding=6)
         sf.pack(fill="both", expand=True, pady=4)
@@ -3406,6 +3499,10 @@ class OptimiseDialog(tk.Toplevel):
                    "aims": {k: to_float(v.get()) for k, v in
                             self.aims.items()}}
             ctx["aims"] = {k: v for k, v in ctx["aims"].items() if v}
+            if self.obj.current() > 0 and self.refs:
+                ctx = reference_context(
+                    ctx, self.refs[max(0, self.ref_pick.current())],
+                    "match" if self.obj.current() == 1 else "both")
             names, bounds, x0 = [], [], []
             for n, g, vmin, vmax, lk in self.rows:
                 lo, hi = float(vmin.get()), float(vmax.get())
@@ -3603,9 +3700,25 @@ class ResultsWindow(tk.Toplevel):
         db = self.app.db
         names, (g, s, terms) = self.names, self.base
         L = []
-        L.append(f"Score (0 = every target met): current {before[0]:.3f} → "
+        rm = ctx.get("ref_match")
+        goal = ("every target met" if not rm else
+                f"same as {rm['name']} per 1000 kcal" +
+                ("" if rm["only"] else " and every renal target met"))
+        L.append(f"Score (0 = {goal}): current {before[0]:.3f} -> "
                  f"optimised {s:.3f}")
         L.append(f"Energy target: {ctx['kcal_target']:.0f} kcal/day\n")
+        ref = next((r for r in load_references() if rm and
+                    r["name"] == rm["name"]), None)
+        if ref:
+            _, tot, miss = compute(list(zip(names, g)), db)[:3]
+            L.append(f"OPTIMISED RECIPE vs {ref['name']} (per 1000 kcal)")
+            for row in reference_rows(tot, ref, miss, ctx.get("extended")):
+                n_, u_, a_, b_, d_ = [str(x).replace("≥", ">=") for x in row]
+                L.append(f"  {n_:<26} {u_:<7} {a_:>10} {b_:>10} {d_:>7}")
+            if rm["only"]:
+                L.append("  (matching the reference only - renal targets are "
+                         "not part of this score)")
+            L.append("")
         L.append("OPTIMISED DAILY AMOUNTS")
         w = max(len(n) for n in names) + 2
         for n, a, b in zip(names, x0, g):

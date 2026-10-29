@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29s"
+ENGINE_VERSION = "2026.10.29t"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -695,6 +695,27 @@ with tab_opt:
             column_config={"Lock": st.column_config.CheckboxColumn(
                 "Lock at current", help="Binders are always locked.")})
 
+        refs_o = rc.load_references()
+        OBJ = ["Renal targets", "Match a reference diet",
+               "Renal targets + reference diet"]
+        oc = st.columns([1, 2])
+        obj = oc[0].selectbox(
+            "Objective", OBJ if refs_o else OBJ[:1], key="o_obj",
+            help="'Match a reference diet' changes amounts (and suggests "
+                 "additions/substitutions) to get as close as possible to "
+                 "the reference per 1000 kcal, keeping the energy target. "
+                 "'+ reference' keeps the renal targets and adds closeness "
+                 "to the reference.")
+        o_ref = None
+        if obj != OBJ[0]:
+            rn = oc[1].selectbox("Reference diet",
+                                 [r_["name"] for r_ in refs_o], key="o_ref")
+            o_ref = next(r_ for r_ in refs_o if r_["name"] == rn)
+            oc[1].caption("Closeness is weighted most for protein and "
+                          "phosphorus, then fat, calcium, sodium and "
+                          "potassium. Label values given only as 'added' "
+                          "count as minimums.")
+
         with st.expander("Priorities and aims"):
             wc = st.columns(5)
             weights = {}
@@ -759,6 +780,9 @@ with tab_opt:
                    "ranges": dict(ctx0.get("ranges", {})),
                    "weights": weights, "aims": {k: v for k, v in
                                                 aims.items() if v}}
+            if o_ref is not None:
+                ctx = rc.reference_context(
+                    ctx, o_ref, "match" if obj == OBJ[1] else "both")
             names = list(bdf["Ingredient"])
             x0 = list(bdf["Current g"].astype(float))
             bounds = [(float(r["Min g"]), float(r["Max g"]),
@@ -808,8 +832,31 @@ with tab_opt:
             ctx = r["ctx"]
             g, s, terms = r["base"]
             st.divider()
+            rm_ = ctx.get("ref_match")
             st.markdown(f"**Score:** current {r['before']:.3f} → optimised "
-                        f"**{s:.3f}**  (0 = every target met)")
+                        f"**{s:.3f}**  " + (
+                            f"(0 = same as {rm_['name']} per 1000 kcal"
+                            + (")" if rm_["only"] else
+                               " and every renal target met)")
+                            if rm_ else "(0 = every target met)"))
+            if rm_:
+                ref_o = next((r_ for r_ in rc.load_references()
+                              if r_["name"] == rm_["name"]), None)
+                if ref_o:
+                    with st.expander(f"Optimised recipe vs {rm_['name']}",
+                                     expanded=True):
+                        _, tot_o, miss_o = rc.compute(
+                            list(zip(r["names"], g)), db)[:3]
+                        show_df(st, pd.DataFrame(
+                            rc.reference_rows(tot_o, ref_o, miss_o, ss.ext),
+                            columns=["Nutrient", "Unit", "Recipe /1000 kcal",
+                                     "Reference /1000 kcal", "Difference"]),
+                            hide_index=True, **FULL)
+                        if rm_["only"]:
+                            st.caption("Matching the reference only: renal "
+                                       "targets are not checked here – see "
+                                       "the status column and the Recipe "
+                                       "tab after applying.")
 
             def recipe_table(names, grams, new=()):
                 return pd.DataFrame({
