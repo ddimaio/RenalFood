@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29f"
+ENGINE_VERSION = "2026.10.29h"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -175,6 +175,18 @@ for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
     ss.setdefault(key, val)
 db = ss.db
 
+LIGHT_CSS = {"g": "background-color: #dcf2dc; color: #1b5e20",
+             "a": "background-color: #fdecc4; color: #7a4f00",
+             "r": "background-color: #f8cfc8; color: #8e1b10; "
+                  "font-weight: 600"}
+LIGHT_LEGEND = ("🟢 fine, or a good source of a needed nutrient · 🟡 rich in "
+                "a nutrient to limit, or partly meets a need · 🔴 a cause of "
+                "a problem in this recipe (total too high and this ingredient "
+                "supplies ≥10 % of it) · blank = no target or not a "
+                "meaningful source. Each cell is judged on that ingredient's "
+                "density per 1000 kcal against the targets; the TOTAL row "
+                "shows the recipe's own status. % of P: red when its share "
+                "of phosphorus is over 1.5× its share of calories.")
 TAG_COLOUR = {"ok": "color: #1b7a1b", "warn": "color: #b36b00",
               "bad": "color: #c0392b; font-weight: 600", "": ""}
 
@@ -418,6 +430,21 @@ with tab_rec:
             return df_.style.apply(
                 lambda r: [TAG_COLOUR.get(tags[r.name], "")] * len(r),
                 axis=1)
+
+        lights = a.get("breakdown_lights") or []
+
+        def traffic(df_, idx=None):
+            """Cell colours from the engine's traffic lights; idx = column
+            positions kept in df_ (phone subset)."""
+            if len(lights) != len(df_):
+                return df_
+            L = [[row[i] for i in idx] if idx else row for row in lights]
+            css = pd.DataFrame([[LIGHT_CSS.get(x, "") for x in r] for r in L],
+                               index=df_.index, columns=df_.columns)
+            css.iloc[-1] = [c + "; border-top: 2px solid #9aa4b2" if c else
+                            "border-top: 2px solid #9aa4b2"
+                            for c in css.iloc[-1]]
+            return df_.style.apply(lambda _: css, axis=None)
         with ct:
             sm = pd.DataFrame(a["summary"],
                               columns=["Summary", "Unit", "Value", "Note"])
@@ -449,12 +476,16 @@ with tab_rec:
                                "Desktop (sidebar).")
         with bt:
             with view("desk", "brk"):
-                show_df(st, brk, hide_index=True, **FULL)
+                show_df(st, traffic(brk), hide_index=True, **FULL)
             _m = view("mob", "brk")
             if _m:
                 with _m:
-                    show_df(st, brk[["Ingredient", "g", "kcal", "P mg",
-                                      "% of P"]], hide_index=True, **FULL)
+                    keep = ["Ingredient", "g", "kcal", "P mg", "% of P"]
+                    show_df(st, traffic(brk[keep],
+                                        [list(brk.columns).index(c)
+                                         for c in keep]),
+                            hide_index=True, **FULL)
+            st.caption(LIGHT_LEGEND)
             st.caption("'?' = value unknown for that ingredient"
                        + ("; '≈' = AAFCO minimum assumed (complete food). "
                           "All nutrients shown – scroll sideways."

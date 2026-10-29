@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29f"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29h"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1466,11 +1466,14 @@ def breakdown_rows(recipe, db, mass, t, extended=False):
         if n not in db or g <= 0:
             continue
         v = db[n]["per100g"]
-        amt = {c: (None if v[k] is None else v[k] * g / 100)
-               for c, k in BRK_KEYS}
+        amt = {c: (None if value(db[n], k) is None else
+                   value(db[n], k) * g / 100) for c, k in BRK_KEYS}
+        assumed_c = {c for c, k in BRK_KEYS
+                     if v[k] is None and value(db[n], k) is not None}
 
-        def f(x):
-            return "?" if x is None else fmt(x)
+        def f(x, c=None):
+            return "?" if x is None else ("≈" if c in assumed_c else "") \
+                + fmt(x)
 
         pk = (amt["kcal"] / t["kcal"] * 100
               if amt["kcal"] is not None and t["kcal"] else None)
@@ -1480,7 +1483,8 @@ def breakdown_rows(recipe, db, mass, t, extended=False):
                "?" if pk is None else f"{pk:.0f}", f(amt["protein"]),
                f(amt["fat"]), f(amt["p"]),
                "?" if pp is None else f"{pp:.0f}",
-               f(amt["ca"]), f(amt["na"]), f(amt["k"]), f(amt["epa"]))
+               f(amt["ca"]), f(amt["na"], "na"), f(amt["k"], "k"),
+               f(amt["epa"]))
         for k in extra:
             x = value(db[n], k)
             row += ("?" if x is None else
@@ -1492,6 +1496,146 @@ def breakdown_rows(recipe, db, mass, t, extended=False):
     rows.append(total + tuple(fmt(t[k]) for k in extra))
     return rows
 
+
+# Traffic lights for the ingredient breakdown ------------------------------
+# Each nutrient cell is judged on that ingredient's own density (per 1000
+# kcal) against the targets, so it shows which ingredients push the recipe
+# out of range and which help. 'g' green / 'a' amber / 'r' red / None.
+# Limit nutrients (renal protein, P, Na): green <= aim, amber up to max,
+# red above max. Needed nutrients (Ca, EPA+DHA, vitamins/minerals): green
+# >= minimum, amber 50-100 %, blank below; red only above a maximum.
+# Potassium: green in range, amber at 50-100 % of the minimum, red above.
+# Red = a cause of a recipe problem: the recipe total is flagged and the
+# ingredient supplies >=10 % of it; otherwise a rich ingredient is amber.
+# "% of P": red if its share of P is >1.5x its share of kcal.
+LIGHT_LIMIT = ("protein", "p", "na")         # high is the problem (renal)
+LIGHT_RANGE = ("k",)                          # both ends matter
+_COL_KEY = {"protein": "protein", "fat": "fat", "p": "p", "ca": "ca",
+            "na": "na", "k": "k", "epa": "epa_dha"}
+_MIN_KCAL = 5.0          # per 100 g; below this (salt, minerals) no density
+
+
+def _light_limit(d, aim, hi):
+    if d > hi:
+        return "r"
+    return "a" if aim is not None and d > aim else "g"
+
+
+def _light_need(d, lo, hi=None):
+    if hi is not None and d > hi:
+        return "r"
+    if lo is None or lo <= 0:
+        return None
+    return "g" if d >= lo else ("a" if d >= 0.5 * lo else None)
+
+
+def nutrient_light(k, d, renal, R, aims):
+    """Light for density d (per 1000 kcal) of nutrient k."""
+    if k in LIGHT_LIMIT and renal:
+        lo, hi = R[k]
+        return _light_limit(d, aims.get(k), hi)
+    if k == "na":                                # non-renal: AAFCO only
+        return None
+    if k in LIGHT_RANGE and renal:
+        lo, hi = R[k]
+        return "r" if d > hi else ("g" if d >= lo else
+                                   "a" if d >= 0.5 * lo else None)
+    if k == "epa_dha":
+        lo, hi = R["epa_dha"]
+        return _light_need(d, lo, hi)
+    if k == "ca":
+        return _light_need(d, AAFCO["ca"], R["ca_max"])
+    if k in AAFCO and k not in ("fat",):
+        return _light_need(d, AAFCO[k], AAFCO_MAX.get(k))
+    return None
+
+
+_LIGHT_NAME = {"protein": "Protein", "p": "P", "pp": "P share", "ca": "Ca",
+               "na": "Na", "k": "K", "epa": "EPA+DHA"}
+
+
+def light_summary(row_lights, cols):
+    """('r'|'a'|'g'|None, text) for one breakdown row - for displays that
+    cannot colour individual cells (desktop)."""
+    names = {"r": [], "a": [], "g": []}
+    for (c, _, _), li in zip(cols, row_lights):
+        if li in names:
+            names[li].append(_LIGHT_NAME.get(c, LABEL.get(c, c)))
+    worst = "r" if names["r"] else "a" if names["a"] else \
+        "g" if names["g"] else None
+    parts = []
+    if names["r"]:
+        parts.append("RED " + ", ".join(names["r"]))
+    if names["a"]:
+        parts.append("amber " + ", ".join(names["a"]))
+    return worst, " · ".join(parts) or ("all green" if worst else "")
+
+
+def breakdown_lights(recipe, db, t, renal, ranges=None, aims=None,
+                     extended=False):
+    """Light codes aligned with breakdown_rows() (ingredients + TOTAL)."""
+    R = ranges or get_ranges()
+    aims = aims or {}
+    cols = [c for c, _, _ in breakdown_columns(extended)]
+    keys = [_COL_KEY.get(c, c if c in KEYS else None) for c in cols]
+    # TOTAL: recipe status, as in the composition table
+    tot = [None] * len(cols)
+    if t["kcal"] > 0:
+        f = 1000.0 / t["kcal"]
+        tag2 = {"ok": "g", "warn": "a", "bad": "r"}
+        for i, k in enumerate(keys):
+            if k is None or k == "kcal":
+                continue
+            v = (max(0.0, t["p"] - t["p_bind"]) if k == "p" else t[k]) * f
+            tot[i] = tag2.get(status_for(k, v, renal, R)[1])
+    # is the recipe total too HIGH for each column (same rule as ingredients)
+    too_high = [False] * len(cols)
+    if t["kcal"] > 0:
+        for i, k in enumerate(keys):
+            if k is None or k == "kcal":
+                continue
+            v = (max(0.0, t["p"] - t["p_bind"]) if k == "p" else t[k]) * f
+            too_high[i] = nutrient_light(k, v, renal, R, aims) == "r"
+    out = []
+    for n, g in recipe:
+        if n not in db or g <= 0:
+            continue
+        it = db[n]
+        kc = it["per100g"]["kcal"] or 0.0
+        row = [None] * len(cols)
+        for i, (c, k) in enumerate(zip(cols, keys)):
+            if c == "pp":                         # share of P vs share of kcal
+                p, tk, tp = value(it, "p"), t["kcal"], t["p"]
+                if p is not None and tp > 0 and tk > 0:
+                    sp = p * g / 100 / tp
+                    sk = kc * g / 100 / tk
+                    r_ = sp / sk if sk > 0 else (9 if sp > 0.05 else 0)
+                    row[i] = "r" if r_ > 1.5 else "a" if r_ > 1.0 else "g"
+                continue
+            if k is None or k == "kcal" or kc < _MIN_KCAL:
+                continue
+            x = value(it, k)
+            if x is None:
+                continue
+            li = nutrient_light(k, x * 1000.0 / kc, renal, R, aims)
+            # red = a cause of a recipe problem: the recipe total is TOO
+            # HIGH for this nutrient (same test, on the total) AND this is a
+            # noticeable source (>=10 %); otherwise a rich ingredient is
+            # amber (e.g. a sodium-rich food when the recipe is low in Na)
+            if li == "r" and (not too_high[i] or
+                              (t[k] > 0 and x * g / 100 / t[k] < 0.10)):
+                li = "a"
+            row[i] = li
+        if "pp" in cols:                          # P share follows P status
+            j = cols.index("pp")
+            p_tot = t["p"]
+            share = (value(it, "p") or 0.0) * g / 100 / p_tot if p_tot else 0
+            if row[j] == "r" and (not too_high[cols.index("p")]
+                                  or share < 0.10):
+                row[j] = "a"
+        out.append(row)
+    out.append(tot)
+    return out
 
 def food_limit_status(grams, max_g):
     """Status text for the daily amount against the food limit."""
@@ -1592,6 +1736,9 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                              inc + fmt(p1000), inc + fmt(pday), renal, aafco,
                              st), tag))
     res["breakdown"] = breakdown_rows(recipe, db, mass, t, extended)
+    res["breakdown_lights"] = breakdown_lights(
+        recipe, db, t, renal_mode, ranges,
+        (sctx or {}).get("aims") or AIMS.get(stage_name, {}), extended)
     res["notes"] = assess_recipe(stage_name, recipe, db, t, miss, mass, kcal,
                                  need, capr, acid, k1000, renal_mode,
                                  stage_note, fat_me / me_sum, ranges,
@@ -3036,6 +3183,14 @@ def scrolled_tree(parent, **kw):
     return box, tree
 
 
+FLAG_COL = ("flags", "Traffic light", 230)
+
+
+def tk_brk_cols(cols):
+    """Desktop breakdown columns: traffic-light summary after the name."""
+    return [cols[0], FLAG_COL] + list(cols[1:])
+
+
 class App(tk.Tk):
     RES_COLS = [("nutrient", "Nutrient", 230), ("unit", "Unit", 90),
                 ("total", "Recipe total", 170), ("per100", "/100 g fed", 95),
@@ -3185,15 +3340,24 @@ class App(tk.Tk):
         self.tabs.add(comp, text="Composition")
         self.tabs.add(brk, text="Ingredient breakdown")
 
-        self.brk_cols = list(self.BRK_COLS)   # changes with extended mode
+        self.brk_cols = tk_brk_cols(self.BRK_COLS)   # changes w/ extended
         bbox, self.brk = scrolled_tree(brk, show="headings")
         self._set_brk_cols(self.brk_cols)
         self.brk.tag_configure("head", background="#eef2f7")
+        self.brk.tag_configure("light_r", foreground="#c0392b")
+        self.brk.tag_configure("light_a", foreground="#b36b00")
+        self.brk.tag_configure("light_g", foreground="#1b7a1b")
         bbox.pack(fill="both", expand=True)
-        ttk.Label(brk, foreground="#555", text="What each ingredient "
-                  "contributes to the recipe. '?' = value unknown for that "
-                  "ingredient; '≈' = AAFCO minimum assumed (complete "
-                  "food).").pack(anchor="w", pady=2)
+        ttk.Label(brk, foreground="#555", wraplength=1000, justify="left",
+                  text="What each ingredient contributes to the recipe. "
+                  "'?' = value unknown; '~' (≈) = AAFCO minimum assumed "
+                  "(complete food). Traffic light: each nutrient judged on "
+                  "the ingredient's density per 1000 kcal against the "
+                  "targets - RED = a cause of a problem in this recipe "
+                  "(total too high, >= 10 % from this ingredient), amber = rich "
+                  "in a nutrient to limit or partly meets a need. Row colour "
+                  "= worst light; TOTAL = recipe status.").pack(anchor="w",
+                                                               pady=2)
         self._tree_copy(self.brk, self.brk_cols)
 
         cols = [c for c, _, _ in self.RES_COLS]
@@ -3225,7 +3389,7 @@ class App(tk.Tk):
         for c, t, w in cols:
             self.brk.heading(c, text=t)
             self.brk.column(c, width=w, minwidth=40, stretch=False,
-                            anchor="w" if c == "ing" else "e")
+                            anchor="w" if c in ("ing", "flags") else "e")
 
     def _tree_copy(self, tree, cols, with_notes=False):
         menu = tk.Menu(tree, tearoff=0)
@@ -3600,14 +3764,19 @@ class App(tk.Tk):
         for values, tag in a["rows"]:
             self.res.insert("", "end", tags=(tag,) if tag else (),
                             values=values)
-        if a["breakdown_cols"] != self.brk_cols:
-            self.brk_cols[:] = a["breakdown_cols"]   # same list object
+        if tk_brk_cols(a["breakdown_cols"]) != self.brk_cols:
+            self.brk_cols[:] = tk_brk_cols(a["breakdown_cols"])  # same list
             self._set_brk_cols(self.brk_cols)
         if a["mass"] > 0:
+            lights = a.get("breakdown_lights") or []
             for i, row in enumerate(a["breakdown"]):
                 last = i == len(a["breakdown"]) - 1
-                self.brk.insert("", "end", values=row,
-                                tags=("head",) if last else ())
+                worst, txt = (light_summary(lights[i], a["breakdown_cols"])
+                              if i < len(lights) else (None, ""))
+                tags = (("head",) if last else ()) + \
+                    ((f"light_{worst}",) if worst else ())
+                self.brk.insert("", "end", values=(row[0], txt) +
+                                tuple(row[1:]), tags=tags)
         self.notes.insert("end", a["notes"])
 
     def assess(self, t, miss, mass, kcal, need, capr, acid, k1000,
