@@ -2,5 +2,6 @@
 # Streamlit app (renal_diet_app.py):
 streamlit
 pandas
+streamlit-js-eval   # remembers excluded foods in the browser
 # Optional - makes the optimiser faster:
 scipy

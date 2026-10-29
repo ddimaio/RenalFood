@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29l"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29m"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -485,6 +485,45 @@ def assumed_in(recipe, db):
                     assumed_value(item, k) is not None:
                 out[k].append(name)
     return out
+
+
+PREFS_PATH = os.path.join(APP_DIR, "renal_prefs.json")
+
+
+def load_prefs():
+    """User preferences kept between sessions (e.g. excluded foods)."""
+    try:
+        with open(PREFS_PATH, encoding="utf-8") as f:
+            p = json.load(f)
+        return p if isinstance(p, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_prefs(prefs):
+    try:
+        with open(PREFS_PATH, "w", encoding="utf-8") as f:
+            json.dump(prefs, f, indent=1, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def load_excluded():
+    """Foods the user unticked for the generator / optimiser additions."""
+    return set(load_prefs().get("excluded", []))
+
+
+def merge_excluded(old, shown, unticked):
+    """New excluded set after editing a list showing `shown` foods:
+    foods not shown keep their old state."""
+    shown = set(shown)
+    return (set(old) - shown) | (set(unticked) & shown)
+
+
+def save_excluded(excluded):
+    p = load_prefs()
+    p["excluded"] = sorted(excluded, key=str.lower)
+    save_prefs(p)
 
 
 def save_db(db):
@@ -2595,17 +2634,23 @@ class GeneratorDialog(tk.Toplevel):
                              exportselection=False, width=70)
         sb = ttk.Scrollbar(lf, command=self.lb.yview)
         self.lb.configure(yscrollcommand=sb.set)
-        for n in self.names:
+        excluded = load_excluded()
+        for i, n in enumerate(self.names):
             self.lb.insert("end", f"[{ingredient_role(app.db[n])}]  {n}")
-        self.lb.select_set(0, "end")
+            if n not in excluded:
+                self.lb.select_set(i)
+        self.lb.bind("<<ListboxSelect>>", lambda e: self.save_excl())
         self.lb.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
         bb = ttk.Frame(frm)
         bb.pack(fill="x", pady=2)
-        ttk.Button(bb, text="All", command=lambda: self.lb.select_set(
-            0, "end")).pack(side="left")
-        ttk.Button(bb, text="None", command=lambda: self.lb.select_clear(
-            0, "end")).pack(side="left", padx=4)
+        ttk.Button(bb, text="All", command=lambda: (self.lb.select_set(
+            0, "end"), self.save_excl())).pack(side="left")
+        ttk.Button(bb, text="None", command=lambda: (self.lb.select_clear(
+            0, "end"), self.save_excl())).pack(side="left", padx=4)
+        ttk.Label(bb, foreground="#555",
+                  text="Unticked foods are remembered (also for the "
+                       "optimiser's additions).").pack(side="left", padx=8)
 
         ff = ttk.LabelFrame(frm, text="Always include (amount optimised, "
                                       "at least the minimum)", padding=6)
@@ -2642,6 +2687,12 @@ class GeneratorDialog(tk.Toplevel):
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left")
         self.protocol("WM_DELETE_WINDOW", self.close)
+
+    def save_excl(self):
+        sel = set(self.lb.curselection())
+        save_excluded(merge_excluded(
+            load_excluded(), self.names,
+            [n for i, n in enumerate(self.names) if i not in sel]))
 
     def add_forced(self):
         n = self.f_pick.get().strip()
@@ -3009,22 +3060,26 @@ class OptimiseDialog(tk.Toplevel):
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
                     width=4).pack(side="left", padx=4)
-        ttk.Button(row, text="All", command=lambda: self.cand.select_set(
-            0, "end")).pack(side="right")
-        ttk.Button(row, text="None", command=lambda: self.cand.select_clear(
-            0, "end")).pack(side="right", padx=4)
+        ttk.Button(row, text="All", command=lambda: (self.cand.select_set(
+            0, "end"), self.save_excl())).pack(side="right")
+        ttk.Button(row, text="None", command=lambda: (self.cand.select_clear(
+            0, "end"), self.save_excl())).pack(side="right", padx=4)
         ttk.Label(sf, foreground="#555",
                   text="Candidates (click to include/exclude, e.g. untick "
-                       "animal products):").pack(anchor="w", pady=(4, 0))
+                       "animal products; remembered, also for the "
+                       "generator):").pack(anchor="w", pady=(4, 0))
         self.cand_names = sorted(
             (n for n in app.db if n not in dict(app.recipe)
              and app.db[n]["category"] != "binder"
              and app.db[n]["per100g"]["kcal"] is not None), key=str.lower)
         self.cand = tk.Listbox(sf, selectmode="multiple", height=9,
                                exportselection=False)
-        for n in self.cand_names:
+        excluded = load_excluded()
+        for i, n in enumerate(self.cand_names):
             self.cand.insert("end", n)
-        self.cand.select_set(0, "end")
+            if n not in excluded:
+                self.cand.select_set(i)
+        self.cand.bind("<<ListboxSelect>>", lambda e: self.save_excl())
         self.cand.pack(fill="both", expand=True)
 
         bot = ttk.Frame(frm)
@@ -3036,6 +3091,12 @@ class OptimiseDialog(tk.Toplevel):
                                                                  padx=6)
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left", padx=10)
+
+    def save_excl(self):
+        sel = set(self.cand.curselection())
+        save_excluded(merge_excluded(
+            load_excluded(), self.cand_names,
+            [n for i, n in enumerate(self.cand_names) if i not in sel]))
 
     def run(self):
         app = self.app

@@ -20,10 +20,14 @@ import importlib
 import inspect
 
 import renal_diet_calc as rc
+try:                                   # browser storage for preferences
+    from streamlit_js_eval import streamlit_js_eval
+except ImportError:                    # app still works (file only)
+    streamlit_js_eval = None
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29l"
+ENGINE_VERSION = "2026.10.29m"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -174,6 +178,56 @@ for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
                  "blood_eval": None, "ext": False, "max_g": 0.0}.items():
     ss.setdefault(key, val)
 db = ss.db
+
+# ---- excluded foods (generator pool / optimiser additions), remembered in
+#      this browser (localStorage) and in renal_prefs.json next to the app
+LS_KEY = "renalfood_excluded"
+if "excluded" not in ss:
+    ss.excluded = rc.load_excluded()
+    ss.ex_loaded = streamlit_js_eval is None
+    ss.gen_ex_ver = ss.opt_ex_ver = 0
+    ss.gen_ex_base = ss.opt_ex_base = set(ss.excluded)
+if not ss.ex_loaded:
+    raw = streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{LS_KEY}') || 'null'",
+        key="ls_get_excluded")
+    if raw is not None:                # None = browser not answered yet
+        ss.ex_loaded = True
+        try:
+            got = json.loads(raw)
+        except (TypeError, ValueError):
+            got = None
+        if isinstance(got, list):      # browser copy wins over the file
+            ss.excluded = set(got)
+            ss.gen_ex_base = ss.opt_ex_base = set(got)
+            ss.gen_ex_ver += 1
+            ss.opt_ex_ver += 1
+
+
+def set_excluded(new, source):
+    """Store a changed exclusion list; reset the OTHER list's editor so it
+    shows the change."""
+    if new == ss.excluded:
+        return
+    ss.excluded = set(new)
+    rc.save_excluded(ss.excluded)
+    if source == "gen":
+        ss.opt_ex_base = set(new)
+        ss.opt_ex_ver += 1
+    else:
+        ss.gen_ex_base = set(new)
+        ss.gen_ex_ver += 1
+
+
+def store_excluded_in_browser():
+    if streamlit_js_eval is None or not ss.ex_loaded:
+        return
+    val = json.dumps(sorted(ss.excluded, key=str.lower), ensure_ascii=False)
+    streamlit_js_eval(
+        js_expressions=f"localStorage.setItem('{LS_KEY}', {json.dumps(val)})"
+                       " || 1",
+        key=f"ls_set_excluded_{abs(hash(val))}")
+
 
 LIGHT_CSS = {"g": "background-color: #dcf2dc; color: #1b5e20",
              "a": "background-color: #fdecc4; color: #7a4f00",
@@ -649,12 +703,21 @@ with tab_opt:
                       and db[n]["category"] != "binder"
                       and db[n]["per100g"]["kcal"] is not None]
         cdf = st.data_editor(
-            pd.DataFrame({"Use": True, "Role": [rc.ingredient_role(db[n])
-                                                 for n in cand_names],
+            pd.DataFrame({"Use": [n not in ss.opt_ex_base
+                                  for n in cand_names],
+                          "Role": [rc.ingredient_role(db[n])
+                                   for n in cand_names],
                           "Ingredient": cand_names}),
             hide_index=True, **FULL, height=250,
-            disabled=["Role", "Ingredient"], key=f"o_cand_{ss.rec_ver}") \
+            disabled=["Role", "Ingredient"],
+            key=f"o_cand_{ss.rec_ver}_{ss.opt_ex_ver}") \
             if do_sug else None
+        if cdf is not None:
+            set_excluded(rc.merge_excluded(
+                ss.excluded, cand_names,
+                cdf.loc[~cdf["Use"], "Ingredient"]), "opt")
+            st.caption("Unticked foods are remembered in this browser and "
+                       "also left out of the recipe generator.")
 
         if st.button("Run optimisation", type="primary", key="o_run"):
             ctx = {"kcal_target": o_kcal, "bw": ctx0.get("bw"),
@@ -824,15 +887,21 @@ with tab_gen:
                "protein, starch or vegetable fills that role. Roles are "
                "assigned automatically.")
     gdf = st.data_editor(
-        pd.DataFrame({"Use": True, "Always include": False,
+        pd.DataFrame({"Use": [n not in ss.gen_ex_base for n in gnames],
+                      "Always include": False,
                       "Min g": pd.Series([None] * len(gnames),
                                          dtype="float"),
                       "Role": [rc.ingredient_role(db[n]) for n in gnames],
                       "Ingredient": gnames}),
         hide_index=True, **FULL, height=300,
-        disabled=["Role", "Ingredient"], key=f"g_pool_{ss.lib_ver}",
+        disabled=["Role", "Ingredient"],
+        key=f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}",
         column_config={"Min g": st.column_config.NumberColumn(
             "Min g", min_value=0.0, step=1.0, format="%g")})
+    set_excluded(rc.merge_excluded(ss.excluded, gnames,
+                                   gdf.loc[~gdf["Use"], "Ingredient"]), "gen")
+    st.caption("Unticked foods are remembered in this browser and also left "
+               "out of the optimiser's suggested additions.")
 
     if st.button("Generate", type="primary", key="g_run"):
         ctx = score_context(gk)
@@ -1077,3 +1146,5 @@ Sources: [UC Davis – Nutritional Management of Chronic Renal Disease]
 (https://todaysveterinarypractice.com/wp-content/uploads/sites/4/2016/05/2016-0304_ACVN-Nutrition.pdf)
 · [IRIS](https://www.iris-kidney.com/iris-guidelines-1)
 """)
+
+store_excluded_in_browser()

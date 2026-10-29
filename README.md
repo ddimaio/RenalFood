@@ -95,6 +95,13 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Remembered exclusions
+
+Foods you untick in the generator's list or the optimiser's suggested
+additions are remembered and left out of both. The Streamlit app keeps them
+in your browser (so they survive app restarts; per browser/device); the
+desktop app keeps them in `renal_prefs.json` next to the program.
+
 An ingredient may carry `"role": "starch"` (or protein, veg, oil,
 supplement, other) in its JSON to override how the generator classes it;
 otherwise the role comes from its energy split.
