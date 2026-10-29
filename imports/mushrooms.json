@@ -54,7 +54,7 @@
  {
   "name": "Mushrooms, chestnut (crimini), raw weight",
   "category": "food",
-  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Filled from AFCD R3 F005946 (Mushroom, common, fresh, raw), scaled x1.14 for water content: i.",
   "per100g": {
    "kcal": 22.0,
    "water": 92.12,
@@ -100,7 +100,7 @@
    "se": 26.0,
    "met_cys": 0.054,
    "phe_tyr": 0.151,
-   "i": null
+   "i": 0.0
   }
  },
  {

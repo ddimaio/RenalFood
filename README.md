@@ -56,6 +56,18 @@ asks you to match each library food to an FDC food once (saved in
 preparation (cooked vs raw). Commercial foods and supplements are skipped:
 use their labels. Iodine is rarely in FDC.
 
+## Filling missing values from the Australian AFCD
+
+`afcd_fill.py` fills empty values (iodine, B vitamins, vitamin E, trace
+minerals...) from the Australian Food Composition Database, Release 3
+(https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd).
+Download "AFCD Release 3 - Nutrient profiles.xlsx" and run
+`python afcd_fill.py "AFCD Release 3 - Nutrient profiles.xlsx"`
+(`--dry-run` to preview). Foods are matched by hand in the script, values
+are scaled to the library food's water content, existing values are never
+changed, and each filled ingredient's note records the AFCD food used.
+AFCD has no choline; branded foods and algal/fish oil are not in it.
+
 ## Extra ingredients
 
 `imports/` holds JSON files to import via **Import CSV/JSON**: dry white

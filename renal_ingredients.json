@@ -99,7 +99,7 @@
  {
   "name": "Apple, peeled, raw",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F000108 (Apple, red skin, peeled, raw), scaled x0.80 for water content: i.",
   "per100g": {
    "kcal": 48.0,
    "water": 86.7,
@@ -144,13 +144,14 @@
    "cu": 0.031,
    "mn": 0.038,
    "zn": 0.05,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Banana",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F000262 (Banana, cavendish, peeled, raw): i.",
   "per100g": {
    "kcal": 89.0,
    "water": 74.9,
@@ -195,7 +196,8 @@
    "cu": 0.078,
    "mn": 0.27,
    "zn": 0.15,
-   "se": 1.0
+   "se": 1.0,
+   "i": 0.415
   }
  },
  {
@@ -235,7 +237,7 @@
  {
   "name": "Broccoli, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F001900 (Broccoli, fresh, boiled, drained), scaled x1.43 for water content: i.",
   "per100g": {
    "kcal": 35.0,
    "water": 89.3,
@@ -280,13 +282,14 @@
    "cu": 0.061,
    "mn": 0.194,
    "zn": 0.45,
-   "se": 1.6
+   "se": 1.6,
+   "i": 1.14
   }
  },
  {
   "name": "Cabbage, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F002014 (Cabbage, white, boiled, drained), scaled x0.82 for water content: b5, i.",
   "per100g": {
    "kcal": 23.0,
    "water": 92.6,
@@ -306,7 +309,7 @@
    "b6": 0.11,
    "b12": 0.0,
    "folate": 30.0,
-   "b5": null,
+   "b5": 0.0987,
    "choline": null,
    "vit_d": 0.0,
    "vit_e": 0.18,
@@ -331,7 +334,8 @@
    "cu": 0.017,
    "mn": 0.205,
    "zn": 0.2,
-   "se": 0.6
+   "se": 0.6,
+   "i": 0.0
   }
  },
  {
@@ -545,7 +549,7 @@
  {
   "name": "Carrot, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F002275 (Carrot, mature, peeled, fresh, boiled, drained): i.",
   "per100g": {
    "kcal": 35.0,
    "water": 90.2,
@@ -590,13 +594,14 @@
    "cu": 0.017,
    "mn": 0.155,
    "zn": 0.2,
-   "se": 0.7
+   "se": 0.7,
+   "i": 0.673
   }
  },
  {
   "name": "Cauldron Authentic Tofu (organic, 396 g)",
   "category": "food",
-  "note": "Label per 100 g: 118 kcal, protein 13 g, fat 7.1 g, carb 1.0 g, fibre 1.9 g, salt 0.03 g, calcium 401 mg (calcium sulphate set). NOT on label, ESTIMATED from USDA firm calcium-set tofu scaled to 13 g protein: phosphorus 143 mg, potassium 178 mg, magnesium 44 mg; water by difference. Vitamins unknown.",
+  "note": "Label per 100 g: 118 kcal, protein 13 g, fat 7.1 g, carb 1.0 g, fibre 1.9 g, salt 0.03 g, calcium 401 mg (calcium sulphate set). NOT on label, ESTIMATED from USDA firm calcium-set tofu scaled to 13 g protein: phosphorus 143 mg, potassium 178 mg, magnesium 44 mg; water by difference. Vitamins unknown. Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased): b1, b2, b3, b5, b6, folate, vit_c, vit_e, la, fe, cu, mn, zn, i, se, trp.",
   "per100g": {
    "kcal": 118.0,
    "water": 75.5,
@@ -610,26 +615,34 @@
    "k": 178.0,
    "mg": 44.0,
    "vit_a": 0.0,
-   "b1": null,
-   "b2": null,
-   "b3": null,
-   "b6": null,
+   "b1": 0.0961,
+   "b2": 0.0336,
+   "b3": 0.24,
+   "b6": 0.0576,
    "b12": 0.0,
-   "folate": null,
-   "b5": null,
+   "folate": 39.4,
+   "b5": 0.048,
    "choline": null,
    "vit_d": 0.0,
-   "vit_e": null,
-   "vit_c": null,
+   "vit_e": 0.143,
+   "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "la": 4.01,
+   "fe": 2.26,
+   "cu": 0.279,
+   "mn": 0.99,
+   "zn": 1.39,
+   "i": 2.21,
+   "se": 4.42,
+   "trp": 0.142
   }
  },
  {
   "name": "Chickpeas, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F002882 (Chickpea, dried, boiled, drained), scaled x1.19 for water content: i.",
   "per100g": {
    "kcal": 164.0,
    "water": 60.2,
@@ -674,13 +687,14 @@
    "cu": 0.352,
    "mn": 1.03,
    "zn": 1.53,
-   "se": 3.7
+   "se": 3.7,
+   "i": 0.238
   }
  },
  {
   "name": "Coconut oil",
   "category": "food",
-  "note": "Approx. USDA. Mostly saturated (MCT); almost no essential fatty acids. Can cause GI upset - introduce slowly.",
+  "note": "Approx. USDA. Mostly saturated (MCT); almost no essential fatty acids. Can cause GI upset - introduce slowly. Filled from AFCD R3 F006163 (Oil, coconut): i.",
   "per100g": {
    "kcal": 892.0,
    "water": 0.0,
@@ -725,13 +739,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Courgette, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F009773 (Zucchini, green skin, fresh, unpeeled, boiled, drained), scaled x0.87 for water content: b1, b2, b3, b5, i, vit_a.",
   "per100g": {
    "kcal": 15.0,
    "water": 94.8,
@@ -744,14 +759,14 @@
    "na": 3.0,
    "k": 264.0,
    "mg": 19.0,
-   "vit_a": null,
-   "b1": null,
-   "b2": null,
-   "b3": null,
+   "vit_a": 15.8,
+   "b1": 0.0286,
+   "b2": 0.0468,
+   "b3": 0.26,
    "b6": 0.08,
    "b12": 0.0,
    "folate": 17.0,
-   "b5": null,
+   "b5": 0.147,
    "choline": null,
    "vit_d": 0.0,
    "vit_e": 0.18,
@@ -776,13 +791,14 @@
    "cu": 0.052,
    "mn": 0.173,
    "zn": 0.33,
-   "se": 0.2
+   "se": 0.2,
+   "i": 0.0
   }
  },
  {
   "name": "Egg white, cooked (boiled/poached, no fat)",
   "category": "food",
-  "note": "Based on USDA raw egg white: boiling or poaching without fat barely changes composition per 100 g. Small B-vitamin losses with heat; if fried, add the oil separately.",
+  "note": "Based on USDA raw egg white: boiling or poaching without fat barely changes composition per 100 g. Small B-vitamin losses with heat; if fried, add the oil separately. Filled from AFCD R3 F003705 (Egg, chicken, white (albumen), hard-boiled): i.",
   "per100g": {
    "kcal": 52.0,
    "water": 87.6,
@@ -827,13 +843,14 @@
    "cu": 0.023,
    "mn": 0.011,
    "zn": 0.03,
-   "se": 20.0
+   "se": 20.0,
+   "i": 0.0
   }
  },
  {
   "name": "Egg white, raw",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F003706 (Egg, chicken, white (albumen), raw): i.",
   "per100g": {
    "kcal": 52.0,
    "water": 87.6,
@@ -878,13 +895,14 @@
    "cu": 0.023,
    "mn": 0.011,
    "zn": 0.03,
-   "se": 20.0
+   "se": 20.0,
+   "i": 0.0
   }
  },
  {
   "name": "Egg yolk, raw",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F003737 (Egg, chicken, yolk, raw): i.",
   "per100g": {
    "kcal": 322.0,
    "water": 52.3,
@@ -929,13 +947,14 @@
    "cu": 0.077,
    "mn": 0.055,
    "zn": 2.3,
-   "se": 56.0
+   "se": 56.0,
+   "i": 81.5
   }
  },
  {
   "name": "Egg, whole, hard-boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F003721 (Egg, chicken, whole, hard-boiled): i.",
   "per100g": {
    "kcal": 155.0,
    "water": 74.6,
@@ -980,13 +999,14 @@
    "cu": 0.013,
    "mn": 0.026,
    "zn": 1.05,
-   "se": 30.8
+   "se": 30.8,
+   "i": 48.6
   }
  },
  {
   "name": "Egg, whole, raw",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F003729 (Egg, chicken, whole, raw): i.",
   "per100g": {
    "kcal": 143.0,
    "water": 76.2,
@@ -1031,7 +1051,8 @@
    "cu": 0.072,
    "mn": 0.028,
    "zn": 1.29,
-   "se": 30.7
+   "se": 30.7,
+   "i": 57.4
   }
  },
  {
@@ -1253,7 +1274,7 @@
  {
   "name": "Green beans, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F000430 (Bean, green, fresh, boiled, drained), scaled x1.32 for water content: i.",
   "per100g": {
    "kcal": 35.0,
    "water": 89.2,
@@ -1298,13 +1319,14 @@
    "cu": 0.057,
    "mn": 0.285,
    "zn": 0.25,
-   "se": 0.2
+   "se": 0.2,
+   "i": 1.05
   }
  },
  {
   "name": "Hemp seed oil",
   "category": "food",
-  "note": "Typical values. Good linoleic acid + some ALA; EPA+DHA = 0.",
+  "note": "Typical values. Good linoleic acid + some ALA; EPA+DHA = 0. Filled from AFCD R3 F009855 (Oil, hemp): vit_e, la, fe, cu, mn, zn, i, se.",
   "per100g": {
    "kcal": 884.0,
    "water": 0.0,
@@ -1327,7 +1349,7 @@
    "b5": 0.0,
    "choline": 0.0,
    "vit_d": 0.0,
-   "vit_e": null,
+   "vit_e": 3.88,
    "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
@@ -1343,7 +1365,14 @@
    "phe_tyr": 0.0,
    "thr": 0.0,
    "trp": 0.0,
-   "val": 0.0
+   "val": 0.0,
+   "la": 54.9,
+   "fe": 0.0,
+   "cu": 0.0,
+   "mn": 0.0911,
+   "zn": 0.0,
+   "i": 0.0,
+   "se": 0.0
   }
  },
  {
@@ -1416,7 +1445,7 @@
  {
   "name": "Lentils, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F005177 (Lentil, dried, boiled, drained), scaled x1.19 for water content: i.",
   "per100g": {
    "kcal": 116.0,
    "water": 69.6,
@@ -1461,13 +1490,14 @@
    "cu": 0.251,
    "mn": 0.494,
    "zn": 1.27,
-   "se": 2.8
+   "se": 2.8,
+   "i": 0.0
   }
  },
  {
   "name": "Linseed (flaxseed) oil",
   "category": "food",
-  "note": "Approx. USDA. Richest plant source of ALA, but EPA+DHA = 0 (poor conversion in dogs). Oxidises quickly - keep refrigerated.",
+  "note": "Approx. USDA. Richest plant source of ALA, but EPA+DHA = 0 (poor conversion in dogs). Oxidises quickly - keep refrigerated. Filled from AFCD R3 F006168 (Oil, linseed or flaxseed): i.",
   "per100g": {
    "kcal": 884.0,
    "water": 0.0,
@@ -1512,13 +1542,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.07,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Mushrooms, chestnut (crimini), raw weight",
   "category": "food",
-  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Filled from AFCD R3 F005946 (Mushroom, common, fresh, raw), scaled x1.14 for water content: i.",
   "per100g": {
    "kcal": 22.0,
    "water": 92.12,
@@ -1564,7 +1595,7 @@
    "se": 26.0,
    "met_cys": 0.054,
    "phe_tyr": 0.151,
-   "i": null
+   "i": 0.0
   }
  },
  {
@@ -1778,7 +1809,7 @@
  {
   "name": "Oats, rolled, dry",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F006143 (Oats, rolled, uncooked): i.",
   "per100g": {
    "kcal": 379.0,
    "water": 10.8,
@@ -1823,13 +1854,14 @@
    "cu": 0.391,
    "mn": 3.63,
    "zn": 3.64,
-   "se": 28.9
+   "se": 28.9,
+   "i": 72.7
   }
  },
  {
   "name": "Olive oil",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F006177 (Oil, olive): i.",
   "per100g": {
    "kcal": 884.0,
    "water": 0.0,
@@ -1874,13 +1906,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Pasta, boiled (unenriched)",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F006456 (Pasta, white wheat flour, boiled from dry, no added salt): i.",
   "per100g": {
    "kcal": 158.0,
    "water": 62.1,
@@ -1925,13 +1958,14 @@
    "cu": 0.1,
    "mn": 0.322,
    "zn": 0.51,
-   "se": 26.4
+   "se": 26.4,
+   "i": 4.4
   }
  },
  {
   "name": "Peas, green, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F006535 (Pea, green, fresh, boiled, drained), scaled x1.28 for water content: i.",
   "per100g": {
    "kcal": 84.0,
    "water": 77.9,
@@ -1976,7 +2010,8 @@
    "cu": 0.173,
    "mn": 0.525,
    "zn": 1.19,
-   "se": 1.9
+   "se": 1.9,
+   "i": 0.0
   }
  },
  {
@@ -2086,7 +2121,7 @@
  {
   "name": "Potato, boiled, no skin",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F007320 (Potato, pale skin, peeled, boiled, drained), scaled x1.22 for water content: i.",
   "per100g": {
    "kcal": 86.0,
    "water": 77.5,
@@ -2131,13 +2166,14 @@
    "cu": 0.167,
    "mn": 0.14,
    "zn": 0.27,
-   "se": 0.3
+   "se": 0.3,
+   "i": 1.58
   }
  },
  {
   "name": "Pumpkin, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F007554 (Pumpkin, peeled, fresh, boiled, drained), scaled x0.60 for water content: i.",
   "per100g": {
    "kcal": 20.0,
    "water": 93.7,
@@ -2182,13 +2218,14 @@
    "cu": 0.091,
    "mn": 0.089,
    "zn": 0.23,
-   "se": 0.2
+   "se": 0.2,
+   "i": 0.0
   }
  },
  {
   "name": "Rapeseed oil",
   "category": "food",
-  "note": "Approx. USDA canola oil. Contains ALA (plant omega-3), which dogs convert poorly to EPA/DHA, so EPA+DHA = 0.",
+  "note": "Approx. USDA canola oil. Contains ALA (plant omega-3), which dogs convert poorly to EPA/DHA, so EPA+DHA = 0. Filled from AFCD R3 F006159 (Oil, canola): i.",
   "per100g": {
    "kcal": 884.0,
    "water": 0.0,
@@ -2233,13 +2270,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Rice, brown, boiled",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F007641 (Rice, brown, boiled, no added salt), scaled x0.72 for water content: i.",
   "per100g": {
    "kcal": 123.0,
    "water": 70.3,
@@ -2284,13 +2322,14 @@
    "cu": 0.1,
    "mn": 0.905,
    "zn": 0.63,
-   "se": 9.8
+   "se": 9.8,
+   "i": 7.06
   }
  },
  {
   "name": "Rice, white, boiled (unenriched)",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F007661 (Rice, white, boiled or rice cooker, no added salt), scaled x0.83 for water content: i.",
   "per100g": {
    "kcal": 130.0,
    "water": 68.4,
@@ -2335,13 +2374,14 @@
    "cu": 0.069,
    "mn": 0.472,
    "zn": 0.49,
-   "se": 7.5
+   "se": 7.5,
+   "i": 2.15
   }
  },
  {
   "name": "Rice, white, raw (dry, unenriched)",
   "category": "food",
-  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked.",
+  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked. Filled from AFCD R3 F007682 (Rice, white, uncooked): i.",
   "per100g": {
    "kcal": 365.0,
    "water": 11.6,
@@ -2386,7 +2426,8 @@
    "cu": 0.22,
    "mn": 1.088,
    "zn": 1.09,
-   "se": 15.1
+   "se": 15.1,
+   "i": 0.0
   }
  },
  {
@@ -2496,7 +2537,7 @@
  {
   "name": "Spinach, boiled",
   "category": "food",
-  "note": "High oxalate and potassium.",
+  "note": "High oxalate and potassium. Filled from AFCD R3 F008760 (Spinach, Mature English, fresh, boiled, drained), scaled x1.06 for water content: i.",
   "per100g": {
    "kcal": 23.0,
    "water": 91.2,
@@ -2541,13 +2582,14 @@
    "cu": 0.174,
    "mn": 0.935,
    "zn": 0.76,
-   "se": 1.5
+   "se": 1.5,
+   "i": 0.0
   }
  },
  {
   "name": "Sunflower oil",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F006189 (Oil, sunflower): mn, i.",
   "per100g": {
    "kcal": 884.0,
    "water": 0.0,
@@ -2591,13 +2633,15 @@
    "fe": 0.0,
    "cu": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "mn": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Sweet potato, boiled, no skin",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F009034 (Sweet potato, orange flesh, peeled, fresh, boiled, drained): i.",
   "per100g": {
    "kcal": 76.0,
    "water": 80.1,
@@ -2642,13 +2686,14 @@
    "cu": 0.094,
    "mn": 0.266,
    "zn": 0.2,
-   "se": 0.2
+   "se": 0.2,
+   "i": 0.0
   }
  },
  {
   "name": "Tofu, firm (calcium-set)",
   "category": "food",
-  "note": "Calcium varies hugely with coagulant - check label.",
+  "note": "Calcium varies hugely with coagulant - check label. Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased), scaled x1.15 for water content: i.",
   "per100g": {
    "kcal": 144.0,
    "water": 70.8,
@@ -2693,13 +2738,14 @@
    "cu": 0.378,
    "mn": 1.181,
    "zn": 1.57,
-   "se": 17.4
+   "se": 17.4,
+   "i": 2.63
   }
  },
  {
   "name": "Tofu, silken",
   "category": "food",
-  "note": "",
+  "note": "Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased), scaled x0.50 for water content: b5, vit_e, la, mn, i, se.",
   "per100g": {
    "kcal": 55.0,
    "water": 87.3,
@@ -2719,10 +2765,10 @@
    "b6": 0.01,
    "b12": 0.0,
    "folate": 44.0,
-   "b5": null,
+   "b5": 0.0249,
    "choline": null,
    "vit_d": 0.0,
-   "vit_e": null,
+   "vit_e": 0.0742,
    "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
@@ -2741,7 +2787,11 @@
    "val": 0.295,
    "fe": 0.82,
    "cu": 0.207,
-   "zn": 0.52
+   "zn": 0.52,
+   "la": 2.08,
+   "mn": 0.513,
+   "i": 1.15,
+   "se": 2.29
   }
  },
  {

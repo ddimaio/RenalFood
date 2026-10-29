@@ -2,7 +2,7 @@
  {
   "name": "Rapeseed oil",
   "category": "food",
-  "note": "Approx. USDA canola oil. Contains ALA (plant omega-3), which dogs convert poorly to EPA/DHA, so EPA+DHA = 0.",
+  "note": "Approx. USDA canola oil. Contains ALA (plant omega-3), which dogs convert poorly to EPA/DHA, so EPA+DHA = 0. Filled from AFCD R3 F006159 (Oil, canola): i.",
   "per100g": {
    "kcal": 884,
    "water": 0,
@@ -46,13 +46,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Coconut oil",
   "category": "food",
-  "note": "Approx. USDA. Mostly saturated (MCT); almost no essential fatty acids. Can cause GI upset - introduce slowly.",
+  "note": "Approx. USDA. Mostly saturated (MCT); almost no essential fatty acids. Can cause GI upset - introduce slowly. Filled from AFCD R3 F006163 (Oil, coconut): i.",
   "per100g": {
    "kcal": 892,
    "water": 0,
@@ -96,13 +97,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Linseed (flaxseed) oil",
   "category": "food",
-  "note": "Approx. USDA. Richest plant source of ALA, but EPA+DHA = 0 (poor conversion in dogs). Oxidises quickly - keep refrigerated.",
+  "note": "Approx. USDA. Richest plant source of ALA, but EPA+DHA = 0 (poor conversion in dogs). Oxidises quickly - keep refrigerated. Filled from AFCD R3 F006168 (Oil, linseed or flaxseed): i.",
   "per100g": {
    "kcal": 884,
    "water": 0,
@@ -146,13 +148,14 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.07,
-   "se": 0.0
+   "se": 0.0,
+   "i": 0.0
   }
  },
  {
   "name": "Hemp seed oil",
   "category": "food",
-  "note": "Typical values. Good linoleic acid + some ALA; EPA+DHA = 0.",
+  "note": "Typical values. Good linoleic acid + some ALA; EPA+DHA = 0. Filled from AFCD R3 F009855 (Oil, hemp): vit_e, la, fe, cu, mn, zn, i, se.",
   "per100g": {
    "kcal": 884,
    "water": 0,
@@ -178,7 +181,7 @@
    "b5": 0,
    "choline": 0,
    "vit_d": 0,
-   "vit_e": null,
+   "vit_e": 3.88,
    "arg": 0.0,
    "his": 0.0,
    "ile": 0.0,
@@ -190,7 +193,14 @@
    "phe_tyr": 0.0,
    "thr": 0.0,
    "trp": 0.0,
-   "val": 0.0
+   "val": 0.0,
+   "la": 54.9,
+   "fe": 0.0,
+   "cu": 0.0,
+   "mn": 0.0911,
+   "zn": 0.0,
+   "i": 0.0,
+   "se": 0.0
   }
  },
  {

@@ -2,7 +2,7 @@
  {
   "name": "Egg white, cooked (boiled/poached, no fat)",
   "category": "food",
-  "note": "Based on USDA raw egg white: boiling or poaching without fat barely changes composition per 100 g. Small B-vitamin losses with heat; if fried, add the oil separately.",
+  "note": "Based on USDA raw egg white: boiling or poaching without fat barely changes composition per 100 g. Small B-vitamin losses with heat; if fried, add the oil separately. Filled from AFCD R3 F003705 (Egg, chicken, white (albumen), hard-boiled): i.",
   "per100g": {
    "kcal": 52,
    "water": 87.6,
@@ -46,7 +46,8 @@
    "cu": 0.023,
    "mn": 0.011,
    "zn": 0.03,
-   "se": 20.0
+   "se": 20.0,
+   "i": 0.0
   }
  }
 ]
