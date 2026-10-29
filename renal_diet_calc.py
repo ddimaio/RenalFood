@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29e"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -111,6 +111,11 @@ EXT_KEYS = ["arg", "his", "ile", "leu", "lys", "met", "met_cys", "phe",
             "phe_tyr", "thr", "trp", "val", "la", "fe", "cu", "mn", "zn",
             "i", "se"]
 BASE_KEYS = [k for k in KEYS if k not in EXT_KEYS]
+# Core minerals a complete food must meet but labels often omit. For foods
+# flagged 'assume_aafco' they are taken at the AAFCO minimum instead of
+# unknown (unknown would switch off the shortfall check for the whole
+# recipe). Ca and P are excluded: renal-critical, use real label values.
+ASSUME_CORE = ("na", "k", "mg")
 
 
 def visible_keys(extended=False):
@@ -443,7 +448,8 @@ def assumed_value(item, k):
     """For a complete commercial food flagged 'assume_aafco': the AAFCO
     adult minimum for extended nutrient k, per 100 g of the food (AAFCO is
     per 1000 kcal). None if not applicable or the energy is unknown."""
-    if not item.get("assume_aafco") or k not in EXT_KEYS:
+    if not item.get("assume_aafco") or (k not in EXT_KEYS and
+                                         k not in ASSUME_CORE):
         return None
     kcal = item["per100g"].get("kcal")
     if not kcal:
@@ -460,12 +466,13 @@ def value(item, k):
 
 def assumed_in(recipe, db):
     """{nutrient: [ingredient names]} whose value is an AAFCO assumption."""
-    out = {k: [] for k in EXT_KEYS}
+    keys = list(EXT_KEYS) + list(ASSUME_CORE)
+    out = {k: [] for k in keys}
     for name, grams in recipe:
         item = db.get(name)
         if item is None or grams <= 0:
             continue
-        for k in EXT_KEYS:
+        for k in keys:
             if item["per100g"][k] is None and \
                     assumed_value(item, k) is not None:
                 out[k].append(name)
@@ -921,7 +928,8 @@ def _family(name):
 
 def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                      progress=None, cancelled=lambda: False, n_veg=2,
-                     veg_max_uses=2, veg_min_g=None, forced=None):
+                     veg_max_uses=2, veg_min_g=None, forced=None,
+                     max_extra=3):
     """Build balanced recipes from scratch.
     Stage 1: every protein x starch x vegetable base (amounts optimised).
     Stage 2: best bases get vegetables added up to n_veg (forced, for
@@ -930,6 +938,8 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     Variety: protein families round-robin, at most 2 recipes per protein
     family, each vegetable in at most veg_max_uses recipes, every vegetable
     kept at >= veg_min_g grams.
+    max_ing counts FOODS only; salt, supplements and oils are extras on top,
+    up to max_extra per recipe (so e.g. salt is never crowded out).
     fixed: [(name, grams)] always included at locked amounts (e.g. kibble).
     forced: {name: min_grams} always included, amounts optimised (>= min).
             A forced protein/starch/vegetable fills that role in the base.
@@ -1059,8 +1069,16 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             return True
 
         # (a) vegetables up to n_veg - added even at a small score cost
-        while len(vegs(cur_n)) < n_veg and \
-                len(cur_n) - nfx < max_ing:
+        def is_extra(n):
+            return roles.get(n) in ("supplement", "oil")
+
+        def n_foods():
+            return sum(1 for n in cur_n[nfx:] if not is_extra(n))
+
+        def n_extras():
+            return sum(1 for n in cur_n[nfx:] if is_extra(n))
+
+        while len(vegs(cur_n)) < n_veg and n_foods() < max_ing:
             if cancelled():
                 return []
             cands = [c for c in by["veg"] if allowed(c)] or \
@@ -1072,12 +1090,17 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             cur_b.append(bnd(best[0]))
             cur_g, cur_s = best[2], best[1]
 
-        # (b) greedy improvements with anything else
-        while len(cur_n) - nfx < max_ing and cur_s >= 1e-4:
+        # (b) greedy improvements with anything else; foods and extras
+        #     (salt, supplements, oils) have separate limits
+        while cur_s >= 1e-4:
             if cancelled():
                 return []
+            room_f, room_x = n_foods() < max_ing, n_extras() < max_extra
+            if not (room_f or room_x):
+                break
             best = try_add(cur_n, cur_b, cur_g,
-                           [c for c in extra_pool if allowed(c)])
+                           [c for c in extra_pool if allowed(c) and
+                            (room_x if is_extra(c) else room_f)])
             if best is None or best[1] > cur_s * 0.97:
                 break
             cur_n.append(best[0])
@@ -1498,6 +1521,13 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                                  stage_note, fat_me / me_sum, ranges,
                                  (sctx or {}).get("blood_note", ""), extended,
                                  assumed)
+    core = {k: v for k, v in assumed.items() if k in ASSUME_CORE and v}
+    if core:
+        foods = sorted({n for v in core.values() for n in v})
+        res["notes"] += ("\n• " + ", ".join(LABEL[k] for k in core) +
+                         " not declared for " + ", ".join(foods) +
+                         " – taken at the AAFCO minimum (complete food). Ask "
+                         "the manufacturer for the real values.")
     return res
 
 
@@ -2218,7 +2248,8 @@ class GeneratorDialog(tk.Toplevel):
         self.n = tk.StringVar(value="5")
         ttk.Spinbox(r0, from_=1, to=10, textvariable=self.n, width=4).pack(
             side="left", padx=4)
-        ttk.Label(r0, text="   max. ingredients each").pack(side="left")
+        ttk.Label(r0, text="   max. foods each (+ up to 3 salt/"
+                           "supplements/oils)").pack(side="left")
         self.max_ing = tk.StringVar(value="6")
         ttk.Spinbox(r0, from_=3, to=9, textvariable=self.max_ing,
                     width=4).pack(side="left", padx=4)

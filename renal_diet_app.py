@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29c"
+ENGINE_VERSION = "2026.10.29e"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -716,7 +716,8 @@ with tab_gen:
     gk = g1.number_input("Target kcal/day", 1.0, 10000.0,
                          float(round(ctx0["kcal_target"])), key="g_kcal")
     gn = g2.slider("Recipes", 1, 10, 5, key="g_n")
-    gmax = g3.slider("Max. ingredients each", 3, 9, 6, key="g_max")
+    gmax = g3.slider("Max. foods each", 3, 9, 6, key="g_max",
+                     help="Salt, supplements and oils are extra (up to 3).")
     v1, v2, v3 = st.columns(3)
     gveg = v1.slider("Vegetables per recipe", 0, 4, 2, key="g_veg")
     guse = v2.slider("Same vegetable in max. … recipes", 1, 10, 2,
