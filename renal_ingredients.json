@@ -1382,7 +1382,7 @@
  {
   "name": "Just Be Kind vegan wet dog food (290 g tray)",
   "category": "commercial food",
-  "note": "From label (as fed). Ca, P, Na, K, Mg not declared - ask info@justbekind.co.uk. Vitamins D3, E, B1, B12, niacin are the ADDED amounts only (ingredients add a little more). Contains algae; EPA+DHA not stated. Also adds taurine, L-carnitine, zinc, copper, iodine, selenium, methionine, tryptophan.",
+  "note": "From label (as fed). Ca 0.17% and P 0.13% from the justbekind.co.uk product page (Jumping Jack GOLD); Na, K, Mg not declared - ask info@justbekind.co.uk. Vitamins D3, E, B1, B12, niacin are the ADDED amounts only (ingredients add a little more). Contains algae; EPA+DHA not stated. Also adds taurine, L-carnitine, zinc, copper, iodine, selenium, methionine, tryptophan.",
   "per100g": {
    "kcal": 89.0,
    "water": 79.0,
@@ -1390,8 +1390,8 @@
    "fat": 4.5,
    "carb": 9.0,
    "fibre": 1.1,
-   "ca": null,
-   "p": null,
+   "ca": 170.0,
+   "p": 130.0,
    "na": null,
    "k": null,
    "mg": null,
