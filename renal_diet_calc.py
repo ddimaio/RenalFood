@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29m"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29n"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1055,7 +1055,7 @@ def _family(name):
 def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                      progress=None, cancelled=lambda: False, n_veg=2,
                      veg_max_uses=2, veg_min_g=None, forced=None,
-                     max_extra=3, veg_max=None):
+                     max_extra=3, veg_max=None, max_each=None):
     """Build balanced recipes from scratch.
     Vegetables: at least n_veg (min) and at most veg_max (default = n_veg).
     Stage 1: every protein x starch x vegetable base (amounts optimised);
@@ -1071,10 +1071,13 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     fixed: [(name, grams)] always included at locked amounts (e.g. kibble).
     forced: {name: min_grams} always included, amounts optimised (>= min).
             A forced protein/starch/vegetable fills that role in the base.
+    max_each: {name: max_grams} upper limit for that ingredient whenever it
+              is used (wins over a forced minimum or the vegetable minimum).
     Returns up to n_recipes distinct (names, grams, score, terms), best first.
     """
     forced = {n: m for n, m in (forced or {}).items()
               if n in db and n not in [f for f, _ in fixed]}
+    max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
     fx_names = [n for n, _ in fixed]
     fx_g = [g for _, g in fixed]
     fx_b = [(g, g, True) for g in fx_g]
@@ -1106,6 +1109,10 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             dflt = 0.5 if roles.get(n) in ("oil", "supplement") else 5.0
             lo = max(lo, forced[n] or dflt)
             hi = max(hi, lo)
+        cap = max_each.get(n)
+        if cap is not None:
+            hi = max(0.0, float(cap))
+            lo = min(lo, hi)
         return (lo, hi, False)
 
     fo_b = [bnd(n) for n in fo_names]
@@ -2675,6 +2682,25 @@ class GeneratorDialog(tk.Toplevel):
                        "(no second one is added). Blank min = 5 g (0.5 g for "
                        "oils/supplements).").pack(anchor="w")
 
+        mf = ttk.LabelFrame(frm, text="Maximum amount (g/day, whenever the "
+                                      "ingredient is used)", padding=6)
+        mf.pack(fill="x", pady=(6, 0))
+        r3 = ttk.Frame(mf)
+        r3.pack(fill="x")
+        self.m_pick = ttk.Combobox(r3, values=sorted(app.db, key=str.lower),
+                                   width=42)
+        self.m_pick.pack(side="left")
+        ttk.Label(r3, text=" max g").pack(side="left")
+        self.m_max = tk.StringVar(value="")
+        ttk.Entry(r3, textvariable=self.m_max, width=6).pack(side="left",
+                                                             padx=4)
+        ttk.Button(r3, text="Add", command=self.add_max).pack(side="left")
+        ttk.Button(r3, text="Remove selected",
+                   command=self.remove_max).pack(side="left", padx=4)
+        self.max_each = {}
+        self.m_list = tk.Listbox(mf, height=3, exportselection=False)
+        self.m_list.pack(fill="x", pady=(4, 0))
+
         bot = ttk.Frame(frm)
         bot.pack(fill="x", pady=(8, 0))
         self.run_btn = ttk.Button(bot, text="Generate", command=self.run)
@@ -2720,6 +2746,33 @@ class GeneratorDialog(tk.Toplevel):
             self.f_list.insert("end", f"{n}  –  min "
                                + (f"{m:g} g" if m else "default"))
 
+    def add_max(self):
+        n = self.m_pick.get().strip()
+        if n not in self.app.db:
+            messagebox.showerror("Maximum amount", "Pick an ingredient from "
+                                 "the list.", parent=self)
+            return
+        try:
+            m = to_float(self.m_max.get())
+        except ValueError:
+            m = None
+        if m is None or m < 0:
+            messagebox.showerror("Maximum amount", "Max g must be a number "
+                                 "(0 or more).", parent=self)
+            return
+        self.max_each[n] = m
+        self._refresh_max()
+
+    def remove_max(self):
+        for i in reversed(self.m_list.curselection()):
+            self.max_each.pop(list(self.max_each)[i], None)
+        self._refresh_max()
+
+    def _refresh_max(self):
+        self.m_list.delete(0, "end")
+        for n, m in self.max_each.items():
+            self.m_list.insert("end", f"{n}  –  max {m:g} g")
+
     def stop(self):
         self._cancel = True
 
@@ -2744,6 +2797,12 @@ class GeneratorDialog(tk.Toplevel):
             veg_min = to_float(self.veg_min.get()) or 0.0
         except ValueError:
             messagebox.showerror("Generate", "Check the numbers.", parent=self)
+            return
+        clash = [n for n, m in self.forced.items()
+                 if m and n in self.max_each and m > self.max_each[n]]
+        if clash:
+            messagebox.showerror("Generate", "Min g is larger than max g "
+                                 "for: " + ", ".join(clash), parent=self)
             return
         pool = [self.names[i] for i in self.lb.curselection()]
         pool += [n for n in self.forced if n not in pool]
@@ -2770,7 +2829,8 @@ class GeneratorDialog(tk.Toplevel):
                                    n_veg=n_veg, veg_max=veg_max,
                                    veg_max_uses=veg_uses,
                                    veg_min_g=veg_min,
-                                   forced=dict(self.forced))
+                                   forced=dict(self.forced),
+                                   max_each=dict(self.max_each))
         except tk.TclError:              # window closed mid-run
             return
         if not self.winfo_exists():

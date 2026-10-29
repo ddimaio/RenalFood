@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29m"
+ENGINE_VERSION = "2026.10.29n"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -883,7 +883,8 @@ with tab_gen:
     st.caption("Untick **Use** for anything you do not want (e.g. animal "
                "products). Tick **Always include** to force an ingredient "
                "into every recipe – its amount is optimised but never below "
-               "**Min g** (blank = 5 g, 0.5 g for oils/supplements). A forced "
+               "**Min g** (blank = 5 g, 0.5 g for oils/supplements). **Max g** "
+               "caps an ingredient whenever it is used. A forced "
                "protein, starch or vegetable fills that role. Roles are "
                "assigned automatically.")
     gdf = st.data_editor(
@@ -891,13 +892,19 @@ with tab_gen:
                       "Always include": False,
                       "Min g": pd.Series([None] * len(gnames),
                                          dtype="float"),
+                      "Max g": pd.Series([None] * len(gnames),
+                                         dtype="float"),
                       "Role": [rc.ingredient_role(db[n]) for n in gnames],
                       "Ingredient": gnames}),
         hide_index=True, **FULL, height=300,
         disabled=["Role", "Ingredient"],
         key=f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}",
         column_config={"Min g": st.column_config.NumberColumn(
-            "Min g", min_value=0.0, step=1.0, format="%g")})
+            "Min g", min_value=0.0, step=1.0, format="%g"),
+            "Max g": st.column_config.NumberColumn(
+            "Max g", min_value=0.0, step=1.0, format="%g",
+            help="Upper limit (g/day) whenever this ingredient is used; "
+                 "blank = no limit")})
     set_excluded(rc.merge_excluded(ss.excluded, gnames,
                                    gdf.loc[~gdf["Use"], "Ingredient"]), "gen")
     st.caption("Unticked foods are remembered in this browser and also left "
@@ -913,7 +920,13 @@ with tab_gen:
                   for _, rw in frows.iterrows()}
         pool = list(gdf.loc[gdf["Use"] | gdf["Always include"],
                             "Ingredient"])
-        if len(pool) < 2:
+        max_each = {rw["Ingredient"]: float(rw["Max g"])
+                    for _, rw in gdf.iterrows() if pd.notna(rw["Max g"])}
+        clash = [n for n, m in forced.items()
+                 if m is not None and n in max_each and m > max_each[n]]
+        if clash:
+            st.error("Min g is larger than Max g for: " + ", ".join(clash))
+        elif len(pool) < 2:
             st.error("Select more ingredients.")
         else:
             bar = st.progress(0.0, text="Starting…")
@@ -926,7 +939,7 @@ with tab_gen:
                 [tuple(x) for x in ss.recipe] if fixed_base else (),
                 prog, n_veg=gveg_lo, veg_max=gveg_hi, veg_max_uses=guse,
                 veg_min_g=gmin,
-                forced=forced)
+                forced=forced, max_each=max_each)
             bar.empty()
             ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),
                              "n_fixed": len(ss.recipe) if fixed_base else 0}
