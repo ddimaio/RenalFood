@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29j"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29k"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -116,6 +116,10 @@ BASE_KEYS = [k for k in KEYS if k not in EXT_KEYS]
 # unknown (unknown would switch off the shortfall check for the whole
 # recipe). Ca and P are excluded: renal-critical, use real label values.
 ASSUME_CORE = ("na", "k", "mg")
+# ...and nutrients with NO AAFCO minimum are taken as 0 when undeclared: a
+# complete food need not contain them (e.g. EPA+DHA - otherwise an
+# undeclared value let the food stand in for the omega-3 dose)
+ASSUME_ZERO = ("epa_dha",)
 
 
 def visible_keys(extended=False):
@@ -448,6 +452,8 @@ def assumed_value(item, k):
     """For a complete commercial food flagged 'assume_aafco': the AAFCO
     adult minimum for extended nutrient k, per 100 g of the food (AAFCO is
     per 1000 kcal). None if not applicable or the energy is unknown."""
+    if item.get("assume_aafco") and k in ASSUME_ZERO:
+        return 0.0
     if not item.get("assume_aafco") or (k not in EXT_KEYS and
                                          k not in ASSUME_CORE):
         return None
@@ -466,7 +472,7 @@ def value(item, k):
 
 def assumed_in(recipe, db):
     """{nutrient: [ingredient names]} whose value is an AAFCO assumption."""
-    keys = list(EXT_KEYS) + list(ASSUME_CORE)
+    keys = list(EXT_KEYS) + list(ASSUME_CORE) + list(ASSUME_ZERO)
     out = {k: [] for k in keys}
     for name, grams in recipe:
         item = db.get(name)
@@ -1753,6 +1759,11 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                                  stage_note, fat_me / me_sum, ranges,
                                  (sctx or {}).get("blood_note", ""), extended,
                                  assumed)
+    zero = sorted({n for k in ASSUME_ZERO for n in assumed.get(k, [])})
+    if zero:
+        res["notes"] += ("\n• EPA+DHA not declared for " + ", ".join(zero) +
+                         " – counted as 0 (no AAFCO minimum, so a complete "
+                         "food need not contain any). Ask the manufacturer.")
     core = {k: v for k, v in assumed.items() if k in ASSUME_CORE and v}
     if core:
         foods = sorted({n for v in core.values() for n in v})
