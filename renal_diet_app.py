@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29i"
+ENGINE_VERSION = "2026.10.29j"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -787,9 +787,13 @@ with tab_gen:
     gmax = g3.slider("Max. foods each", 3, 9, 6, key="g_max",
                      help="Salt, supplements and oils are extra (up to 3).")
     v1, v2, v3 = st.columns(3)
-    gveg = v1.slider("Vegetables per recipe", 0, 4, 2, key="g_veg",
-                     help="Exact number of non-starchy vegetables (incl. "
-                          "mushrooms and low-calorie fruit such as apple). "
+    gveg_lo, gveg_hi = v1.slider(
+                     "Vegetables per recipe (min – max)", 0, 6, (1, 3),
+                     key="g_veg_rng",
+                     help="Non-starchy vegetables (incl. mushrooms and "
+                          "low-calorie fruit such as apple): at least the "
+                          "minimum, more up to the maximum only if they "
+                          "improve the recipe. "
                           "Potato, sweet potato and banana count as starch; "
                           "peas and chickpeas as 'other' – see the Role "
                           "column in the results.")
@@ -851,7 +855,8 @@ with tab_gen:
             res = rc.generate_recipes(
                 db, pool, ctx, gn, gmax,
                 [tuple(x) for x in ss.recipe] if fixed_base else (),
-                prog, n_veg=gveg, veg_max_uses=guse, veg_min_g=gmin,
+                prog, n_veg=gveg_lo, veg_max=gveg_hi, veg_max_uses=guse,
+                veg_min_g=gmin,
                 forced=forced)
             bar.empty()
             ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),

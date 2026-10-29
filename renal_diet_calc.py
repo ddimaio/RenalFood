@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29i"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29j"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1004,12 +1004,14 @@ def _family(name):
 def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                      progress=None, cancelled=lambda: False, n_veg=2,
                      veg_max_uses=2, veg_min_g=None, forced=None,
-                     max_extra=3):
+                     max_extra=3, veg_max=None):
     """Build balanced recipes from scratch.
-    Stage 1: every protein x starch x vegetable base (amounts optimised).
-    Stage 2: best bases get vegetables added up to n_veg (forced, for
+    Vegetables: at least n_veg (min) and at most veg_max (default = n_veg).
+    Stage 1: every protein x starch x vegetable base (amounts optimised);
+             with a minimum of 0 the base may also have no vegetable.
+    Stage 2: best bases get vegetables added up to the minimum (forced, for
              variety), then grow greedily with oils, supplements and other
-             foods up to max_ing ingredients.
+             foods (vegetables only up to the maximum) up to max_ing.
     Variety: protein families round-robin, at most 2 recipes per protein
     family, each vegetable in at most veg_max_uses recipes, every vegetable
     kept at >= veg_min_g grams.
@@ -1036,15 +1038,19 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     by = {r: [n for n in pool if roles[n] == r and n not in base_names]
           for r in ROLES}
     filled = {roles[n] for n in fo_names}        # roles covered by forced
-    # n_veg is exact: with 0 vegetables the base has none either
-    groups = [by[r] for r in ("protein", "starch", "veg")
-              if by[r] and r not in filled and (r != "veg" or n_veg > 0)]
+    veg_min = max(0, int(n_veg))
+    veg_max = veg_min if veg_max is None else max(veg_min, int(veg_max))
+    # base vegetable slot: none if max is 0; optional if min is 0
+    groups = [(by[r] + [None] if r == "veg" and veg_min == 0 else by[r])
+              for r in ("protein", "starch", "veg")
+              if by[r] and r not in filled and (r != "veg" or veg_max > 0)]
     if not groups and not fo_names:
         groups = [[n for n in pool if n not in base_names
                    and roles[n] not in ("binder", "supplement")]]
     combos = [[]]
     for grp in groups:
         combos = [c + [x] for c in combos for x in grp]
+    combos = [[x for x in c if x is not None] for c in combos]
 
     def bnd(n):
         lo, hi = default_bounds(db[n], tgt)
@@ -1060,7 +1066,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     fo_x0 = [max(b[0], 1.0) for b in fo_b]
 
     def vegs(names, grams=None, variety=False):
-        """Vegetables in a recipe (forced ones count towards n_veg but not
+        """Vegetables in a recipe (forced ones count towards the min/max but not
         towards the variety caps)."""
         start = nb if variety else nfx
         return [n for i, n in enumerate(names) if i >= start and
@@ -1144,7 +1150,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                 return False
             return True
 
-        # (a) vegetables up to n_veg - added even at a small score cost
+        # (a) vegetables up to the minimum - added even at a small cost
         def is_extra(n):
             return roles.get(n) in ("supplement", "oil")
 
@@ -1154,7 +1160,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         def n_extras():
             return sum(1 for n in cur_n[nfx:] if is_extra(n))
 
-        while len(vegs(cur_n)) < n_veg and n_foods() < max_ing:
+        while len(vegs(cur_n)) < veg_min and n_foods() < max_ing:
             if cancelled():
                 return []
             cands = [c for c in by["veg"] if allowed(c)] or \
@@ -1174,7 +1180,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             room_f, room_x = n_foods() < max_ing, n_extras() < max_extra
             if not (room_f or room_x):
                 break
-            veg_full = len(vegs(cur_n)) >= n_veg   # vegetables: exact count
+            veg_full = len(vegs(cur_n)) >= veg_max   # vegetable maximum
             best = try_add(cur_n, cur_b, cur_g,
                            [c for c in extra_pool if allowed(c) and
                             (room_x if is_extra(c) else room_f) and
@@ -2482,11 +2488,15 @@ class GeneratorDialog(tk.Toplevel):
 
         r1 = ttk.Frame(frm)
         r1.pack(fill="x", pady=(6, 0))
-        ttk.Label(r1, text="Vegetables per recipe (non-starchy; potato "
-                           "= starch)").pack(side="left")
-        self.n_veg = tk.StringVar(value="2")
-        ttk.Spinbox(r1, from_=0, to=4, textvariable=self.n_veg,
-                    width=4).pack(side="left", padx=4)
+        ttk.Label(r1, text="Vegetables (non-starchy; potato = starch)  "
+                           "min").pack(side="left")
+        self.n_veg = tk.StringVar(value="1")
+        ttk.Spinbox(r1, from_=0, to=6, textvariable=self.n_veg,
+                    width=3).pack(side="left", padx=2)
+        ttk.Label(r1, text="max").pack(side="left")
+        self.veg_max = tk.StringVar(value="3")
+        ttk.Spinbox(r1, from_=0, to=6, textvariable=self.veg_max,
+                    width=3).pack(side="left", padx=2)
         ttk.Label(r1, text="   same vegetable in max.").pack(side="left")
         self.veg_uses = tk.StringVar(value="2")
         ttk.Spinbox(r1, from_=1, to=10, textvariable=self.veg_uses,
@@ -2630,6 +2640,9 @@ class GeneratorDialog(tk.Toplevel):
             n = int(self.n.get())
             max_ing = int(self.max_ing.get())
             n_veg = int(self.n_veg.get())
+            veg_max = int(self.veg_max.get())
+            if veg_max < n_veg:
+                raise ValueError("vegetable max < min")
             veg_uses = int(self.veg_uses.get())
             veg_min = to_float(self.veg_min.get()) or 0.0
         except ValueError:
@@ -2657,7 +2670,8 @@ class GeneratorDialog(tk.Toplevel):
         try:
             res = generate_recipes(app.db, pool, ctx, n, max_ing, fixed,
                                    progress, lambda: self._cancel,
-                                   n_veg=n_veg, veg_max_uses=veg_uses,
+                                   n_veg=n_veg, veg_max=veg_max,
+                                   veg_max_uses=veg_uses,
                                    veg_min_g=veg_min,
                                    forced=dict(self.forced))
         except tk.TclError:              # window closed mid-run
