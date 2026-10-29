@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29r"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29s"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1087,14 +1087,37 @@ def optimise(names, db, bounds, x0, ctx, use_scipy=True, max_evals=5000):
     tgt = ctx["kcal_target"]
 
     def amounts(y):
+        """Scale the free amounts to the energy target, keeping every
+        ingredient inside its min/max: an ingredient that would cross a
+        limit is held at it and the others are rescaled (hard bounds)."""
         g = [0.0] * len(names)
         for i in fixed:
             g[i] = x0[i] if bounds[i][2] else 0.0
         kfix = sum(g[i] * kc[i] / 100.0 for i in fixed)
-        kfree = sum(y[j] * kc[i] / 100.0 for j, i in enumerate(free))
-        s = max(0.0, (tgt - kfix) / kfree) if kfree > 1e-9 else 1.0
-        for j, i in enumerate(free):
-            g[i] = y[j] * s
+        yi = {i: y[j] for j, i in enumerate(free)}
+        active, held = list(free), {}
+        s = 1.0
+        for _ in range(len(free) + 1):
+            kheld = sum(v * kc[i] / 100.0 for i, v in held.items())
+            kfree = sum(yi[i] * kc[i] / 100.0 for i in active)
+            s = (max(0.0, (tgt - kfix - kheld) / kfree) if kfree > 1e-9
+                 else 1.0)
+            moved = False
+            for i in list(active):
+                lo, hi, _ = bounds[i]
+                v = yi[i] * s
+                if v > hi + 1e-9:
+                    held[i] = hi
+                elif v < lo - 1e-9:
+                    held[i] = lo
+                else:
+                    continue
+                active.remove(i)
+                moved = True
+            if not moved:
+                break
+        for i in free:
+            g[i] = held[i] if i in held else yi[i] * s
         return g
 
     def obj(y):
@@ -1125,7 +1148,8 @@ def optimise(names, db, bounds, x0, ctx, use_scipy=True, max_evals=5000):
         g = amounts(y)
     else:
         g = amounts([])
-    g = [round(v, 1) if not bounds[i][2] else v for i, v in enumerate(g)]
+    g = [min(bounds[i][1], max(bounds[i][0], round(v, 1)))
+         if not bounds[i][2] else v for i, v in enumerate(g)]
     sc, terms = score_amounts(g, vecs, ctx)
     return g, sc, terms
 
