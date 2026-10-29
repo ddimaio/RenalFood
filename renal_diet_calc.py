@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29t"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29u"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -680,6 +680,35 @@ def merge_excluded(old, shown, unticked):
 def save_excluded(excluded):
     p = load_prefs()
     p["excluded"] = sorted(excluded, key=str.lower)
+    save_prefs(p)
+
+
+def clean_gen_settings(d):
+    """Generator per-ingredient settings: {"forced": [names], "min":
+    {name: g}, "max": {name: g}} (anything else dropped)."""
+    d = d if isinstance(d, dict) else {}
+
+    def nums(x):
+        out = {}
+        for k, v in (x if isinstance(x, dict) else {}).items():
+            try:
+                if v is not None and float(v) >= 0:
+                    out[str(k)] = float(v)
+            except (TypeError, ValueError):
+                pass
+        return out
+    return {"forced": sorted({str(n) for n in d.get("forced", [])
+                              if isinstance(n, str)}, key=str.lower),
+            "min": nums(d.get("min")), "max": nums(d.get("max"))}
+
+
+def load_gen_settings():
+    return clean_gen_settings(load_prefs().get("gen"))
+
+
+def save_gen_settings(gen):
+    p = load_prefs()
+    p["gen"] = clean_gen_settings(gen)
     save_prefs(p)
 
 
@@ -2991,7 +3020,8 @@ class GeneratorDialog(tk.Toplevel):
         ttk.Label(ff, foreground="#555", wraplength=700, justify="left",
                   text="A forced protein, starch or vegetable fills that role "
                        "(no second one is added). Blank min = 5 g (0.5 g for "
-                       "oils/supplements).").pack(anchor="w")
+                       "oils/supplements). These lists are remembered.").pack(
+            anchor="w")
 
         mf = ttk.LabelFrame(frm, text="Maximum amount (g/day, whenever the "
                                       "ingredient is used)", padding=6)
@@ -3011,6 +3041,12 @@ class GeneratorDialog(tk.Toplevel):
         self.max_each = {}
         self.m_list = tk.Listbox(mf, height=3, exportselection=False)
         self.m_list.pack(fill="x", pady=(4, 0))
+        gs = load_gen_settings()          # remembered from last time
+        self.forced = {n: gs["min"].get(n) for n in gs["forced"]
+                       if n in app.db}
+        self.max_each = {n: v for n, v in gs["max"].items() if n in app.db}
+        self._refresh_forced()
+        self._refresh_max()
 
         bot = ttk.Frame(frm)
         bot.pack(fill="x", pady=(8, 0))
@@ -3031,6 +3067,20 @@ class GeneratorDialog(tk.Toplevel):
             load_excluded(), self.names,
             [n for i, n in enumerate(self.names) if i not in sel]))
 
+    def save_gen(self):
+        gs = load_gen_settings()
+        was = set(gs["forced"])
+        gs["forced"] = list(self.forced)
+        for n in was - set(self.forced):
+            gs["min"].pop(n, None)
+        for n, m in self.forced.items():
+            if m is None:
+                gs["min"].pop(n, None)
+            else:
+                gs["min"][n] = m
+        gs["max"] = dict(self.max_each)
+        save_gen_settings(gs)
+
     def add_forced(self):
         n = self.f_pick.get().strip()
         if n not in self.app.db:
@@ -3045,11 +3095,13 @@ class GeneratorDialog(tk.Toplevel):
             return
         self.forced[n] = m
         self._refresh_forced()
+        self.save_gen()
 
     def remove_forced(self):
         for i in reversed(self.f_list.curselection()):
             self.forced.pop(list(self.forced)[i], None)
         self._refresh_forced()
+        self.save_gen()
 
     def _refresh_forced(self):
         self.f_list.delete(0, "end")
@@ -3073,11 +3125,13 @@ class GeneratorDialog(tk.Toplevel):
             return
         self.max_each[n] = m
         self._refresh_max()
+        self.save_gen()
 
     def remove_max(self):
         for i in reversed(self.m_list.curselection()):
             self.max_each.pop(list(self.max_each)[i], None)
         self._refresh_max()
+        self.save_gen()
 
     def _refresh_max(self):
         self.m_list.delete(0, "end")

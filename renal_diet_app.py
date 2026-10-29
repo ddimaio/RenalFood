@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29t"
+ENGINE_VERSION = "2026.10.29u"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -200,8 +200,40 @@ if not ss.ex_loaded:
         if isinstance(got, list):      # browser copy wins over the file
             ss.excluded = set(got)
             ss.gen_ex_base = ss.opt_ex_base = set(got)
+            if "gen_set" in ss:
+                ss.gen_set_base = ss.gen_set
             ss.gen_ex_ver += 1
             ss.opt_ex_ver += 1
+
+
+# ---- generator settings per ingredient (Always include, Min g, Max g),
+#      remembered the same way
+LS_GEN = "renalfood_gen"
+if "gen_set" not in ss:
+    ss.gen_set = rc.load_gen_settings()
+    ss.gen_set_base = ss.gen_set
+    ss.gen_loaded = streamlit_js_eval is None
+if not ss.gen_loaded:
+    raw = streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{LS_GEN}') || 'null'",
+        key="ls_get_gen")
+    if raw is not None:
+        ss.gen_loaded = True
+        try:
+            got = json.loads(raw)
+        except (TypeError, ValueError):
+            got = None
+        if isinstance(got, dict):
+            ss.gen_set = ss.gen_set_base = rc.clean_gen_settings(got)
+            ss.gen_ex_base = set(ss.excluded)
+            ss.gen_ex_ver += 1
+
+
+def set_gen_settings(new):
+    new = rc.clean_gen_settings(new)
+    if new != ss.gen_set:
+        ss.gen_set = new
+        rc.save_gen_settings(new)
 
 
 def set_excluded(new, source):
@@ -216,6 +248,7 @@ def set_excluded(new, source):
         ss.opt_ex_ver += 1
     else:
         ss.gen_ex_base = set(new)
+        ss.gen_set_base = ss.gen_set      # editor is rebuilt: keep settings
         ss.gen_ex_ver += 1
 
 
@@ -227,6 +260,12 @@ def store_excluded_in_browser():
         js_expressions=f"localStorage.setItem('{LS_KEY}', {json.dumps(val)})"
                        " || 1",
         key=f"ls_set_excluded_{abs(hash(val))}")
+    if ss.gen_loaded:
+        val = json.dumps(ss.gen_set, ensure_ascii=False, sort_keys=True)
+        streamlit_js_eval(
+            js_expressions=f"localStorage.setItem('{LS_GEN}', "
+                           f"{json.dumps(val)}) || 1",
+            key=f"ls_set_gen_{abs(hash(val))}")
 
 
 LIGHT_CSS = {"g": "background-color: #dcf2dc; color: #1b5e20",
@@ -1079,18 +1118,24 @@ with tab_gen:
                "caps an ingredient whenever it is used. A forced "
                "protein, starch or vegetable fills that role. Roles are "
                "assigned automatically.")
+    _gkey = f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}"
+    if ss.get("gen_key_last") != _gkey:      # fresh editor: current settings
+        ss.gen_key_last = _gkey
+        ss.gen_set_base = ss.gen_set
+        ss.gen_ex_base = set(ss.excluded)
     gdf = st.data_editor(
         pd.DataFrame({"Use": [n not in ss.gen_ex_base for n in gnames],
-                      "Always include": False,
-                      "Min g": pd.Series([None] * len(gnames),
-                                         dtype="float"),
-                      "Max g": pd.Series([None] * len(gnames),
-                                         dtype="float"),
+                      "Always include": [n in ss.gen_set_base["forced"]
+                                         for n in gnames],
+                      "Min g": pd.Series([ss.gen_set_base["min"].get(n)
+                                          for n in gnames], dtype="float"),
+                      "Max g": pd.Series([ss.gen_set_base["max"].get(n)
+                                          for n in gnames], dtype="float"),
                       "Role": [rc.ingredient_role(db[n]) for n in gnames],
                       "Ingredient": gnames}),
         hide_index=True, **FULL, height=300,
         disabled=["Role", "Ingredient"],
-        key=f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}",
+        key=_gkey,
         column_config={"Min g": st.column_config.NumberColumn(
             "Min g", min_value=0.0, step=1.0, format="%g"),
             "Max g": st.column_config.NumberColumn(
@@ -1099,8 +1144,20 @@ with tab_gen:
                  "blank = no limit")})
     set_excluded(rc.merge_excluded(ss.excluded, gnames,
                                    gdf.loc[~gdf["Use"], "Ingredient"]), "gen")
-    st.caption("Unticked foods are remembered in this browser and also left "
-               "out of the optimiser's suggested additions.")
+    _shown = set(gnames)
+    _old = ss.gen_set
+    set_gen_settings({
+        "forced": [n for n in _old["forced"] if n not in _shown]
+        + list(gdf.loc[gdf["Always include"], "Ingredient"]),
+        "min": {**{n: v for n, v in _old["min"].items() if n not in _shown},
+                **{rw["Ingredient"]: float(rw["Min g"])
+                   for _, rw in gdf.iterrows() if pd.notna(rw["Min g"])}},
+        "max": {**{n: v for n, v in _old["max"].items() if n not in _shown},
+                **{rw["Ingredient"]: float(rw["Max g"])
+                   for _, rw in gdf.iterrows() if pd.notna(rw["Max g"])}}})
+    st.caption("Your ticks and Min/Max values are remembered in this "
+               "browser; unticked foods are also left out of the optimiser's "
+               "suggested additions.")
 
     if st.button("Generate", type="primary", key="g_run"):
         ctx = score_context(gk)
