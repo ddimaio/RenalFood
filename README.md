@@ -102,7 +102,12 @@ scaled by protein, the rest by dry matter).
 diet" (Streamlit) or **Compare with reference…** (desktop) shows the
 recipe and the reference per 1000 kcal side by side. Add more entries in
 the same format (label values per 100 g as fed, with kcal; `added_only`
-lists nutrients where the label gives only added amounts).
+lists nutrients where the label gives only added amounts), or import them
+like ingredients: Ingredient library tab → *Reference diets* (Streamlit) or
+the buttons in the desktop comparison window. CSV (download the reference
+template; blank = not declared; blank kcal is estimated from protein, fat,
+fibre, ash and moisture) or JSON (a reference diet, a list, or an ingredient
+JSON such as `imports/bonza_kibble.json`). Same-name entries are replaced.
 
 ## Remembered exclusions
 

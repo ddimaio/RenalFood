@@ -33,6 +33,7 @@ vet-approved vitamin/mineral supplement.
 
 import csv
 import json
+import io
 import os
 try:
     import tkinter as tk
@@ -48,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29p"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29q"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -502,6 +503,103 @@ def load_references():
                 and (r.get("per100g") or {}).get("kcal")]
     except (OSError, ValueError):
         return []
+
+
+def save_references(refs):
+    with open(REF_PATH, "w", encoding="utf-8") as f:
+        json.dump(refs, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+
+def estimate_kcal(per):
+    """Modified Atwater energy (kcal/100 g) from a label's analysis; needs
+    protein and fat; fibre/ash/moisture default to 0 / 0 / 8 %."""
+    pr, fa = per.get("protein"), per.get("fat")
+    if pr is None or fa is None:
+        return None
+    nfe = 100 - pr - fa - (per.get("fibre") or 0) - (per.get("ash") or 0) \
+        - (8.0 if per.get("water") is None else per["water"])
+    return round(3.5 * pr + 8.5 * fa + 3.5 * max(0.0, nfe), 1)
+
+
+REF_CSV_EXTRA = ["ash"]          # label field used only to estimate energy
+
+
+def reference_template_rows():
+    head = ["name", "source", "note", "added_only"] + KEYS + REF_CSV_EXTRA
+    units = ["# per 100 g as fed ->", "", "",
+             "keys with only ADDED amounts, e.g. vit_a;vit_d;zn"] + \
+        [UNIT[k] for k in KEYS] + ["g"]
+    return [head, units]
+
+
+def parse_references(filename, data):
+    """Reference diets from an uploaded .json or .csv (bytes or str).
+    JSON: a reference, a list of them, or ingredient entries (name +
+    per100g). CSV: the reference template (blank = not declared). Energy
+    is estimated from protein/fat/fibre/ash/moisture when kcal is blank."""
+    if isinstance(data, bytes):
+        data = data.decode("utf-8-sig")
+    out = []
+    if filename.lower().endswith(".json"):
+        raw = json.loads(data)
+        raw = raw if isinstance(raw, list) else [raw]
+        for r in raw:
+            if not isinstance(r, dict) or not r.get("name"):
+                continue
+            per = {k: (None if v is None else float(v))
+                   for k, v in (r.get("per100g") or {}).items()
+                   if k in KEYS or k in REF_CSV_EXTRA}
+            out.append({"name": str(r["name"]).strip(),
+                        "source": r.get("source", ""),
+                        "note": r.get("note", ""), "per100g": per,
+                        "added_only": [k for k in r.get("added_only", [])
+                                       if k in KEYS]})
+    else:
+        for row in csv.DictReader(io.StringIO(data)):
+            row = {(k or "").strip().lower(): (v or "").strip()
+                   for k, v in row.items()}
+            nm = row.get("name", "")
+            if not nm or nm.startswith("#"):
+                continue
+            per = {}
+            for k in KEYS + REF_CSV_EXTRA:
+                v = to_float(row.get(k, ""))
+                if v is not None:
+                    per[k] = v
+            ao = [k.strip() for k in
+                  row.get("added_only", "").replace(",", ";").split(";")
+                  if k.strip() in KEYS]
+            out.append({"name": nm, "source": row.get("source", ""),
+                        "note": row.get("note", ""), "per100g": per,
+                        "added_only": ao})
+    for r in out:
+        if not r["per100g"].get("kcal"):
+            e = estimate_kcal(r["per100g"])
+            if e:
+                r["per100g"]["kcal"] = e
+                r["note"] = (r["note"] + " Energy estimated from the "
+                             "analysis (modified Atwater).").strip()
+    bad = [r["name"] for r in out if not r["per100g"].get("kcal")]
+    if bad:
+        raise ValueError("No energy (kcal) and too little data to estimate "
+                         "it for: " + ", ".join(bad))
+    return out
+
+
+def import_references(items):
+    """Merge into renal_references.json (same name = replaced).
+    Returns (new, updated)."""
+    refs = {r["name"]: r for r in load_references()}
+    new = sum(1 for r in items if r["name"] not in refs)
+    for r in items:
+        refs[r["name"]] = r
+    save_references(sorted(refs.values(), key=lambda r: r["name"].lower()))
+    return new, len(items) - new
+
+
+def delete_reference(name):
+    save_references([r for r in load_references() if r["name"] != name])
 
 
 def reference_rows(totals, ref, missing=None, extended=True):
@@ -3516,7 +3614,8 @@ class ResultsWindow(tk.Toplevel):
 
 
 class RefCompareWindow(tk.Toplevel):
-    """Recipe vs a reference diet (renal_references.json), per 1000 kcal."""
+    """Recipe vs a reference diet (renal_references.json), per 1000 kcal;
+    also imports / exports / deletes reference diets."""
     COLS = [("n", "Nutrient", 200), ("u", "Unit", 70),
             ("r", "Recipe /1000 kcal", 140), ("f", "Reference /1000 kcal",
                                                160), ("d", "Difference", 100)]
@@ -3525,22 +3624,22 @@ class RefCompareWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.title("Compare with a reference diet")
-        self.geometry("760x720")
-        self.refs = load_references()
+        self.geometry("780x740")
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
-        if not self.refs:
-            ttk.Label(frm, text="No reference diets found "
-                                "(renal_references.json).").pack()
-            return
         top = ttk.Frame(frm)
         top.pack(fill="x")
         ttk.Label(top, text="Reference").pack(side="left")
-        self.pick = ttk.Combobox(top, state="readonly", width=50,
-                                 values=[r["name"] for r in self.refs])
-        self.pick.current(0)
+        self.pick = ttk.Combobox(top, state="readonly", width=46)
         self.pick.pack(side="left", padx=6)
         self.pick.bind("<<ComboboxSelected>>", lambda e: self.fill())
+        bar = ttk.Frame(frm)
+        bar.pack(fill="x", pady=(6, 0))
+        for txt, cmd in [("Import CSV/JSON…", self.do_import),
+                         ("CSV template…", self.do_template),
+                         ("Export…", self.do_export),
+                         ("Delete selected", self.do_delete)]:
+            ttk.Button(bar, text=txt, command=cmd).pack(side="left", padx=1)
         box, self.tree = scrolled_tree(frm, columns=[c for c, _, _ in
                                                      self.COLS],
                                        show="headings", height=16)
@@ -3548,17 +3647,32 @@ class RefCompareWindow(tk.Toplevel):
             self.tree.heading(c, text=t)
             self.tree.column(c, width=w, anchor="w" if c in "nu" else "e")
         box.pack(fill="both", expand=True, pady=6)
-        self.note = ttk.Label(frm, foreground="#555", wraplength=720,
+        self.note = ttk.Label(frm, foreground="#555", wraplength=740,
                               justify="left")
         self.note.pack(anchor="w")
+        self.reload()
+
+    def reload(self, select=None):
+        self.refs = load_references()
+        names = [r["name"] for r in self.refs]
+        self.pick["values"] = names
+        if names:
+            self.pick.current(names.index(select) if select in names else 0)
+        else:
+            self.pick.set("")
         self.fill()
 
     def fill(self):
-        ref = self.refs[self.pick.current()]
+        self.tree.delete(*self.tree.get_children())
+        if not self.refs:
+            self.note.config(text="No reference diets loaded - use Import "
+                                  "(CSV template or JSON; an ingredient JSON "
+                                  "also works).")
+            return
+        ref = self.refs[max(0, self.pick.current())]
         a = analyse_recipe(self.app.recipe, self.app.db,
                            self.app.current_mer(), self.app.stage.get(),
                            self.app.score_context())
-        self.tree.delete(*self.tree.get_children())
         if a["mass"] > 0:
             for row in reference_rows(a["totals"], ref, a["missing"],
                                       self.app.ext.get()):
@@ -3570,6 +3684,48 @@ class RefCompareWindow(tk.Toplevel):
                  "value is unknown. " + ref.get("note", "")
                  + ("\nSource: " + ref["source"] if ref.get("source")
                     else ""))
+
+    def do_import(self):
+        path = filedialog.askopenfilename(parent=self, filetypes=[
+            ("CSV or JSON", "*.csv *.json"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                items = parse_references(path, f.read())
+            n_new, n_upd = import_references(items)
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            messagebox.showerror("Import", f"Import failed:\n{e}",
+                                 parent=self)
+            return
+        self.reload(items[0]["name"] if items else None)
+        messagebox.showinfo("Import", f"Imported {len(items)} ({n_new} new, "
+                            f"{n_upd} updated).", parent=self)
+
+    def do_template(self):
+        path = filedialog.asksaveasfilename(
+            parent=self, defaultextension=".csv",
+            initialfile="reference_template.csv")
+        if path:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerows(reference_template_rows())
+
+    def do_export(self):
+        path = filedialog.asksaveasfilename(
+            parent=self, defaultextension=".json",
+            initialfile="renal_references.json")
+        if path:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.refs, f, indent=1, ensure_ascii=False)
+
+    def do_delete(self):
+        if not self.refs:
+            return
+        name = self.refs[max(0, self.pick.current())]["name"]
+        if messagebox.askyesno("Delete", f"Delete reference '{name}'?",
+                               parent=self):
+            delete_reference(name)
+            self.reload()
 
 
 def scrolled_tree(parent, **kw):

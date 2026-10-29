@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29p"
+ENGINE_VERSION = "2026.10.29q"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -529,6 +529,9 @@ with tab_rec:
                                "· ? data missing. Per-day amounts: Layout → "
                                "Desktop (sidebar).")
             refs = rc.load_references()
+            if not refs:
+                st.caption("No reference diets loaded – import one on the "
+                           "Ingredient library tab to compare.")
             if refs:
                 with st.expander("Compare with a reference diet"):
                     rname = st.selectbox("Reference", [r_["name"]
@@ -1227,6 +1230,44 @@ with tab_lib:
                     ss.lib_ver += 1
                     st.success(f"Added {lname.strip()}.")
                     st.rerun()
+
+    # ---- reference diets (comparison only, not ingredients)
+    st.markdown("#### Reference diets (for comparison, not ingredients)")
+    refs_all = rc.load_references()
+    st.caption("Shown on the Recipe tab → Composition → *Compare with a "
+               "reference diet*. Loaded: " +
+               (", ".join(r_["name"] for r_ in refs_all) or "none") + ".")
+    rc1, rc2 = st.columns(2)
+    rt = io.StringIO()
+    csv.writer(rt).writerows(rc.reference_template_rows())
+    rc1.download_button("⬇️ Reference CSV template", rt.getvalue(),
+                        file_name="reference_template.csv", mime="text/csv")
+    rc2.download_button("⬇️ Export reference diets",
+                        json.dumps(refs_all, indent=1, ensure_ascii=False),
+                        file_name="renal_references.json",
+                        mime="application/json", disabled=not refs_all)
+    rimp = st.file_uploader("Import reference diets (CSV template or JSON; an "
+                            "ingredient JSON also works). Same-name entries "
+                            "are replaced. Blank kcal is estimated from "
+                            "protein, fat, fibre, ash and moisture.",
+                            type=["csv", "json"], key="ref_imp")
+    if rimp is not None and st.button("Import reference diets",
+                                      key="ref_imp_go"):
+        try:
+            items = rc.parse_references(rimp.name, rimp.getvalue())
+            n_new, n_upd = rc.import_references(items)
+            st.success(f"Imported {len(items)} ({n_new} new, {n_upd} "
+                       "updated).")
+            st.rerun()
+        except (ValueError, KeyError, TypeError) as e:
+            st.error(f"Import failed: {e}")
+    if refs_all:
+        dc1, dc2 = st.columns([3, 1])
+        rdel = dc1.selectbox("Delete a reference diet",
+                             [r_["name"] for r_ in refs_all], key="ref_del")
+        if dc2.button("Delete", key="ref_del_go"):
+            rc.delete_reference(rdel)
+            st.rerun()
 
 # ================================================================ ABOUT
 with tab_about:
