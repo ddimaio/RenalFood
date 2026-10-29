@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29o"
+ENGINE_VERSION = "2026.10.29p"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -528,6 +528,26 @@ with tab_rec:
                     st.caption("Values per 1000 kcal. ✓ ok · ↓ low · ↑ high "
                                "· ? data missing. Per-day amounts: Layout → "
                                "Desktop (sidebar).")
+            refs = rc.load_references()
+            if refs:
+                with st.expander("Compare with a reference diet"):
+                    rname = st.selectbox("Reference", [r_["name"]
+                                                       for r_ in refs],
+                                         key="ref_pick")
+                    ref = next(r_ for r_ in refs if r_["name"] == rname)
+                    rdf = pd.DataFrame(
+                        rc.reference_rows(t, ref, a["missing"], ss.ext),
+                        columns=["Nutrient", "Unit", "Recipe /1000 kcal",
+                                 "Reference /1000 kcal", "Difference"])
+                    show_df(st, rdf, hide_index=True, **FULL,
+                            height=35 * (len(rdf) + 1) + 3)
+                    st.caption("For comparison only – not an ingredient. "
+                               "'≥' = lower bound (label gives only added "
+                               "amounts, or an ingredient's value is "
+                               "unknown); no difference is shown then. "
+                               + ref.get("note", ""))
+                    if ref.get("source"):
+                        st.caption(f"Source: {ref['source']}")
         with bt:
             with view("desk", "brk"):
                 show_df(st, traffic(brk), hide_index=True, **FULL)

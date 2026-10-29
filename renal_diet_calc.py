@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29o"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29p"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -485,6 +485,65 @@ def assumed_in(recipe, db):
                     assumed_value(item, k) is not None:
                 out[k].append(name)
     return out
+
+
+REF_PATH = os.path.join(APP_DIR, "renal_references.json")
+
+
+def load_references():
+    """Reference diets (e.g. commercial renal foods) for comparison only -
+    never used as ingredients. Each: name, source, note, per100g (as fed,
+    with kcal), added_only (keys where the label gives only added amounts,
+    so the true value is higher)."""
+    try:
+        with open(REF_PATH, encoding="utf-8") as f:
+            refs = json.load(f)
+        return [r for r in refs if isinstance(r, dict) and r.get("name")
+                and (r.get("per100g") or {}).get("kcal")]
+    except (OSError, ValueError):
+        return []
+
+
+def reference_rows(totals, ref, missing=None, extended=True):
+    """Compare a recipe (totals per day) with a reference diet, both per
+    1000 kcal. missing: {key: [ingredients without data]} marks recipe
+    values as lower bounds. Returns [(label, unit, recipe, reference,
+    difference %)]."""
+    missing = missing or {}
+    kr = ref["per100g"]["kcal"]
+    kt = totals.get("kcal") or 0
+    if not kt or not kr:
+        return []
+    lo = set(ref.get("added_only", []))
+    rows = []
+    for k in KEYS:
+        v = ref["per100g"].get(k)
+        if v is None or k in ("kcal", "water", "base_meq", "p_bind") or \
+                (not extended and k in EXT_KEYS):
+            continue
+        rec = totals[k] * 1000 / kt
+        rv = v * 1000 / kr
+        diff = (rec / rv - 1) * 100 if rv else None
+        unsure = k in lo or bool(missing.get(k))
+        rows.append((LABEL[k], UNIT[k],
+                     ("≥" if missing.get(k) else "") + f"{rec:.4g}",
+                     ("≥" if k in lo else "") + f"{rv:.4g}",
+                     "" if diff is None or unsure else f"{diff:+.0f}%"))
+    rp, rc_ = ref["per100g"].get("p"), ref["per100g"].get("ca")
+    if rp and rc_ and totals.get("p"):
+        rows.append(("Ca:P ratio", "", f"{totals['ca'] / totals['p']:.2f}",
+                     f"{rc_ / rp:.2f}", ""))
+    pk = ref["per100g"].get("protein")
+    if pk:
+        rows.append(("Energy from protein", "%",
+                     f"{totals['protein'] * 3.5 / kt * 100:.0f}",
+                     f"{pk * 3.5 / kr * 100:.0f}", ""))
+    fk = ref["per100g"].get("fat")
+    if fk:
+        rows.append(("Energy from fat", "%",
+                     f"{totals['fat'] * 8.5 / kt * 100:.0f}",
+                     f"{fk * 8.5 / kr * 100:.0f}", ""))
+    return rows
 
 
 PREFS_PATH = os.path.join(APP_DIR, "renal_prefs.json")
@@ -3456,6 +3515,63 @@ class ResultsWindow(tk.Toplevel):
         self.apply(self.names + [c], g, s, f"Optimised + {c}")
 
 
+class RefCompareWindow(tk.Toplevel):
+    """Recipe vs a reference diet (renal_references.json), per 1000 kcal."""
+    COLS = [("n", "Nutrient", 200), ("u", "Unit", 70),
+            ("r", "Recipe /1000 kcal", 140), ("f", "Reference /1000 kcal",
+                                               160), ("d", "Difference", 100)]
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self.title("Compare with a reference diet")
+        self.geometry("760x720")
+        self.refs = load_references()
+        frm = ttk.Frame(self, padding=8)
+        frm.pack(fill="both", expand=True)
+        if not self.refs:
+            ttk.Label(frm, text="No reference diets found "
+                                "(renal_references.json).").pack()
+            return
+        top = ttk.Frame(frm)
+        top.pack(fill="x")
+        ttk.Label(top, text="Reference").pack(side="left")
+        self.pick = ttk.Combobox(top, state="readonly", width=50,
+                                 values=[r["name"] for r in self.refs])
+        self.pick.current(0)
+        self.pick.pack(side="left", padx=6)
+        self.pick.bind("<<ComboboxSelected>>", lambda e: self.fill())
+        box, self.tree = scrolled_tree(frm, columns=[c for c, _, _ in
+                                                     self.COLS],
+                                       show="headings", height=16)
+        for c, t, w in self.COLS:
+            self.tree.heading(c, text=t)
+            self.tree.column(c, width=w, anchor="w" if c in "nu" else "e")
+        box.pack(fill="both", expand=True, pady=6)
+        self.note = ttk.Label(frm, foreground="#555", wraplength=720,
+                              justify="left")
+        self.note.pack(anchor="w")
+        self.fill()
+
+    def fill(self):
+        ref = self.refs[self.pick.current()]
+        a = analyse_recipe(self.app.recipe, self.app.db,
+                           self.app.current_mer(), self.app.stage.get(),
+                           self.app.score_context())
+        self.tree.delete(*self.tree.get_children())
+        if a["mass"] > 0:
+            for row in reference_rows(a["totals"], ref, a["missing"],
+                                      self.app.ext.get()):
+                self.tree.insert("", "end", values=[
+                    str(x).replace("≥", ">=") for x in row])
+        self.note.config(
+            text="For comparison only - not an ingredient. '>=' = lower "
+                 "bound: label gives only added amounts, or an ingredient's "
+                 "value is unknown. " + ref.get("note", "")
+                 + ("\nSource: " + ref["source"] if ref.get("source")
+                    else ""))
+
+
 def scrolled_tree(parent, **kw):
     """Treeview with vertical + horizontal scrollbars (grid in its own
     frame) and Shift+wheel for sideways scrolling. Returns (frame, tree)."""
@@ -3552,6 +3668,9 @@ class App(tk.Tk):
             var.trace_add("write", lambda *a: self.recalc())
         ttk.Button(top, text="Export results CSV",
                    command=self.export_results).pack(side="right")
+        ttk.Button(top, text="Compare with reference…",
+                   command=lambda: RefCompareWindow(self)).pack(
+            side="right", padx=6)
         ttk.Button(top, text="Copy results",
                    command=lambda: self.copy_table(False, notes=True)).pack(
             side="right", padx=6)

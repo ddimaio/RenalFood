@@ -95,6 +95,15 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Reference diets
+
+`renal_references.json` holds commercial renal diets for comparison only
+(not ingredients): Recipe tab → Composition → "Compare with a reference
+diet" (Streamlit) or **Compare with reference…** (desktop) shows the
+recipe and the reference per 1000 kcal side by side. Add more entries in
+the same format (label values per 100 g as fed, with kcal; `added_only`
+lists nutrients where the label gives only added amounts).
+
 ## Remembered exclusions
 
 Foods you untick in the generator's list or the optimiser's suggested

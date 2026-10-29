@@ -1,0 +1,39 @@
+[
+ {
+  "name": "Advance Veterinary Diets Renal (dog, dry)",
+  "source": "https://www.advance-affinity.com/en/dog/food-dog/veterinary-diets-renal-1000479.html",
+  "note": "Manufacturer label, per 100 g as fed: protein 16.5%, fat 17.5%, fibre 3.5%, ash 4.5%, Ca 0.65%, P 0.3%, K 0.7%, Na 0.25%, omega-3 0.7%, omega-6 2.9%. Moisture and energy not declared: energy estimated (modified Atwater, 8% moisture assumed) = 382 kcal/100 g, so per-1000 kcal values are approximate. Omega-6 used as linoleic acid. Omega-3 0.7% is total (fish oil + plant), EPA+DHA not declared. Vitamins and trace minerals are ADDED amounts per kg (ingredients add more): vit A 27,000 IU, D3 600 IU, E 600 mg, Fe 86 mg, Cu 8.8 mg, Mn 40 mg, Zn 148 mg, I 1.4 mg, Se 0.1 mg. Retailer listings (e.g. zooplus) show an older label (protein 14.5%, Ca 0.8%, K 0.6%, D3 1800 IU).",
+  "per100g": {
+   "kcal": 382,
+   "water": 8,
+   "protein": 16.5,
+   "fat": 17.5,
+   "fibre": 3.5,
+   "ca": 650,
+   "p": 300,
+   "na": 250,
+   "k": 700,
+   "vit_a": 810,
+   "vit_d": 60,
+   "vit_e": 60,
+   "la": 2.9,
+   "fe": 8.6,
+   "cu": 0.88,
+   "mn": 4.0,
+   "zn": 14.8,
+   "i": 140,
+   "se": 10
+  },
+  "added_only": [
+   "vit_a",
+   "vit_d",
+   "vit_e",
+   "fe",
+   "cu",
+   "mn",
+   "zn",
+   "i",
+   "se"
+  ]
+ }
+]
