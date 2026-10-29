@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29e"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -692,6 +692,44 @@ def per1000_from(g, vecs):
     return kcal, {k: t[KI[k]] * f for k in KEYS}, t
 
 
+# Unknown values: an ingredient with no value for a nutrient could still
+# supply some of it, so a shortfall is only certain beyond what it could
+# plausibly add. "Plausibly" = its grams x the richest KNOWN value of that
+# nutrient among library foods (supplements/binders excluded). Without this
+# cap a pinch of any ingredient with a missing value (e.g. 0.1 g of yeast
+# flakes with no calcium figure) switched the shortfall check off entirely.
+_CAPS = {"key": None, "caps": {}}
+_CAP_CATS = ("food", "commercial food", "imported")
+
+
+def ensure_caps(db):
+    key = (id(db), len(db))
+    if _CAPS["key"] == key:
+        return
+    caps = {}
+    for it in db.values():
+        if it.get("category", "food") not in _CAP_CATS:
+            continue
+        for k in KEYS:
+            v = it["per100g"].get(k)
+            if v is not None and v > caps.get(k, 0.0):
+                caps[k] = v
+    _CAPS.update(key=key, caps=caps)
+
+
+def _upper(g, vecs, per, kcal, unk):
+    """Per-1000 kcal upper bound for nutrients with unknown values."""
+    caps, f, up = _CAPS["caps"], 1000.0 / kcal, {}
+    for k in unk:
+        if k not in caps:
+            continue
+        j = KI[k]
+        extra = sum(gi / 100.0 * caps[k] for gi, v in zip(g, vecs)
+                    if gi > 0 and v[j] is None)
+        up[k] = per[k] + extra * f
+    return up
+
+
 def score_amounts(g, vecs, ctx):
     """Penalty score for gram amounts g (0 = all targets met) and its terms."""
     kcal, per, t = per1000_from(g, vecs)
@@ -700,15 +738,22 @@ def score_amounts(g, vecs, ctx):
     W, terms = ctx["weights"], {}
     R = get_ranges(ctx)
     unk = _unknown(g, vecs)
+    up = _upper(g, vecs, per, kcal, unk)
 
     def add(name, w, val):
         if val > 0 and w > 0:
             terms[name] = terms.get(name, 0.0) + w * val
 
     def bandk(k, v, lo, hi):
-        # an unknown value can only add to the known total, so a shortfall
-        # may not be real - only an excess is certain
-        return _band(v, None if k in unk else lo, hi)
+        # with unknown values the known total is a lower bound: an excess is
+        # certain; a shortfall only beyond the plausible upper bound
+        if k not in unk:
+            return _band(v, lo, hi)
+        if hi is not None and v > hi:
+            return _band(v, None, hi)
+        if lo is not None and k in up and up[k] < lo:
+            return _band(up[k], lo, None)
+        return 0.0
 
     tgt = ctx["kcal_target"]
     add("Energy", W["energy"], ((kcal - tgt) / tgt) ** 2)
@@ -726,9 +771,18 @@ def score_amounts(g, vecs, ctx):
         add("EPA+DHA", W["omega3"],
             bandk("epa_dha", per["epa_dha"], *R["epa_dha"]))
         for k, aim in ctx["aims"].items():
-            if aim and k not in unk:
-                v = p_eff if k == "p" else per[k]
-                add(f"{LABEL[k]} vs aim", W["aim"], ((v - aim) / aim) ** 2)
+            if not aim:
+                continue
+            v = p_eff if k == "p" else per[k]
+            if k not in unk:
+                d = (v - aim) / aim
+            elif k in up:                # true value lies in [v, v_up]
+                v_up = up[k] - (per["p_bind"] if k == "p" else 0.0)
+                d = ((v - aim) / aim if v > aim else
+                     (aim - v_up) / aim if v_up < aim else 0.0)
+            else:
+                continue
+            add(f"{LABEL[k]} vs aim", W["aim"], d ** 2)
     else:
         add("Protein", W["protein"],
             bandk("protein", per["protein"], AAFCO["protein"], None))
@@ -739,9 +793,29 @@ def score_amounts(g, vecs, ctx):
             bandk("k", per["k"], AAFCO["k"], None))
     if per["p"] > 0 and not {"ca", "p"} & unk:
         add("Ca:P ratio", W["ca_p"], _band(per["ca"] / per["p"], *R["ca_p"]))
+    elif per["p"] > 0 and all(k in up for k in ("ca", "p") if k in unk):
+        # unknown Ca and/or P: the true ratio lies in [r_min, r_max]
+        lo_r, hi_r = R["ca_p"]
+        ca_hi = up.get("ca", per["ca"])
+        p_hi = up.get("p", per["p"])
+        r_min, r_max = per["ca"] / p_hi, ca_hi / per["p"]
+        if r_max < lo_r:
+            add("Ca:P ratio", W["ca_p"], _band(r_max, lo_r, None))
+        elif r_min > hi_r:
+            add("Ca:P ratio", W["ca_p"], _band(r_min, None, hi_r))
     add("Calcium (max)", W["ca_p"], _band(per["ca"], None, R["ca_max"]))
-    if W.get("acid") and not {"protein", "p", "k", "mg", "ca"} & unk:
-        add("Acid load", W["acid"], (max(0.0, pral(per)) / 50.0) ** 2)
+    if W.get("acid") and "protein" not in unk:
+        # most favourable case: unknown alkaline minerals at their upper
+        # bound, unknown phosphorus at its known (lower) value
+        best = dict(per)
+        for k in ("k", "mg", "ca"):
+            if k in unk:
+                if k not in up:
+                    best = None
+                    break
+                best[k] = up[k]
+        if best is not None:
+            add("Acid load", W["acid"], (max(0.0, pral(best)) / 50.0) ** 2)
     add("Vitamin D (max)", W["ca_p"], _band(per["vit_d"], None,
                                             AAFCO_MAX["vit_d"]))
     for k in MICROS:
@@ -799,6 +873,7 @@ def _pattern_search(f, x, lo, hi, max_evals=5000):
 
 
 def optimise(names, db, bounds, x0, ctx, use_scipy=True, max_evals=5000):
+    ensure_caps(db)
     """names: ingredients; bounds: [(min, max, locked)] in g/day; x0: start
     grams (locked items keep x0). Returns (grams, score, terms)."""
     vecs = [_vec(db[n]) for n in names]
@@ -1432,6 +1507,7 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     """Everything the results screens show, independent of the GUI.
     Returns dict: mass, totals, missing, summary [(name, unit, value,
     status)], rows [(values10, tag)], breakdown [13-tuples], notes."""
+    ensure_caps(db)
     renal_mode, stage_note = STAGES[stage_name]
     if sctx and "renal" in sctx:
         renal_mode = sctx["renal"]
