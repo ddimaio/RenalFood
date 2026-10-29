@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29q"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29r"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1187,6 +1187,40 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         cur_g, cur_s, cur_t = best[1], best[2], best[3]
         added.append(best[0])
     return base, singles, (cur_n, cur_g, cur_s, cur_t, added)
+
+
+def suggest_substitutions(names, db, bounds, base, ctx, candidates,
+                          progress=None, same_role=True):
+    """Swap each free (unlocked) ingredient of the optimised recipe for each
+    candidate of the same role (or any role), re-optimising all amounts.
+    base = optimise(...) result. Returns [(old, new, names, grams, score,
+    terms)] that improve the score by >= 2 %, best first (best swap per
+    old/new pair)."""
+    g0, s0, _ = base
+    jobs = []
+    for i, n in enumerate(names):
+        if bounds[i][2] or db[n]["category"] == "binder":
+            continue
+        r = ingredient_role(db[n])
+        for c in candidates:
+            if c in names or c not in db:
+                continue
+            if same_role and ingredient_role(db[c]) != r:
+                continue
+            jobs.append((i, n, c))
+    out = []
+    for j, (i, n, c) in enumerate(jobs):
+        if progress:
+            progress(j, len(jobs), f"{n} → {c}")
+        lo, hi = default_bounds(db[c], ctx["kcal_target"])
+        nn = names[:i] + [c] + names[i + 1:]
+        bb = bounds[:i] + [(lo, hi, False)] + bounds[i + 1:]
+        x0 = list(g0[:i]) + [max(lo, 0.0)] + list(g0[i + 1:])
+        g, sc, t = optimise(nn, db, bb, x0, ctx)
+        if sc < s0 * 0.98 and g[i] >= 0.1:
+            out.append((n, c, nn, g, sc, t))
+    out.sort(key=lambda r: r[4])
+    return out
 
 
 MAX_BASES = 1200     # generator: above this, protein/starch pairs are screened
@@ -3293,6 +3327,9 @@ class OptimiseDialog(tk.Toplevel):
         self.do_suggest = tk.BooleanVar(value=True)
         ttk.Checkbutton(row, text="Test additions from the library",
                         variable=self.do_suggest).pack(side="left")
+        self.do_subs = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row, text="Test substitutions (same type)",
+                        variable=self.do_subs).pack(side="left", padx=(8, 0))
         ttk.Label(row, text="   max. to combine").pack(side="left")
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
@@ -3380,20 +3417,29 @@ class OptimiseDialog(tk.Toplevel):
                 self.update()
                 base, singles, combo = (optimise(names, app.db, bounds, x0,
                                                  ctx), [], None)
+            subs = []
+            if self.do_subs.get():
+                pool_s = ([self.cand_names[i] for i in self.cand.curselection()]
+                          if self.do_suggest.get() else
+                          [n for n in app.db if n not in load_excluded()])
+                subs = suggest_substitutions(
+                    names, app.db, bounds, base, ctx, pool_s,
+                    lambda i, t, nm: progress(i, t, "swap " + nm))
         finally:
             if self.winfo_exists():
                 self.run_btn.state(["!disabled"])
                 self.status.config(text="Done.")
         ResultsWindow(app, ctx, names, x0, before, base, singles, combo,
-                      bounds)
+                      bounds, subs=subs)
 
 
 class ResultsWindow(tk.Toplevel):
     def __init__(self, app, ctx, names, x0, before, base, singles, combo,
-                 bounds=None, title="Optimisation results"):
+                 bounds=None, title="Optimisation results", subs=()):
         super().__init__(app)
         self.app = app
         self.bounds = bounds
+        self.subs = list(subs or [])
         self.title(title)
         self.geometry("980x760")
         self.names, self.base, self.singles, self.combo = (names, base,
@@ -3429,6 +3475,13 @@ class ResultsWindow(tk.Toplevel):
             ttk.Spinbox(b, from_=1, to=len(singles), width=4,
                         textvariable=self.pick).pack(side="left")
             ttk.Button(b, text="Apply", command=self.apply_single).pack(
+                side="left", padx=4)
+        if self.subs:
+            ttk.Label(b, text="  Substitution #").pack(side="left")
+            self.pick_s = tk.StringVar(value="1")
+            ttk.Spinbox(b, from_=1, to=min(10, len(self.subs)), width=4,
+                        textvariable=self.pick_s).pack(side="left")
+            ttk.Button(b, text="Apply", command=self.apply_sub).pack(
                 side="left", padx=4)
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
         ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
@@ -3554,6 +3607,16 @@ class ResultsWindow(tk.Toplevel):
             L.append("\nNo single library ingredient improved the score by "
                      "≥2%.")
 
+        if self.subs:
+            L.append("\nSUGGESTED SUBSTITUTIONS – one ingredient swapped for "
+                     "another of the same type, all amounts re-optimised")
+            for i, (o, n, sn, sg, ss, tt) in enumerate(self.subs[:10],
+                                                       start=1):
+                pct = (1 - ss / s) * 100 if s > 0 else 0
+                why = ", ".join(improvement_reasons(terms, tt)) or "–"
+                L.append(f"  {i:>2}. {o} -> {sg[sn.index(n)]:.1f} g {n}  "
+                         f"score {ss:.3f} (-{pct:.0f}%)   improves: {why}")
+
         if self.combo and self.combo[4]:
             cn, cg, cs, ct, added = self.combo
             L.append(f"\nBEST COMBINATION (adds {', '.join(added)})  → "
@@ -3603,6 +3666,13 @@ class ResultsWindow(tk.Toplevel):
 
     def apply(self, names, g, score, label):
         self.app.apply_recipe(names, g, score, label, self.ctx, self)
+
+    def apply_sub(self):
+        try:
+            o, n, sn, sg, ss, tt = self.subs[int(self.pick_s.get()) - 1]
+        except (ValueError, IndexError):
+            return
+        self.apply(sn, sg, ss, f"Optimised, {o} -> {n}")
 
     def apply_single(self):
         try:

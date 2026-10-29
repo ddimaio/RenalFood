@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29q"
+ENGINE_VERSION = "2026.10.29r"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -719,6 +719,15 @@ with tab_opt:
 
         do_sug = st.checkbox("Test additions from the library", True,
                              key="o_sug")
+        do_subs = st.checkbox("Test substitutions (swap each ingredient for "
+                              "another of the same type)", True,
+                              key="o_subs",
+                              help="Each unlocked ingredient is replaced in "
+                                   "turn by every library food of the same "
+                                   "role (protein, starch, vegetable, oil, "
+                                   "supplement…) and all amounts are "
+                                   "re-optimised. Unticked foods below are "
+                                   "not used.")
         max_add = st.slider("Max. additions to combine", 1, 6, 3,
                             key="o_max")
         cand_names = [n for n in names_all
@@ -774,10 +783,25 @@ with tab_opt:
                     with st.spinner("Optimising…"):
                         base = rc.optimise(names, db, bounds, x0, ctx)
                     singles, combo = [], None
+                subs = []
+                if do_subs:
+                    pool_s = (list(cdf.loc[cdf["Use"], "Ingredient"]) if do_sug
+                              else [n for n in names_all
+                                    if n not in ss.excluded])
+                    bar = st.progress(0.0, text="Testing substitutions…")
+
+                    def prog_s(i, total, name):
+                        bar.progress(min(1.0, (i + 1) / max(1, total)),
+                                     text=f"Substitution {i + 1}/{total}: "
+                                          f"{name}")
+                    subs = rc.suggest_substitutions(names, db, bounds, base,
+                                                    ctx, pool_s, prog_s)
+                    bar.empty()
                 ss.opt_result = {"ctx": ctx, "names": names, "x0": x0,
                                  "before": before[0], "base": base,
                                  "singles": singles, "combo": combo,
-                                 "bounds": bounds, "manual": None}
+                                 "bounds": bounds, "manual": None,
+                                 "subs": subs}
 
         r = ss.opt_result
         if r:
@@ -848,6 +872,25 @@ with tab_opt:
             elif r["combo"] is not None:
                 st.info("No single library ingredient improved the score by "
                         "≥2%.")
+            if r.get("subs"):
+                st.markdown("**Suggested substitutions** – one ingredient "
+                            "swapped for another of the same type, all "
+                            "amounts re-optimised")
+                for i, (old_, new_, sn, sg, ss_, tt) in \
+                        enumerate(r["subs"][:10]):
+                    pct = (1 - ss_ / s) * 100 if s > 0 else 0
+                    why = ", ".join(rc.improvement_reasons(terms, tt)) or "–"
+                    gi = sn.index(new_)
+                    cc = st.columns([5, 1])
+                    cc[0].write(f"{i + 1}. **{old_} → {sg[gi]:.1f} g "
+                                f"{new_}** → score {ss_:.3f} (−{pct:.0f}%) · "
+                                f"improves: {why}")
+                    cc[1].button("Apply", key=f"o_sub_{i}",
+                                 on_click=apply_recipe,
+                                 args=(sn, sg, ss_,
+                                       f"Optimised, {old_} → {new_}", ctx))
+            elif r.get("subs") is not None and st.session_state.get("o_subs"):
+                st.caption("No substitution improved the score by ≥2%.")
             if r["combo"] and r["combo"][4]:
                 cn, cg, cs, ct_, added = r["combo"]
                 st.markdown(f"**Best combination** (adds {', '.join(added)})"
