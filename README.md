@@ -85,6 +85,16 @@ noodles), protein foods (soya, haricot and butter beans, split peas, vital
 wheat gluten, cottage cheese, ricotta, natural yoghurt) and peanut butter,
 chia seeds, rice bran and grapeseed oil. Foods toxic to dogs are left out.
 
+`imports/japan_foods.json` (also in the library) has 19 foods from the
+Standard Tables of Food Composition in Japan 2023 (MEXT), added with
+`jp_add.py` from the main, amino-acid and fatty-acid Excel files: okara,
+edamame, natto, soy milk, kabocha, daikon, winter melon, mung bean sprouts,
+lotus root, shirataki, mung bean glass noodles, potato starch, udon, somen
+and sesame, soybean, corn, safflower and perilla oil. The same script
+replaces silken tofu's estimated values with measured ones and fills
+missing amino acids, B5 and trace minerals of other foods (amino acids
+scaled by protein, the rest by dry matter).
+
 An ingredient may carry `"role": "starch"` (or protein, veg, oil,
 supplement, other) in its JSON to override how the generator classes it;
 otherwise the role comes from its energy split.
