@@ -75,6 +75,20 @@ rice, cooked egg white, oils (rapeseed, coconut, linseed, hemp, walnut)
 and mushrooms (white, chestnut, portobello, shiitake, oyster; also in the
 library).
 
+`imports/afcd_foods.json` (also in the library) has 39 dog-safe foods from
+the AFCD, added with `afcd_add.py`: vegetables (cauliflower, cucumber,
+celery, cos lettuce, red pepper, bean sprouts, Brussels sprouts,
+asparagus, beetroot, turnip, swede, parsnip, mangetout, summer and
+butternut squash, pak choi, Chinese leaf, Swiss chard, okra), starches
+(couscous, quinoa, polenta, pearl barley, buckwheat, millet, tapioca, rice
+noodles), protein foods (soya, haricot and butter beans, split peas, vital
+wheat gluten, cottage cheese, ricotta, natural yoghurt) and peanut butter,
+chia seeds, rice bran and grapeseed oil. Foods toxic to dogs are left out.
+
+An ingredient may carry `"role": "starch"` (or protein, veg, oil,
+supplement, other) in its JSON to override how the generator classes it;
+otherwise the role comes from its energy split.
+
 ## Sources
 
 - UC Davis – Nutritional Management of Chronic Renal Disease

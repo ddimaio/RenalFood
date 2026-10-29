@@ -48,7 +48,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29k"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.29l"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -438,6 +438,8 @@ def normalise(item):
                              else float(vals[k])) for k in KEYS}}
     if truthy(item.get("assume_aafco")):
         out["assume_aafco"] = True
+    if item.get("role") in ROLES:       # optional override of the heuristic
+        out["role"] = item["role"]
     return out
 
 
@@ -971,12 +973,16 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
     return base, singles, (cur_n, cur_g, cur_s, cur_t, added)
 
 
+MAX_BASES = 1200     # generator: above this, protein/starch pairs are screened
+PAIR_KEEP = 3        # best starches kept per protein after screening
 ROLES = ("protein", "starch", "veg", "oil", "supplement", "complete",
          "other", "binder")
 
 
 def ingredient_role(item):
     """Heuristic role from category and macronutrient energy split."""
+    if item.get("role") in ROLES:
+        return item["role"]
     v = item["per100g"]
     kcal = v["kcal"] or 0.0
     if item["category"] == "binder":
@@ -1053,11 +1059,6 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     if not groups and not fo_names:
         groups = [[n for n in pool if n not in base_names
                    and roles[n] not in ("binder", "supplement")]]
-    combos = [[]]
-    for grp in groups:
-        combos = [c + [x] for c in combos for x in grp]
-    combos = [[x for x in c if x is not None] for c in combos]
-
     def bnd(n):
         lo, hi = default_bounds(db[n], tgt)
         if roles.get(n) == "veg" and veg_min_g:
@@ -1078,7 +1079,42 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         return [n for i, n in enumerate(names) if i >= start and
                 roles.get(n) == "veg" and (grams is None or grams[i] >= 2)]
 
-    # ---- stage 1
+    # ---- stage 1 (a large library is pre-screened: with more than
+    #      MAX_BASES combinations, every pair of the first two groups -
+    #      protein x starch - is tried alone and only the best PAIR_KEEP
+    #      partners of each first-group food go on to get a vegetable)
+    def _opt(names):
+        extra = names[nb:]
+        return optimise(names, db, fx_b + fo_b + [bnd(n) for n in extra],
+                        fx_g + fo_x0 + [0.0] * len(extra), ctx,
+                        use_scipy=False, max_evals=1500)
+
+    total = 1
+    for grp in groups:
+        total *= len(grp)
+    if total > MAX_BASES and len(groups) >= 3:
+        pairs = [(a, b) for a in groups[0] for b in groups[1]]
+        scored = {}
+        for i, (a, b) in enumerate(pairs):
+            if cancelled():
+                return []
+            if progress and i % 5 == 0:
+                progress("Screening protein/starch pairs", i, len(pairs))
+            scored[(a, b)] = _opt(base_names + [x for x in (a, b)
+                                                if x is not None])[1]
+        heads = [[]]
+        for a in groups[0]:
+            best = sorted(groups[1], key=lambda b: scored[(a, b)])
+            heads += [[a, b] for b in best[:PAIR_KEEP]]
+        heads = heads[1:]
+        rest = groups[2:]
+    else:
+        heads, rest = [[]], groups
+    combos = heads
+    for grp in rest:
+        combos = [c + [x] for c in combos for x in grp]
+    combos = [[x for x in c if x is not None] for c in combos]
+
     bases = []
     for i, combo in enumerate(combos):
         if cancelled():
@@ -1086,9 +1122,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         if progress and i % 5 == 0:
             progress("Testing base combinations", i, len(combos))
         names = base_names + combo
-        g, s, t = optimise(names, db, fx_b + fo_b + [bnd(n) for n in combo],
-                           fx_g + fo_x0 + [0.0] * len(combo), ctx,
-                           use_scipy=False, max_evals=1500)
+        g, s, t = _opt(names)
         bases.append((s, names, g))
     bases.sort(key=lambda b: b[0])
 
@@ -2234,6 +2268,7 @@ class IngredientDialog(tk.Toplevel):
         self.cat.set(item["category"])
         self.cat.grid(row=1, column=1, sticky="we", pady=2)
         self.assume = tk.BooleanVar(value=bool(item.get("assume_aafco")))
+        self.role = item.get("role")
         ttk.Checkbutton(frm, variable=self.assume,
                         text="Complete food: assume AAFCO minimums for "
                              "missing extended nutrients").grid(
@@ -2284,7 +2319,7 @@ class IngredientDialog(tk.Toplevel):
                 return
         self.result = {"name": name, "category": self.cat.get() or "food",
                        "note": self.note.get().strip(), "per100g": vals,
-                       "assume_aafco": self.assume.get()}
+                       "assume_aafco": self.assume.get(), "role": self.role}
         self.destroy()
 
 

@@ -23,7 +23,7 @@ import renal_diet_calc as rc
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29k"
+ENGINE_VERSION = "2026.10.29l"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -961,7 +961,8 @@ with tab_lib:
             new_db[nm] = rc.normalise({
                 "name": nm, "category": rw["category"] or "food",
                 "note": rw["note"] if pd.notna(rw["note"]) else "",
-                "per100g": per, "assume_aafco": flag})
+                "per100g": per, "assume_aafco": flag,
+                "role": orig.get("role") if orig else None})
         ss.db = new_db
         rc.save_db(new_db)
         ss.lib_ver += 1
