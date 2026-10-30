@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30b"
+ENGINE_VERSION = "2026.10.30c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -471,7 +471,14 @@ with tab_rec:
     left, right = st.columns([2, 3], gap="large")
     with left:
         st.subheader("Recipe (grams per day)")
-        df = pd.DataFrame(ss.recipe or [], columns=["Ingredient", "g"])
+        # The editor's input must stay the same between reruns, otherwise
+        # Streamlit drops edits in progress (e.g. a new row with no grams
+        # yet). It is rebuilt only when the recipe is set by the app
+        # (apply, undo, load, scale... all bump rec_ver).
+        if ss.get("rec_base_ver") != ss.rec_ver:
+            ss.rec_base = [list(r) for r in ss.recipe]
+            ss.rec_base_ver = ss.rec_ver
+        df = pd.DataFrame(ss.rec_base or [], columns=["Ingredient", "g"])
         df["Ingredient"] = df["Ingredient"].astype("object")
         df["g"] = df["g"].astype("float")
         ed = st.data_editor(
