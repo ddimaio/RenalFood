@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -410,6 +410,118 @@ for _item in BUILTIN:
 # --------------------------------------------------------------------------
 # Database & calculations
 # --------------------------------------------------------------------------
+# Oxalate (mg/100 g) and label doses for library foods, used to fill
+# older library files that lack them (values from oxalate_fill.py /
+# product labels). Only empty values are filled.
+OXALATE_DEFAULTS = {
+    'Algal oil (vegan omega-3)': 0,
+    'Aluminium hydroxide (as phosphate binder)': 0,
+    'Apple, peeled, raw': 1.4,
+    'Asparagus, boiled': 5.6,
+    'Banana': 5.1,
+    'Beetroot, boiled': 56.5,
+    'Broccoli, boiled': 6.7,
+    'Buckwheat, boiled': 123.5,
+    'Butter (lima) beans, boiled': 10.6,
+    'Butternut squash, boiled': 4,
+    'Cabbage, boiled': 3.8,
+    'Calcium acetate (as phosphate binder)': 0,
+    'Calcium carbonate': 0,
+    'Calcium carbonate (as phosphate binder)': 0,
+    'Calcium citrate (tetrahydrate)': 0,
+    'Carrot, boiled': 11.5,
+    'Cauldron Authentic Tofu (organic, 396 g)': 8,
+    'Cauliflower, boiled': 3.3,
+    'Celery, raw': 25,
+    'Chia seeds, dry': 469.2,
+    'Chickpeas, boiled': 10.5,
+    'Chinese leaf cabbage, boiled': 3.8,
+    'Coconut oil': 0,
+    'Corn oil': 0,
+    'Cottage cheese': 0,
+    'Courgette, boiled': 4,
+    'Couscous, boiled': 16.6,
+    'Cucumber, peeled, raw': 4.2,
+    'Dafy V-Integra Adult Dog homemade diet balancer': 0,
+    'Dafy V-Integra Renal homemade diet balancer': 0,
+    'Daikon (white radish), boiled': 1,
+    'Edamame, boiled': 29.3,
+    'Egg white, cooked (boiled/poached, no fat)': 0,
+    'Egg white, raw': 0,
+    'Egg yolk, raw': 0,
+    'Egg, whole, hard-boiled': 0,
+    'Egg, whole, raw': 0,
+    'Eggshell powder': 0,
+    'Engevita organic yeast flakes (purple)': 0,
+    'Engevita yeast flakes + B12 (blue)': 0,
+    'Engevita yeast flakes protein & fibre (pink)': 0,
+    'Engevita yeast flakes vitamin D & B12 (green)': 0,
+    'Fish oil (salmon)': 0,
+    'Grapeseed oil': 0,
+    'Green beans, boiled': 24.2,
+    'Haricot beans, boiled': 55.8,
+    'Hemp seed oil': 0,
+    'Just Be Kind vegan supplement': 0,
+    'Kabocha squash, boiled': 4,
+    'Lentils, boiled': 8.3,
+    'Linseed (flaxseed) oil': 0,
+    'Millet, boiled': 36.8,
+    'Mushrooms, chestnut (crimini), raw weight': 1.3,
+    'Mushrooms, oyster, raw weight': 1.3,
+    'Mushrooms, portobello, grilled': 1.3,
+    'Mushrooms, shiitake, cooked': 1.3,
+    'Mushrooms, white (button), boiled': 1.3,
+    'Natural yoghurt (~3% fat)': 2.4,
+    'Oats, rolled, dry': 32.7,
+    'Okra, boiled': 100,
+    'Olive oil': 0,
+    'Pak choi (bok choy), steamed': 3.2,
+    'Parsnip, boiled': 19.2,
+    'Pasta, boiled (unenriched)': 18.8,
+    'Peanut butter, no added salt or sugar': 124.1,
+    'Pearl barley, boiled': 10.7,
+    'Peas, green, boiled': 2.5,
+    'Perilla oil': 0,
+    'Polenta (cornmeal), boiled': 2,
+    'Potassium citrate (monohydrate)': 0,
+    'Potassium gluconate': 0,
+    'Potato, boiled, no skin': 23.1,
+    'Pumpkin, boiled': 5.8,
+    'Quinoa, boiled': 61.1,
+    'Rapeseed oil': 0,
+    'Rice bran oil': 0,
+    'Rice, brown, boiled': 5.6,
+    'Rice, white, boiled (unenriched)': 1.1,
+    'Rice, white, raw (dry, unenriched)': 3.1,
+    'Ricotta': 0,
+    'Safflower oil (high linoleic)': 0,
+    'Salt (sodium chloride)': 0,
+    'Sesame oil': 0,
+    'Sodium bicarbonate': 0,
+    'Soy milk, unsweetened': 3.7,
+    'Soya beans, boiled': 45.3,
+    'Soybean oil': 0,
+    'Spinach, boiled': 566.7,
+    'Split peas, boiled': 4.1,
+    'Squash, summer (button), boiled': 4,
+    'Sunflower oil': 0,
+    'Swede, boiled': 4.7,
+    'Sweet potato, boiled, no skin': 126.4,
+    'Swiss chard (silverbeet), boiled': 334.9,
+    'Tapioca, boiled': 5,
+    'ThorneVet B ComplexVET soft chew (2 g)': 0,
+    'Tofu, firm (calcium-set)': 8,
+    'Tofu, silken': 8,
+    'Turnip, boiled': 2.6,
+    'Walnut oil': 0,
+}
+MAX_DOSE_DEFAULTS = {
+    'Dafy V-Integra Adult Dog homemade diet balancer': '10:7',
+    'ThorneVet B ComplexVET soft chew (2 g)': '0.176/kg',
+    'Dafy V-Integra Renal homemade diet balancer': '5:4, 10:8, 15:10, 25:15, 40:20, 60:28',
+}
+
+
 def load_db():
     db = {}
     if os.path.exists(DB_PATH):
@@ -426,6 +538,11 @@ def load_db():
                 if cur.get(k) is None and item["per100g"].get(k) is not None:
                     cur[k] = float(item["per100g"][k])
         db.setdefault(item["name"], normalise(item))
+    for n, it in db.items():          # fill values added in later versions
+        if it["per100g"].get("oxalate") is None and n in OXALATE_DEFAULTS:
+            it["per100g"]["oxalate"] = float(OXALATE_DEFAULTS[n])
+        if not it.get("max_dose") and n in MAX_DOSE_DEFAULTS:
+            it["max_dose"] = MAX_DOSE_DEFAULTS[n]
     save_db(db)
     return db
 
