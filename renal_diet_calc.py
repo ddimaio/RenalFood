@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30g"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30i"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -751,7 +751,7 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 {''.join(rows_i)}{tot_row}</table>
 <div class="small">Weigh with kitchen scales. Amounts are for cooked foods
 where the name says so (e.g. "boiled"). {f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 else ''}
-Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
+Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
 
 <h2>Key nutrients</h2>
 <table><tr><th>Nutrient</th><th>Unit</th><th class=n>Per day</th>
@@ -1560,17 +1560,23 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         lo, hi = default_bounds(db[c], ctx["kcal_target"])
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
                            list(base[0]) + [0.0], ctx, **QUICK)
-        if s < base[1] * 0.995 and g[-1] >= 0.1:
+        if g[-1] >= 0.5 and round(s, 3) <= round(base[1], 3):
             screened.append((s, c, g))
-    screened.sort(key=lambda r: r[0])
+    # equal scores: prefer the higher rating when choosing what to refine
+    screened.sort(key=lambda r: rank_key(
+        r[0], recipe_rating(names + [r[1]], r[2], db, ctx)[0]))
     singles = []
+    r_base = recipe_rating(names, base[0], db, ctx)[0]
     for s0, c, g0 in screened[:REFINE_TOP]:
         lo, hi = default_bounds(db[c], ctx["kcal_target"])
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
                            g0, ctx)
-        if s < base[1] * 0.98 and g[-1] >= 0.1:
+        if g[-1] >= 0.5 and improves(
+                s, base[1], recipe_rating(names + [c], g, db, ctx)[0],
+                r_base):
             singles.append((c, g, s, t))
-    singles.sort(key=lambda r: r[2])
+    singles.sort(key=lambda r: rank_key(
+        r[2], recipe_rating(names + [r[0]], r[1], db, ctx)[0]))
 
     cur_n, cur_b, cur_g, cur_s, cur_t = (list(names), list(bounds),
                                          list(base[0]), base[1], base[2])
@@ -1584,9 +1590,15 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
             lo, hi = default_bounds(db[c], ctx["kcal_target"])
             g, s, t = optimise(cur_n + [c], db, cur_b + [(lo, hi, False)],
                                cur_g + [0.0], ctx, **QUICK)
-            if g[-1] >= 0.1 and (best is None or s < best[2]):
+            if g[-1] >= 0.5 and (best is None or rank_key(
+                    s, recipe_rating(cur_n + [c], g, db, ctx)[0]) <
+                    rank_key(best[2], recipe_rating(cur_n + [best[0]],
+                                                    best[1], db, ctx)[0])):
                 best = (c, g, s, t)
-        if best is None or best[2] > cur_s * 0.98:
+        if best is None or not improves(
+                best[2], cur_s,
+                recipe_rating(cur_n + [best[0]], best[1], db, ctx)[0],
+                recipe_rating(cur_n, cur_g, db, ctx)[0]):
             break
         lo, hi = default_bounds(db[best[0]], ctx["kcal_target"])
         cur_n, cur_b = cur_n + [best[0]], cur_b + [(lo, hi, False)]
@@ -1717,6 +1729,94 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
     return cur_n, g, sc, t, added
 
 
+# ---- Rating: a 0-100 tie-breaker for recipes with the same score --------
+# The score only counts problems (0 = every target met). The rating rewards
+# how WELL a recipe meets them, so equal-score recipes can be ranked:
+#   phosphorus  low within the renal range (lower = better, down to its min)
+#   protein     close to the stage aim
+#   coverage    share of AAFCO minimums met (fat, Ca, Mg, vitamins; extended
+#               nutrients too when on) - also those the score is told to ignore
+#   data        share of nutrients with no unknown ingredient values
+#   oxalate     low oxalate
+#   balance     sodium/potassium/EPA+DHA away from the range edges, Ca:P
+#               near the middle of its range
+RATING_W = {"phosphorus": 25, "coverage": 25, "protein": 10, "data": 15,
+            "oxalate": 15, "balance": 10}
+RATING_LABELS = {"phosphorus": "Phosphorus low", "coverage":
+                 "Minimums covered", "protein": "Protein near aim",
+                 "data": "Data complete", "oxalate": "Oxalate low",
+                 "balance": "Na/K/EPA/Ca:P balance"}
+
+
+def recipe_rating(names, grams, db, ctx):
+    """(rating 0-100, {part: 0-1}) - see RATING_W."""
+    vecs = [_vec(db[n]) for n in names]
+    kcal, per, _ = per1000_from(grams, vecs)
+    if kcal <= 0:
+        return 0.0, {}
+    unk = _unknown(grams, vecs)
+    R = get_ranges(ctx)
+    aims = ctx.get("aims") or {}
+    renal = ctx.get("renal", True)
+    clip = lambda x: max(0.0, min(1.0, x))
+    parts = {}
+    lo, hi = R["p"]
+    p = max(0.0, per["p"] - per["p_bind"])
+    parts["phosphorus"] = clip(1 - (p - lo) / (hi - lo)) if renal else \
+        clip(1 - max(0.0, p - AAFCO["p"]) / AAFCO["p"])
+    a = aims.get("protein") or sum(R["protein"]) / 2
+    parts["protein"] = clip(1 - abs(per["protein"] - a) / a)
+    keys = list(MICROS + VITAMINS) + ([k for k in EXT_KEYS if k in AAFCO]
+                                      if ctx.get("extended") else [])
+    keys = [k for k in keys if k in AAFCO]
+    parts["coverage"] = sum(min(1.0, per[k] / AAFCO[k]) for k in keys) \
+        / len(keys)
+    scored = [k for k in BASE_KEYS + (EXT_KEYS if ctx.get("extended")
+                                      else [])
+              if k not in ("base_meq", "p_bind")]
+    parts["data"] = 1 - sum(1 for k in scored if k in unk) / len(scored)
+    lim = R.get("ox_max", OXALATE_MAX)
+    parts["oxalate"] = clip(1 - per["oxalate"] / (2 * lim))
+    bal = []
+    for k in ("na", "k", "epa_dha"):
+        lo_, hi_ = R[k]
+        if hi_ > lo_:
+            x = (per[k] - lo_) / (hi_ - lo_)          # 0..1 inside range
+            bal.append(clip(1 - abs(x - 0.5) * 2) ** 0.5 if 0 <= x <= 1
+                       else 0.0)
+    if per["p"] > 0:
+        lo_, hi_ = R["ca_p"]
+        x = (per["ca"] / per["p"] - lo_) / (hi_ - lo_)
+        bal.append(clip(1 - abs(x - 0.5) * 2) ** 0.5 if 0 <= x <= 1
+                   else 0.0)
+    parts["balance"] = sum(bal) / len(bal) if bal else 0.0
+    tot = sum(RATING_W.values())
+    return round(sum(RATING_W[k] * parts[k] for k in RATING_W) / tot * 100,
+                 1), parts
+
+
+def improves(s_new, s_old, r_new=None, r_old=None):
+    """A real improvement: score >= 2 % AND >= 0.001 lower, or the same
+    score (to 3 decimals) with a rating at least 1 point higher."""
+    if s_new < s_old * 0.98 and s_old - s_new >= 1e-3:
+        return True
+    return (r_new is not None and r_old is not None and
+            round(s_new, 3) <= round(s_old, 3) and r_new >= r_old + 1.0)
+
+
+def score_change(s_new, s_old):
+    """'(-35%)' for a real score change, '(same score)' when both are ~0."""
+    if s_old < 1e-3 or abs(s_old - s_new) < 1e-3:
+        return "(same score)"
+    return f"({(s_new / s_old - 1) * 100:+.0f}%)"
+
+
+def rank_key(score, rating):
+    """Sort key: score first (rounded, so tiny differences tie), then the
+    higher rating."""
+    return (round(score, 3), -rating)
+
+
 QUICK = {"use_scipy": False, "max_evals": 800}   # screening searches
 REFINE_TOP = 15      # best screened candidates re-optimised fully
 
@@ -1787,15 +1887,19 @@ def suggest_substitutions(names, db, bounds, base, ctx, candidates,
         bb = bounds[:i] + [(lo, hi, False)] + bounds[i + 1:]
         x0 = list(g0[:i]) + [max(lo, 0.0)] + list(g0[i + 1:])
         g, sc, t = optimise(nn, db, bb, x0, ctx, **QUICK)
-        if sc < s0 * 0.995 and g[i] >= 0.1:
+        if round(sc, 3) <= round(s0, 3) and g[i] >= 0.5:
             screened.append((sc, i, n, c, nn, bb, g))
-    screened.sort(key=lambda r: r[0])
+    screened.sort(key=lambda r: rank_key(
+        r[0], recipe_rating(r[4], r[6], db, ctx)[0]))
+    r0 = recipe_rating(names, g0, db, ctx)[0]
     out = []
     for _, i, n, c, nn, bb, gq in screened[:REFINE_TOP]:
         g, sc, t = optimise(nn, db, bb, gq, ctx)
-        if sc < s0 * 0.98 and g[i] >= 0.1:
+        if g[i] >= 0.5 and improves(sc, s0,
+                                    recipe_rating(nn, g, db, ctx)[0], r0):
             out.append((n, c, nn, g, sc, t))
-    out.sort(key=lambda r: r[4])
+    out.sort(key=lambda r: rank_key(r[4], recipe_rating(r[2], r[3], db,
+                                                          ctx)[0]))
     return out
 
 
@@ -2107,8 +2211,15 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                 per_veg[f] = per_veg.get(f, 0) + 1
             out.append(r)
             if len(out) >= n_recipes:
-                return sorted(out, key=lambda x: (round(x[2], 4), len(x[0])))
-    return sorted(out, key=lambda x: (round(x[2], 4), len(x[0])))
+                return _rank(out, db, ctx)
+    return _rank(out, db, ctx)
+
+
+def _rank(results, db, ctx):
+    """Generator results: lowest score first; equal scores (to 3 decimals)
+    by the higher rating."""
+    return sorted(results, key=lambda x: rank_key(
+        x[2], recipe_rating(x[0], x[1], db, ctx)[0]))
 
 
 def improvement_reasons(before, after, n=3):
@@ -2601,11 +2712,19 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None, meals=1):
         sc, terms = score_amounts([g for n, g in recipe if n in db],
                                   [_vec(db[n]) for n in names], sctx)
         res["score"], res["terms"] = sc, terms
+        res["rating"], res["rating_parts"] = recipe_rating(
+            names, [g for n, g in recipe if n in db], db, sctx)
         top = [k for k, v in sorted(terms.items(), key=lambda kv: -kv[1])
                if v > 1e-3][:3]
         summary.insert(0, ("Score (0 = all targets met)", "", f"{sc:.3f}",
                            "gaps: " + ", ".join(top) if top
                            else "all targets met"))
+        rt, rp = recipe_rating(names, [g for n, g in recipe if n in db], db,
+                               sctx)
+        summary.insert(1, ("Rating (tie-breaker, higher = better)", "/100",
+                           f"{rt:.0f}", " · ".join(
+                               f"{RATING_LABELS[k]} {rp[k] * 100:.0f}%"
+                               for k in RATING_W)))
     res["summary"] = summary
 
     assumed = assumed_in(recipe, db)
@@ -3748,8 +3867,11 @@ class GenResultsWindow(tk.Toplevel):
         for i, (names, g, s, terms) in enumerate(self.results, start=1):
             vecs = [_vec(db[n]) for n in names]
             kcal, per, _ = per1000_from(g, vecs)
-            L.append(f"RECIPE {i}   score {s:.3f}   "
+            rt, rp = recipe_rating(names, g, db, ctx)
+            L.append(f"RECIPE {i}   score {s:.3f}   rating {rt:.0f}/100   "
                      f"({sum(g):.0f} g/day, {kcal:.0f} kcal)")
+            L.append("  rating: " + ", ".join(
+                f"{RATING_LABELS[k]} {rp[k] * 100:.0f}%" for k in RATING_W))
             w = max(len(n) for n in names) + 2
             for j, (n, a) in enumerate(zip(names, g)):
                 kc = (db[n]["per100g"]["kcal"] or 0) * a / 100
@@ -4314,8 +4436,10 @@ class ResultsWindow(tk.Toplevel):
         goal = ("every target met" if not rm else
                 f"same as {rm['name']} per 1000 kcal" +
                 ("" if rm["only"] else " and every renal target met"))
+        c0r = {k: v for k, v in ctx.items() if k != "ref_match"}
         L.append(f"Score (0 = {goal}): current {before[0]:.3f} -> "
-                 f"optimised {s:.3f}")
+                 f"optimised {s:.3f}   rating "
+                 f"{recipe_rating(names, g, db, c0r)[0]:.0f}/100")
         L.append(f"Energy target: {ctx['kcal_target']:.0f} kcal/day\n")
         ref = next((r for r in load_references() if rm and
                     r["name"] == rm["name"]), None)
@@ -4352,8 +4476,10 @@ class ResultsWindow(tk.Toplevel):
             for i, (c, gg, ss, tt) in enumerate(self.singles[:10], start=1):
                 pct = (1 - ss / s) * 100 if s > 0 else 0
                 why = ", ".join(improvement_reasons(terms, tt)) or "–"
-                L.append(f"  {i:>2}. + {gg[-1]:.1f} g {c}  → score {ss:.3f} "
-                         f"(−{pct:.0f}%)   improves: {why}")
+                L.append(f"  {i:>2}. + {gg[-1]:.1f} g {c}  -> score {ss:.3f} "
+                         f"{score_change(ss, s)}  rating "
+                         f"{recipe_rating(names + [c], gg, db, c0r)[0]:.0f}"
+                         f"   improves: {why}")
         elif self.combo is not None:
             L.append("\nNo single library ingredient improved the score by "
                      "≥2%.")
@@ -4374,7 +4500,9 @@ class ResultsWindow(tk.Toplevel):
                 pct = (1 - ss / s) * 100 if s > 0 else 0
                 why = ", ".join(improvement_reasons(terms, tt)) or "–"
                 L.append(f"  {i:>2}. {o} -> {sg[sn.index(n)]:.1f} g {n}  "
-                         f"score {ss:.3f} (-{pct:.0f}%)   improves: {why}")
+                         f"score {ss:.3f} {score_change(ss, s)}  rating "
+                         f"{recipe_rating(sn, sg, db, c0r)[0]:.0f}"
+                         f"   improves: {why}")
 
         if self.combo and self.combo[4]:
             cn, cg, cs, ct, added = self.combo

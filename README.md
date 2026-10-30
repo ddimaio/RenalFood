@@ -104,6 +104,17 @@ with Extended nutrients on); the list shows each food's missing nutrients.
 The optimiser has the same option for its suggested additions and
 substitutions. Always-include and fixed-base items are kept.
 
+## Rating (tie-breaker)
+
+The score only counts problems, so many recipes reach 0. The **rating**
+(0-100, higher = better) shows how well a recipe meets the targets:
+phosphorus low within the renal range (25), AAFCO minimums covered incl.
+vitamins and extended nutrients (25), data complete (15), oxalate low (15),
+protein near the aim (10), sodium/potassium/EPA+DHA/Ca:P away from the
+range edges (10). Generated recipes with the same score are ranked by it,
+and the optimiser suggests additions/substitutions that keep the score but
+raise the rating by at least 1 point.
+
 ## Printing a recipe
 
 **🖨️ Printable recipe** (Streamlit, Recipe tab) downloads an A4 page;

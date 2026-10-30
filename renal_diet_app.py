@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30g"
+ENGINE_VERSION = "2026.10.30i"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -581,6 +581,12 @@ with tab_rec:
                 m = st.columns(5)
             m[0].metric("Score", f"{a['score']:.3f}" if a["score"]
                         is not None else "–", help="0 = all targets met")
+            if a.get("rating") is not None:
+                st.caption(f"**Rating {a['rating']:.0f}/100** (tie-breaker "
+                           "for equal scores; higher = better) – " +
+                           " · ".join(f"{rc.RATING_LABELS[k]} "
+                                      f"{a['rating_parts'][k] * 100:.0f}%"
+                                      for k in rc.RATING_W))
             m[1].metric("kcal/day", f"{t['kcal']:.0f}",
                         f"{t['kcal'] - need_now():+.0f} vs need")
             m[2].metric("Protein g", f"{t['protein'] * k1000:.0f}",
@@ -1009,13 +1015,16 @@ with tab_opt:
             ctx = r["ctx"]
             g, s, terms = r["base"]
             st.divider()
+            _c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
+            rt_o = rc.recipe_rating(r["names"], g, db, _c0)[0]
             rm_ = ctx.get("ref_match")
             st.markdown(f"**Score:** current {r['before']:.3f} → optimised "
                         f"**{s:.3f}**  " + (
                             f"(0 = same as {rm_['name']} per 1000 kcal"
                             + (")" if rm_["only"] else
                                " and every renal target met)")
-                            if rm_ else "(0 = every target met)"))
+                            if rm_ else "(0 = every target met)")
+                        + f" · rating **{rt_o:.0f}**/100")
             if rm_:
                 ref_o = next((r_ for r_ in rc.load_references()
                               if r_["name"] == rm_["name"]), None)
@@ -1098,8 +1107,11 @@ with tab_opt:
                     pct = (1 - ss_ / s) * 100 if s > 0 else 0
                     why = ", ".join(rc.improvement_reasons(terms, tt)) or "–"
                     cc = st.columns([5, 1])
+                    rt_s = rc.recipe_rating(r["names"] + [c], gg, db, _c0)[0]
                     cc[0].write(f"{i + 1}. **+ {gg[-1]:.1f} g {c}** → score "
-                                f"{ss_:.3f} (−{pct:.0f}%) · improves: {why}")
+                                f"{ss_:.3f} {rc.score_change(ss_, s)} · rating "
+                                f"{rt_s:.0f} (was {rt_o:.0f}) · improves: "
+                                f"{why}")
                     cc[1].button("Apply", key=f"o_s_{i}",
                                  on_click=apply_recipe,
                                  args=(r["names"] + [c], gg, ss_,
@@ -1115,7 +1127,8 @@ with tab_opt:
                     ch = (rs / s - 1) * 100 if s > 0 else 0
                     cc = st.columns([5, 1])
                     cc[0].write(f"{i + 1}. **− {rm_n}** → score {rs:.3f} "
-                                f"({ch:+.0f}%)")
+                                f"({ch:+.0f}%) · rating "
+                                f"{rc.recipe_rating(rn, rg, db, _c0)[0]:.0f}")
                     cc[1].button("Apply", key=f"o_rem_{i}",
                                  on_click=apply_recipe,
                                  args=(rn, rg, rs, f"Optimised − {rm_n}",
@@ -1133,9 +1146,12 @@ with tab_opt:
                     why = ", ".join(rc.improvement_reasons(terms, tt)) or "–"
                     gi = sn.index(new_)
                     cc = st.columns([5, 1])
+                    rt_s = rc.recipe_rating(sn, sg, db, _c0)[0]
                     cc[0].write(f"{i + 1}. **{old_} → {sg[gi]:.1f} g "
-                                f"{new_}** → score {ss_:.3f} (−{pct:.0f}%) · "
-                                f"improves: {why}")
+                                f"{new_}** → score {ss_:.3f} "
+                                f"{rc.score_change(ss_, s)} · rating "
+                                f"{rt_s:.0f} (was {rt_o:.0f}) · improves: "
+                                f"{why}")
                     cc[1].button("Apply", key=f"o_sub_{i}",
                                  on_click=apply_recipe,
                                  args=(sn, sg, ss_,
@@ -1145,7 +1161,8 @@ with tab_opt:
             if r["combo"] and r["combo"][4]:
                 cn, cg, cs, ct_, added = r["combo"]
                 st.markdown(f"**Best combination** (adds {', '.join(added)})"
-                            f" → score **{cs:.3f}**")
+                            f" → score **{cs:.3f}** · rating "
+                            f"{rc.recipe_rating(cn, cg, db, _c0)[0]:.0f}")
                 cc = st.columns(2)
                 show_df(cc[0], recipe_table(cn, cg, added), hide_index=True,
                                 **FULL)
@@ -1411,11 +1428,16 @@ with tab_gen:
         for i, (names, g, s, terms) in enumerate(gr["res"]):
             vecs = [rc._vec(db[n]) for n in names]
             kcal, per, _ = rc.per1000_from(g, vecs)
-            title = (f"Recipe {i + 1} · score {s:.3f} · {sum(g):.0f} g/day · "
+            rt_, rparts = rc.recipe_rating(names, g, db, ctx)
+            title = (f"Recipe {i + 1} · score {s:.3f} · rating {rt_:.0f} · "
+                     f"{sum(g):.0f} g/day · "
                      + ", ".join(n.split(",")[0] for n, a in zip(names, g)
                                  if rc.ingredient_role(db[n]) in
                                  ("protein", "starch", "veg")))
             with st.expander(title, expanded=(i == 0)):
+                st.caption("Rating " + f"{rt_:.0f}/100 – " + " · ".join(
+                    f"{rc.RATING_LABELS[k]} {rparts[k] * 100:.0f}%"
+                    for k in rc.RATING_W))
                 cc = st.columns([3, 2])
                 show_df(cc[0], pd.DataFrame({
                     "Ingredient": names,
