@@ -1659,7 +1659,8 @@
    "i": 6000.0,
    "se": 150.0,
    "oxalate": 0.0
-  }
+  },
+  "max_dose": "10:7"
  },
  {
   "name": "Daikon (white radish), boiled",
@@ -5734,7 +5735,8 @@
    "i": null,
    "se": null,
    "oxalate": 0.0
-  }
+  },
+  "max_dose": "0.176/kg"
  },
  {
   "name": "Tofu, firm (calcium-set)",
@@ -6156,6 +6158,7 @@
    "i": 4500.0,
    "se": 550.0,
    "oxalate": 0.0
-  }
+  },
+  "max_dose": "5:4, 10:8, 15:10, 25:15, 40:20, 60:28"
  }
 ]

@@ -117,6 +117,21 @@ Optimise tab (Streamlit) / **Optimise…** (desktop), in steps:
 Renal, a phosphorus-free vitamin-mineral balancer (vegetarian; mostly
 calcium, potassium and magnesium carbonates). From the manufacturer's label.
 
+## Recommended maximum amounts
+
+An ingredient can carry a recommended maximum (label dose) in g/day:
+column *Recommended max g/day* in the library (Streamlit), *Recommended
+max g/day* in the desktop ingredient editor, or `max_dose` in JSON/CSV.
+Write a fixed amount (`7`), an amount per kg body weight (`0.18/kg`) or a
+weight table (`5:4, 10:8, 15:10` = up to 5 kg 4 g, up to 10 kg 8 g...).
+The optimiser fills **Max g** with it for the dog's weight, says where
+each value came from and flags current amounts above it; the generator and
+suggested additions use it too. Concentrated EPA+DHA oils (fish, algal)
+get a max from the upper limit of 2800 mg EPA+DHA per 1000 kcal of the
+energy target. Set so far: ThorneVet B ComplexVET (1 chew per 11 kg =
+0.176 g/kg), Dafy V-Integra Renal (label table) and V-Integra Adult
+(7 g up to 10 kg - only that band is known).
+
 ## Only ingredients with complete data
 
 Generator: "Only ingredients with complete data" (and "…but allow missing

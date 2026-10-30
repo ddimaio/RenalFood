@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.31a"
+ENGINE_VERSION = "2026.10.31b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -851,11 +851,15 @@ with tab_opt:
 
         # ---- 1 · ingredients & limits
         st.markdown("#### 1 · Ingredients & limits")
-        rows = []
+        rows, recs = [], []
+        _bw = ctx0.get("bw")
         for n, g in ss.recipe:
-            lo, hi = rc.default_bounds(db[n], _kcal_now)
+            lo, hi = rc.default_bounds(db[n], _kcal_now, _bw)
+            rec = rc.recommended_max(db[n], _bw, _kcal_now)
+            if rec:
+                recs.append((n, g, rec))
             rows.append({"Ingredient": n, "Current g": g, "Min g": lo,
-                         "Max g": max(hi, g),
+                         "Max g": hi if rec else max(hi, g),
                          "Lock": db[n]["category"] == "binder"})
         bdf = st.data_editor(
             pd.DataFrame(rows), hide_index=True, **FULL,
@@ -866,6 +870,13 @@ with tab_opt:
                 "Lock at current", help="Keep this amount exactly (e.g. "
                                         "breakfast kibble). Binders are "
                                         "always locked.")})
+        if recs:
+            st.caption("Max g filled in from recommended amounts"
+                       + (f" for {_bw:g} kg" if _bw else "") + ": " +
+                       "; ".join(f"{n} ≤ {r_[0]:g} g ({r_[1]})"
+                                 + (f" – **current {g:g} g is above it**"
+                                    if g > r_[0] + 1e-9 else "")
+                                 for n, g, r_ in recs) + ".")
 
         # ---- 2 · goal
         st.markdown("#### 2 · Goal")
@@ -1160,7 +1171,8 @@ with tab_opt:
             def bounds_for(nn):
                 bm = dict(zip(r["names"], r["bounds"]))
                 return [bm.get(n) or (*rc.default_bounds(
-                    db[n], ctx["kcal_target"]), False) for n in nn]
+                    db[n], ctx["kcal_target"], ctx.get("bw")), False)
+                        for n in nn]
 
             with st.expander("5 · Fine-tune yourself – add or remove "
                              "specific foods and re-optimise",
@@ -1456,15 +1468,23 @@ with tab_lib:
                "note": it.get("note", "")}
         row.update({k: it["per100g"][k] for k in rc.KEYS})
         row["assume_aafco"] = bool(it.get("assume_aafco"))
+        row["max_dose"] = it.get("max_dose", "")
         lib_rows.append(row)
     full_df = pd.DataFrame(lib_rows)        # all columns, for export
     flag_col = ["assume_aafco"] if ss.ext else []   # extended mode only
-    ldf = full_df[["name", "category", "note"] + flag_col + lib_keys]
+    ldf = full_df[["name", "category", "note", "max_dose"] + flag_col
+                  + lib_keys]
     cfg = {"category": st.column_config.SelectboxColumn(
         "category", options=["food", "supplement", "binder",
                              "commercial food", "imported"])}
     cfg.update({k: st.column_config.NumberColumn(
         f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in lib_keys})
+    cfg["max_dose"] = st.column_config.TextColumn(
+        "Recommended max g/day",
+        help="Label dose, used as the optimiser's default Max g: a number "
+             "(7), per kg body weight (0.18/kg) or a weight table "
+             "(5:4, 10:8, 15:10 = up to 5 kg 4 g, up to 10 kg 8 g...). "
+             "Blank = none.")
     cfg["assume_aafco"] = st.column_config.CheckboxColumn(
         "Complete food (assume AAFCO)",
         help="Missing extended nutrients are assumed to be at the AAFCO "
@@ -1478,7 +1498,18 @@ with tab_lib:
                          hide_index=True, **FULL,
                          height=420, column_config=cfg)
     lc = st.columns(3)
-    if lc[0].button("💾 Save library changes", type="primary"):
+    _bad_md = []
+    for _, rw in led.iterrows():
+        try:
+            rc.parse_max_dose(rw["max_dose"] if pd.notna(rw["max_dose"])
+                              else "")
+        except (ValueError, TypeError):
+            _bad_md.append(str(rw["name"]))
+    if _bad_md:
+        st.error("Recommended max not understood for: " + ", ".join(_bad_md)
+                 + " – write e.g. 7, 0.18/kg or 5:4, 10:8.")
+    if lc[0].button("💾 Save library changes", type="primary",
+                    disabled=bool(_bad_md)):
         new_db = {}
         for idx, rw in led.iterrows():
             nm = str(rw["name"]).strip() if pd.notna(rw["name"]) else ""
@@ -1500,7 +1531,9 @@ with tab_lib:
                 "name": nm, "category": rw["category"] or "food",
                 "note": rw["note"] if pd.notna(rw["note"]) else "",
                 "per100g": per, "assume_aafco": flag,
-                "role": orig.get("role") if orig else None})
+                "role": orig.get("role") if orig else None,
+                "max_dose": rw["max_dose"] if pd.notna(rw["max_dose"])
+                else ""})
         ss.db = new_db
         rc.save_db(new_db)
         ss.lib_ver += 1
@@ -1513,9 +1546,11 @@ with tab_lib:
                           mime="text/csv")
     tmpl = io.StringIO()
     wt = csv.writer(tmpl)
-    wt.writerow(["name", "category", "note"] + rc.KEYS + ["assume_aafco"])
+    wt.writerow(["name", "category", "note"] + rc.KEYS +
+                ["assume_aafco", "max_dose"])
     wt.writerow(["# units per 100 g ->", "", ""] +
-                [rc.UNIT[k] for k in rc.KEYS] + ["1 = complete food"])
+                [rc.UNIT[k] for k in rc.KEYS] +
+                ["1 = complete food", "g/day: 7, 0.18/kg or 5:4, 10:8"])
     lc[2].download_button("⬇️ CSV template", tmpl.getvalue(),
                           file_name="ingredients_template.csv",
                           mime="text/csv")
@@ -1545,7 +1580,8 @@ with tab_lib:
                                   (row.get("category") or "imported").strip(),
                                   "note": (row.get("note") or "").strip(),
                                   "per100g": per,
-                                  "assume_aafco": row.get("assume_aafco", "")})
+                                  "assume_aafco": row.get("assume_aafco", ""),
+                                  "max_dose": row.get("max_dose", "")})
             new = sum(1 for i in items if i["name"] not in db)
             for i in items:
                 db[str(i["name"]).strip()] = rc.normalise(i)

@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -442,6 +442,9 @@ def normalise(item):
         out["assume_aafco"] = True
     if item.get("role") in ROLES:       # optional override of the heuristic
         out["role"] = item["role"]
+    md = item.get("max_dose")
+    if md is not None and md == md and str(md).strip():
+        out["max_dose"] = str(md).strip()
     return out
 
 
@@ -1113,10 +1116,65 @@ VITAMINS = ("vit_a", "b1", "b2", "b3", "b5", "b6", "b12", "folate",
             "choline", "vit_d", "vit_e")
 
 
-def default_bounds(item, kcal_target=None):
+EPA_DHA_UPPER = 2800      # mg/1000 kcal: ACVN renal range top = NRC safe upper
+
+
+def parse_max_dose(text):
+    """Recommended maximum g/day of an ingredient, written as
+    '7' (fixed), '0.18/kg' (per kg body weight) or '5:4, 10:8, 15:10'
+    (up to 5 kg: 4 g, up to 10 kg: 8 g...). Returns ('g', x),
+    ('per_kg', x) or ('table', [(kg, g), ...]); raises ValueError."""
+    t = (str(text).strip().lower().replace(" ", "").replace("kg", "K")
+         .replace("g", "").replace("K", "kg"))
+    if not t:
+        return None
+    if t.endswith("/kg"):
+        return "per_kg", float(t[:-3].replace(",", "."))
+    if ":" in t:
+        rows = []
+        for part in t.replace(";", ",").split(","):
+            if part:
+                kg, g = part.split(":")
+                rows.append((float(kg.replace("kg", "").replace(",", ".")),
+                             float(g.replace(",", "."))))
+        return "table", sorted(rows)
+    return "g", float(t.replace(",", "."))
+
+
+def recommended_max(item, bw=None, kcal_target=None):
+    """(grams/day, reason) from the item's label dose ('max_dose') for this
+    body weight, or for EPA+DHA oils the upper limit of 2800 mg/1000 kcal
+    of the energy target. None if there is no recommendation."""
+    md = item.get("max_dose")
+    if md:
+        try:
+            kind, v = parse_max_dose(md)
+        except (ValueError, TypeError):
+            kind = None
+        if kind == "g":
+            return v, "label dose"
+        if kind == "per_kg" and bw:
+            return round(v * bw, 1), f"label dose {v:g} g/kg"
+        if kind == "table" and bw:
+            for kg, g in v:
+                if bw <= kg + 1e-9:
+                    return g, f"label dose up to {kg:g} kg"
+    epa = item["per100g"].get("epa_dha") or 0
+    if epa >= 10000 and kcal_target:          # concentrated omega-3 oils
+        return (round(EPA_DHA_UPPER * kcal_target / 1000 / (epa / 100), 1),
+                f"EPA+DHA ≤ {EPA_DHA_UPPER} mg/1000 kcal")
+    return None
+
+
+def default_bounds(item, kcal_target=None, bw=None):
     """Default (min, max) grams per day for an ingredient (editable in the
-    optimiser dialog). Low-energy foods (vegetables/fruit) are capped at
-    0.25 g per kcal of daily target to keep bulk sensible."""
+    optimiser dialog). The max is the recommended amount when the item has
+    one (label dose for the dog's weight, omega-3 upper limit); otherwise
+    low-energy foods (vegetables/fruit) are capped at 0.25 g per kcal of
+    daily target to keep bulk sensible."""
+    rec = recommended_max(item, bw, kcal_target)
+    if rec:
+        return 0.0, rec[0]
     kcal = item["per100g"]["kcal"] or 0
     if kcal >= 800:                       # oils
         return 0.0, 20.0
@@ -1528,7 +1586,8 @@ def add_manual(names, db, bounds, grams, ctx, additions):
     for n, lo, hi in additions:
         if n in n2 or n not in db:
             continue
-        dlo, dhi = default_bounds(db[n], ctx["kcal_target"])
+        dlo, dhi = default_bounds(db[n], ctx["kcal_target"],
+                                ctx.get("bw"))
         lo = dlo if lo is None else float(lo)
         hi = max(dhi, lo) if hi is None else float(hi)
         hi = max(hi, lo)
@@ -1557,7 +1616,8 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
     for idx, c in enumerate(candidates):
         if progress:
             progress(idx, len(candidates), c)
-        lo, hi = default_bounds(db[c], ctx["kcal_target"])
+        lo, hi = default_bounds(db[c], ctx["kcal_target"],
+                                ctx.get("bw"))
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
                            list(base[0]) + [0.0], ctx, **QUICK)
         if g[-1] >= 0.5 and round(s, 3) <= round(base[1], 3):
@@ -1568,7 +1628,8 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
     singles = []
     r_base = recipe_rating(names, base[0], db, ctx)[0]
     for s0, c, g0 in screened[:REFINE_TOP]:
-        lo, hi = default_bounds(db[c], ctx["kcal_target"])
+        lo, hi = default_bounds(db[c], ctx["kcal_target"],
+                                ctx.get("bw"))
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
                            g0, ctx)
         if g[-1] >= 0.5 and improves(
@@ -1587,7 +1648,8 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         for c in pool:
             if c in cur_n:
                 continue
-            lo, hi = default_bounds(db[c], ctx["kcal_target"])
+            lo, hi = default_bounds(db[c], ctx["kcal_target"],
+                                ctx.get("bw"))
             g, s, t = optimise(cur_n + [c], db, cur_b + [(lo, hi, False)],
                                cur_g + [0.0], ctx, **QUICK)
             if g[-1] >= 0.5 and (best is None or rank_key(
@@ -1600,7 +1662,8 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
                 recipe_rating(cur_n + [best[0]], best[1], db, ctx)[0],
                 recipe_rating(cur_n, cur_g, db, ctx)[0]):
             break
-        lo, hi = default_bounds(db[best[0]], ctx["kcal_target"])
+        lo, hi = default_bounds(db[best[0]], ctx["kcal_target"],
+                                ctx.get("bw"))
         cur_n, cur_b = cur_n + [best[0]], cur_b + [(lo, hi, False)]
         cur_g, cur_s, cur_t = best[1], best[2], best[3]
         added.append(best[0])
@@ -1716,7 +1779,8 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
                 continue
             if progress:
                 progress(step * len(pool) + j, max_add * len(pool), c)
-            lo, hi = default_bounds(db[c], ctx["kcal_target"])
+            lo, hi = default_bounds(db[c], ctx["kcal_target"],
+                                ctx.get("bw"))
             r = solve(cur_n + [c], cur_b + [(lo, hi, False)], g + [0.0])
             if r[0][-1] >= 0.5 and (best is None or r[1] < best[1][1]):
                 best = (c, r, (lo, hi, False))
@@ -1958,7 +2022,8 @@ def suggest_substitutions(names, db, bounds, base, ctx, candidates,
     for j, (i, n, c) in enumerate(jobs):
         if progress:
             progress(j, len(jobs), f"{n} → {c}")
-        lo, hi = default_bounds(db[c], ctx["kcal_target"])
+        lo, hi = default_bounds(db[c], ctx["kcal_target"],
+                                ctx.get("bw"))
         nn = names[:i] + [c] + names[i + 1:]
         bb = bounds[:i] + [(lo, hi, False)] + bounds[i + 1:]
         x0 = list(g0[:i]) + [max(lo, 0.0)] + list(g0[i + 1:])
@@ -2069,7 +2134,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         groups = [[n for n in pool if n not in base_names
                    and roles[n] not in ("binder", "supplement")]]
     def bnd(n):
-        lo, hi = default_bounds(db[n], tgt)
+        lo, hi = default_bounds(db[n], tgt, ctx.get("bw"))
         if roles.get(n) == "veg" and veg_min_g:
             lo = min(veg_min_g, hi)
         if n in forced:
@@ -3343,14 +3408,23 @@ class IngredientDialog(tk.Toplevel):
         self.note = ttk.Entry(frm, width=40)
         self.note.insert(0, item.get("note", ""))
         self.note.grid(row=2, column=1, columnspan=3, sticky="we", pady=2)
+        mdf = ttk.Frame(frm)
+        mdf.grid(row=3, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        ttk.Label(mdf, text="Recommended max g/day").pack(side="left")
+        self.max_dose = ttk.Entry(mdf, width=34)
+        self.max_dose.insert(0, item.get("max_dose", ""))
+        self.max_dose.pack(side="left", padx=4)
+        ttk.Label(mdf, foreground="#555",
+                  text="e.g. 7  ·  0.18/kg  ·  5:4, 10:8 (up to kg : g); "
+                       "blank = none").pack(side="left")
         ttk.Label(frm, text="Values per 100 g (leave blank if unknown)",
                   font=("TkDefaultFont", 9, "italic")).grid(
-            row=3, column=0, columnspan=4, sticky="w", pady=(8, 2))
+            row=4, column=0, columnspan=4, sticky="w", pady=(8, 2))
 
         self.entries = {}
         half = (len(keys) + 1) // 2
         for i, k in enumerate(keys):
-            r, c = 4 + i % half, (i // half) * 2
+            r, c = 5 + i % half, (i // half) * 2
             ttk.Label(frm, text=f"{LABEL[k]} ({UNIT[k]})").grid(
                 row=r, column=c, sticky="w", padx=(0, 4))
             e = ttk.Entry(frm, width=12)
@@ -3361,7 +3435,7 @@ class IngredientDialog(tk.Toplevel):
             self.entries[k] = e
 
         btns = ttk.Frame(frm)
-        btns.grid(row=5 + half, column=0, columnspan=4, pady=(10, 0))
+        btns.grid(row=6 + half, column=0, columnspan=4, pady=(10, 0))
         ttk.Button(btns, text="Save", command=self.ok).pack(side="left",
                                                             padx=4)
         ttk.Button(btns, text="Cancel", command=self.destroy).pack(
@@ -3383,9 +3457,17 @@ class IngredientDialog(tk.Toplevel):
                                      f"Invalid number for {LABEL[k]}.",
                                      parent=self)
                 return
+        md = self.max_dose.get().strip()
+        try:
+            parse_max_dose(md)
+        except (ValueError, TypeError):
+            messagebox.showerror("Ingredient", "Recommended max: write e.g. "
+                                 "7, 0.18/kg or 5:4, 10:8.", parent=self)
+            return
         self.result = {"name": name, "category": self.cat.get() or "food",
                        "note": self.note.get().strip(), "per100g": vals,
-                       "assume_aafco": self.assume.get(), "role": self.role}
+                       "assume_aafco": self.assume.get(), "role": self.role,
+                       "max_dose": md}
         self.destroy()
 
 
@@ -4117,14 +4199,17 @@ class OptimiseDialog(tk.Toplevel):
                              padding=6)
         ing.pack(fill="x", pady=6)
         for c, h in enumerate(("Ingredient", "Current", "Min", "Max",
-                               "Lock at current")):
+                               "Lock at current", "Max from")):
             ttk.Label(ing, text=h, font=("TkDefaultFont", 10, "bold")).grid(
                 row=0, column=c, sticky="w", padx=4)
         self.rows = []
         for r, (n, g) in enumerate(app.recipe, start=1):
-            lo, hi = default_bounds(app.db[n], app.current_mer())
+            lo, hi = default_bounds(app.db[n], app.current_mer(),
+                                    app.current_bw())
+            rec = recommended_max(app.db[n], app.current_bw(),
+                                  app.current_mer())
             vmin = tk.StringVar(value=f"{lo:g}")
-            vmax = tk.StringVar(value=f"{max(hi, g):g}")
+            vmax = tk.StringVar(value=f"{hi if rec else max(hi, g):g}")
             is_binder = app.db[n]["category"] == "binder"
             lk = tk.BooleanVar(value=is_binder)
             ttk.Label(ing, text=n + ("  (binder – vet dose, locked)"
@@ -4140,6 +4225,13 @@ class OptimiseDialog(tk.Toplevel):
             cbt.grid(row=r, column=4)
             if is_binder:
                 cbt.state(["disabled"])
+            if rec:
+                ttk.Label(ing, foreground="#a00" if g > rec[0] + 1e-9
+                          else "#555",
+                          text=f"recommended: {rec[1]}" +
+                               (" – current is above it" if g > rec[0] + 1e-9
+                                else "")).grid(row=r, column=5, sticky="w",
+                                               padx=4)
             self.rows.append((n, g, vmin, vmax, lk))
 
         wf = ttk.LabelFrame(frm, text="Priorities (higher = more important;"
@@ -4503,7 +4595,8 @@ class ResultsWindow(tk.Toplevel):
         cn, cg, cs = o["names"], o["grams"], o["score"]
         bm = dict(zip(self.names, self.bounds))
         cb = [bm.get(n) or (*default_bounds(self.app.db[n],
-                                            self.ctx["kcal_target"]), False)
+                                            self.ctx["kcal_target"],
+                                            self.ctx.get("bw")), False)
               for n in cn]
         rm_ = [n for n in self.manual_rm if n in cn]
         adds = [(n, lo, hi) for n, (lo, hi) in self.manual.items()
@@ -5127,7 +5220,8 @@ class App(tk.Tk):
                                       "note": (row.get("note") or "").strip(),
                                       "per100g": per,
                                       "assume_aafco":
-                                          row.get("assume_aafco", "")})
+                                          row.get("assume_aafco", ""),
+                                      "max_dose": row.get("max_dose", "")})
             new = sum(1 for i in items if i["name"] not in self.db)
             for i in items:
                 self.db[str(i["name"]).strip()] = normalise(i)
@@ -5147,9 +5241,11 @@ class App(tk.Tk):
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["name", "category", "note"] + KEYS +
-                       ["assume_aafco"])
+                       ["assume_aafco", "max_dose"])
             w.writerow(["# units per 100 g ->", "", ""] +
-                       [UNIT[k] for k in KEYS] + ["1 = complete food"])
+                       [UNIT[k] for k in KEYS] + ["1 = complete food",
+                                                  "g/day: 7, 0.18/kg or "
+                                                  "5:4, 10:8"])
             ex = self.db.get("Lentils, boiled")
             if ex:
                 w.writerow([ex["name"] + " (example)", ex["category"], ""] +
@@ -5167,13 +5263,14 @@ class App(tk.Tk):
         with open(path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["name", "category", "note"] + KEYS +
-                       ["assume_aafco"])
+                       ["assume_aafco", "max_dose"])
             for n in sorted(self.db, key=str.lower):
                 it = self.db[n]
                 w.writerow([n, it["category"], it.get("note", "")] +
                            ["" if it["per100g"][k] is None else
                             it["per100g"][k] for k in KEYS] +
-                           [1 if it.get("assume_aafco") else ""])
+                           [1 if it.get("assume_aafco") else "",
+                            it.get("max_dose", "")])
 
     # ---------------- recipe actions
     def add_to_recipe(self):
