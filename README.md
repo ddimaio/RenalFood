@@ -209,6 +209,21 @@ An ingredient may carry `"role": "starch"` (or protein, veg, oil,
 supplement, other) in its JSON to override how the generator classes it;
 otherwise the role comes from its energy split.
 
+## Recent literature additions
+
+- Blood potassium 5.1–5.5 mmol/L ("high-normal") lowers the potassium
+  ceiling to 1700 mg/1000 kcal (K > 5.1 was linked to faster progression;
+  Miyakawa et al., JVIM 2021).
+- Muscle condition score (0–3, the vet's) in the blood results: any loss
+  raises the protein minimum/aim and energy; slightly heavy dogs (BCS 6–7)
+  get no energy cut (muscle loss shortened and a heavier body condition
+  lengthened survival; PLOS One 2020).
+- Assessment flags recipes where calcium-rich supplements or binders give
+  ≥40% of the calcium: ask for ionised calcium checks (IRIS).
+- Assessment shows the water supplied by the food vs the ~1 ml/kcal total
+  need; printout suggests adding warm water and feeding the renal recipe
+  consistently (≥75% of the time was linked to longer survival).
+
 ## Sources
 
 - UC Davis – Nutritional Management of Chronic Renal Disease

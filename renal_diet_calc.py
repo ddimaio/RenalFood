@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -771,7 +771,11 @@ adjustments in use when printed.</div>
 <div><h2>Feeding</h2><ul>
 <li>Split the daily amount into {meals} meal{'s' if meals > 1 else ''}.</li>
 <li>Change diets gradually over 7–10 days; never force-feed.</li>
-<li>Fresh water always available.</li>
+<li>Fresh water always available; adding a little warm water to each meal
+helps intake (no stock cubes or broth – salt, onion).</li>
+<li>Feed the renal recipe consistently – in a 2020 study, dogs fed a renal
+diet at least 75% of the time lived longer. Avoid high-phosphorus treats
+(cheese, dairy chews, jerky, bones).</li>
 <li>Weigh the dog every 1–2 weeks; adjust amounts to keep weight stable.</li>
 <li>Give binders and supplements only as prescribed.</li></ul></div>
 <div><h2>Vet notes</h2><div class="lines"></div></div>
@@ -2370,6 +2374,41 @@ def improvement_reasons(before, after, n=3):
     return [k for d, k in diffs[:n] if d > 1e-6]
 
 
+CA_RICH = 5000          # mg Ca per 100 g: a calcium-rich supplement (5 %)
+
+
+def calcium_supplements(recipe, db, t, min_share=0.4):
+    """(share of total calcium, [names]) from calcium-rich supplements and
+    binders when they give at least min_share of the recipe's calcium;
+    else None."""
+    if not t.get("ca"):
+        return None
+    items, ca = [], 0.0
+    for n, g in recipe:
+        if n in db and g > 0 and db[n]["category"] in ("supplement",
+                                                        "binder"):
+            c = db[n]["per100g"].get("ca") or 0
+            if c >= CA_RICH:
+                items.append(n)
+                ca += c * g / 100
+    share = ca / t["ca"]
+    return (share, items) if items and share >= min_share else None
+
+
+def water_note(t, miss, need_kcal):
+    """Water supplied by the food vs the dog's total daily water need
+    (about 1 ml per kcal of energy need)."""
+    w = t.get("water") or 0
+    if not need_kcal or w <= 0:
+        return ""
+    unk = bool(miss.get("water"))
+    return (f"• Water: the food provides {'≥ ' if unk else '≈ '}{w:.0f} "
+            f"ml/day, about {w / need_kcal * 100:.0f}% of the ~"
+            f"{need_kcal:.0f} ml a dog this size needs in total – the rest "
+            "comes from drinking. More water helps the kidneys: adding warm "
+            "water to meals is commonly advised in CKD.")
+
+
 def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                   acid, k1000, renal_mode, stage_note, fat_frac, ranges=None,
                   blood_note="", extended=False, assumed=None):
@@ -2501,6 +2540,19 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
         out.append(f"• This recipe supplies {kcal:.0f} kcal = {pct:.0f}% of "
                    f"the estimated daily need ({need:.0f} kcal). "
                    f"Feed ≈ {need / kcal * mass:.0f} g/day to meet MER.")
+    ca_n = calcium_supplements(recipe, db, t)
+    if ca_n:
+        share, items = ca_n
+        out.append(f"• {share * 100:.0f}% of the calcium comes from "
+                   f"calcium-rich supplements ({', '.join(items)}). Ask your "
+                   "vet to check IONISED calcium (not only total calcium) "
+                   "at blood tests – IRIS advises this with calcium-"
+                   "containing binders and supplements; hypercalcaemia "
+                   "occurs in some CKD dogs.")
+    if renal_mode:
+        w = water_note(t, miss, need or kcal)
+        if w:
+            out.append(w)
     missing = sorted({n for k in BASE_KEYS for n in miss[k]})
     if missing:
         out.append("• Incomplete data for: " + ", ".join(missing) +
@@ -3009,6 +3061,8 @@ BLOOD_FIELDS = [
     ("sbp", "Systolic blood pressure", "mmHg", "IRIS: <140 normal, 140–159 pre-, 160–179 hypertensive, ≥180 severe"),
     ("pcv", "PCV / haematocrit", "%", "typical ~37–55"),
     ("bcs", "Body condition score", "1–9", "ideal 4–5"),
+    ("mcs", "Muscle condition (vet's score)", "0–3",
+     "0 normal, 1 mild, 2 moderate, 3 severe muscle loss"),
 ]
 STAGE_NAMES = {1: "Stage 1 – non-proteinuric", 2: "Stage 2", 3: "Stage 3",
                4: "Stage 4"}
@@ -3139,20 +3193,46 @@ def adapt_from_bloods(b, current_stage="Stage 2"):
                       "proteinuria this needs the vet promptly."))
         else:
             F.append(("Albumin", fv("alb"), ref("alb"), "ok", ""))
+    wt_txt = trend if v["bcs"] is None else f"{trend}, BCS {v['bcs']:g}"
     if trend == "losing" or (v["bcs"] is not None and v["bcs"] < 4):
         p_lo = max(p_lo, 35)
         mer_delta += 0.2
-        F.append(("Weight / BCS", trend if v["bcs"] is None else
-                  f"{trend}, BCS {v['bcs']:g}", "ideal BCS 4–5",
+        F.append(("Weight / BCS", wt_txt, "ideal BCS 4–5",
                   "losing weight / thin",
                   "MER factor +0.2, protein min → 35 g/1000 kcal."))
-    elif trend == "gaining" or (v["bcs"] is not None and v["bcs"] > 6):
+    elif v["bcs"] is not None and v["bcs"] >= 8:
         mer_delta -= 0.1
-        F.append(("Weight / BCS", trend if v["bcs"] is None else
-                  f"{trend}, BCS {v['bcs']:g}", "ideal BCS 4–5",
-                  "gaining / overweight", "MER factor −0.1."))
+        F.append(("Weight / BCS", wt_txt, "ideal BCS 4–5", "obese",
+                  "MER factor −0.1 – slow, vet-supervised loss only."))
+    elif trend == "gaining" or (v["bcs"] is not None and v["bcs"] > 5):
+        F.append(("Weight / BCS", wt_txt, "ideal BCS 4–5",
+                  "slightly heavy" if v["bcs"] is not None and v["bcs"] > 5
+                  else "gaining",
+                  "No energy cut: in CKD dogs a slightly heavy condition "
+                  "(BCS 6–7) was linked to longer survival – avoid slimming "
+                  "below BCS 5. Reduce only if BCS reaches 8."))
+    # muscle: any loss was linked to shorter survival (PLOS One 2020)
+    if v["mcs"] is not None:
+        m = v["mcs"]
+        if m >= 1:
+            p_lo = max(p_lo, 35 if m < 2 else 40)
+            aims["protein"] = max(aims.get("protein", 45), p_lo + 10)
+            add = 0.1 if m < 2 else 0.2
+            mer_delta = max(mer_delta, add) if mer_delta >= 0 else add
+            F.append(("Muscle condition", f"{m:g}", ref("mcs"),
+                      ["", "mild", "moderate", "severe"][min(3, int(m))]
+                      + " muscle loss",
+                      f"Protein min → {p_lo}, aim ≥ {aims['protein']} g/1000 "
+                      f"kcal; MER factor +{add:.1f}. Do not restrict protein "
+                      "further; check appetite and energy intake with the "
+                      "vet."))
+        else:
+            F.append(("Muscle condition", f"{m:g}", ref("mcs"), "normal",
+                      ""))
     if p_lo > p_hi:
         p_hi = p_lo + 10
+    if aims.get("protein", 0) > p_hi:
+        aims["protein"] = p_hi
     if "protein" in aims and aims["protein"] < p_lo + 5:
         aims["protein"] = min(p_hi, p_lo + 5)   # weight loss/low albumin win
     R["protein"] = (p_lo, p_hi)
@@ -3173,6 +3253,15 @@ def adapt_from_bloods(b, current_stage="Stage 2"):
                       "Potassium max → 1300 mg/1000 kcal; avoid spinach, "
                       "potato, beet greens, banana; boil and drain "
                       "vegetables; no potassium citrate."))
+        elif v["k"] > 5.1:
+            R["k"] = (R["k"][0], 1700)
+            W["potassium"] *= 1.5
+            F.append(("Potassium", fv("k"), ref("k"), "high-normal",
+                      "Potassium max → 1700 mg/1000 kcal; no added "
+                      "potassium (citrate/gluconate) and go easy on "
+                      "potassium-rich balancers and fruit; recheck. "
+                      "(Potassium > 5.1 was linked to faster progression – "
+                      "Miyakawa 2021.)"))
         else:
             F.append(("Potassium", fv("k"), ref("k"), "ok", ""))
 
