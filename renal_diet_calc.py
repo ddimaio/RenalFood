@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31i"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31j"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -2012,12 +2012,21 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         base = (mb[1], mb[2], mb[3]) if mb[2] < b0[1] else b0
     else:
         base = optimise(names, db, bounds, x0, ctx)
+    # one progress bar over every phase (later phases use upper bounds, so
+    # the bar can jump forward but never back)
+    n_c, n_ref, n_comb = len(candidates), REFINE_TOP, max_add * 8
+    n_match = (max_add * len(_match_pool(names, db, ctx, candidates))
+               if ctx.get("ref_match") else 0)
+    total = max(1, n_c + n_ref + n_comb + n_match)
+
+    def tick(done, label):
+        if progress:
+            progress(min(done, total - 1), total, label)
     # screen every candidate with a quick search, then re-optimise the
     # most promising ones fully (5x faster than full searches throughout)
     screened = []
     for idx, c in enumerate(candidates):
-        if progress:
-            progress(idx, len(candidates), c)
+        tick(idx, c)
         lo, hi = default_bounds(db[c], ctx["kcal_target"],
                                 ctx.get("bw"))
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
@@ -2029,7 +2038,8 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         r[0], recipe_rating(names + [r[1]], r[2], db, ctx)[0]))
     singles = []
     r_base = recipe_rating(names, base[0], db, ctx)[0]
-    for s0, c, g0 in screened[:REFINE_TOP]:
+    for k_, (s0, c, g0) in enumerate(screened[:REFINE_TOP]):
+        tick(n_c + k_, "refining " + c)
         lo, hi = default_bounds(db[c], ctx["kcal_target"],
                                 ctx.get("bw"))
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
@@ -2045,11 +2055,12 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
                                          list(base[0]), base[1], base[2])
     added = []
     pool = [r[0] for r in singles[:8]]
-    for _ in range(max_add):
+    for step_ in range(max_add):
         best = None
-        for c in pool:
+        for j_, c in enumerate(pool):
             if c in cur_n:
                 continue
+            tick(n_c + n_ref + step_ * 8 + j_, "combining + " + c)
             lo, hi = default_bounds(db[c], ctx["kcal_target"],
                                 ctx.get("bw"))
             g, s, t = optimise(cur_n + [c], db, cur_b + [(lo, hi, False)],
@@ -2074,8 +2085,11 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         if sc <= cur_s:
             cur_g, cur_s, cur_t = g, sc, t
     if ctx.get("ref_match"):
-        mr = match_reference(names, db, bounds, list(base[0]), ctx,
-                             candidates, max_add)
+        off = n_c + n_ref + n_comb
+        tick(off, "matching the reference diet")
+        mr = match_reference(
+            names, db, bounds, list(base[0]), ctx, candidates, max_add,
+            lambda i, t_, c: tick(off + i, "matching reference: + " + c))
         if mr[2] < cur_s:
             cur_n, cur_g, cur_s, cur_t, added = mr
     return base, singles, (cur_n, cur_g, cur_s, cur_t, added)
@@ -2133,6 +2147,20 @@ def _lsq_match(names, db, bounds, x0, ctx, lower_active=()):
     return g, float(r.cost)
 
 
+MATCH_REFINE_TOP = 8   # reference match: candidates fully solved per step
+
+
+def _match_pool(names, db, ctx, candidates):
+    """Foods match_reference() tries: not in the recipe, not binders, with
+    data for the reference's main nutrients."""
+    need = [k for k, (rv, lw) in ctx["ref_match"]["targets"].items()
+            if not lw]
+    return [c for c in candidates if c not in names and c in db
+            and db[c]["category"] != "binder"
+            and db[c]["per100g"]["kcal"] is not None
+            and all(value(db[c], k) is not None for k in need)]
+
+
 def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
                     progress=None):
     """Recipe as close as possible to ctx['ref_match'] (from
@@ -2143,6 +2171,12 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
     def solve(nn, bb, xx):
         if _sp_lsq is None:
             return optimise(nn, db, bb, xx, ctx)
+        res = lsq(nn, bb, xx)
+        return polish(nn, bb, xx, res)
+
+    def lsq(nn, bb, xx):
+        if _sp_lsq is None:
+            return None
         active = set()
         res = _lsq_match(nn, db, bb, xx, ctx)
         for _ in range(3):              # switch on violated minimums
@@ -2155,27 +2189,37 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
                 break
             active |= viol
             res = _lsq_match(nn, db, bb, xx, ctx, active)
+        return res
+
+    def rounded(nn, bb, res):
+        g2 = [min(bb[i][1], max(bb[i][0], round(v, 1)))
+              if not bb[i][2] else v for i, v in enumerate(res[0])]
+        s2, t2 = score_amounts(g2, [_vec(db[n]) for n in nn], ctx)
+        return g2, s2, t2
+
+    def polish(nn, bb, xx, res):
         start = res[0] if res else xx
         g1 = optimise(nn, db, bb, start, ctx)
         if res:
-            g2 = [min(bb[i][1], max(bb[i][0], round(v, 1)))
-                  if not bb[i][2] else v for i, v in enumerate(res[0])]
-            s2, t2 = score_amounts(g2, [_vec(db[n]) for n in nn], ctx)
-            if s2 < g1[1]:
-                return g2, s2, t2
+            r2 = rounded(nn, bb, res)
+            if r2[1] < g1[1]:
+                return r2
         return g1
+
+    def quick(nn, bb, xx):
+        """Cheap screening fit: least-squares amounts, or a short search
+        without scipy. Returns (grams, score, terms, lsq result)."""
+        res = lsq(nn, bb, xx)
+        if res is None:
+            return optimise(nn, db, bb, xx, ctx, **QUICK) + (None,)
+        return rounded(nn, bb, res) + (res,)
     cur_n, cur_b = list(names), list(bounds)
     g, sc, t = solve(cur_n, cur_b, list(x0))
     added = []
-    need = [k for k, (rv, lw) in ctx["ref_match"]["targets"].items()
-            if not lw]
-    # candidates must have data for the reference's main nutrients
-    pool = [c for c in candidates if c not in cur_n and c in db
-            and db[c]["category"] != "binder"
-            and db[c]["per100g"]["kcal"] is not None
-            and all(value(db[c], k) is not None for k in need)]
+    pool = _match_pool(cur_n, db, ctx, candidates)
     for step in range(max_add):
-        best = None
+        # screen every candidate cheaply, then fully solve the best few
+        screened = []
         for j, c in enumerate(pool):
             if c in cur_n:
                 continue
@@ -2183,9 +2227,17 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
                 progress(step * len(pool) + j, max_add * len(pool), c)
             lo, hi = default_bounds(db[c], ctx["kcal_target"],
                                 ctx.get("bw"))
-            r = solve(cur_n + [c], cur_b + [(lo, hi, False)], g + [0.0])
+            bb = cur_b + [(lo, hi, False)]
+            q = quick(cur_n + [c], bb, g + [0.0])
+            screened.append((q[1], c, bb, q))
+        screened.sort(key=lambda r_: r_[0])
+        best = None
+        for _, c, bb, q in screened[:MATCH_REFINE_TOP]:
+            r = polish(cur_n + [c], bb, g + [0.0], q[3]) \
+                if q[3] is not None else \
+                optimise(cur_n + [c], db, bb, q[0], ctx)
             if r[0][-1] >= 0.5 and (best is None or r[1] < best[1][1]):
-                best = (c, r, (lo, hi, False))
+                best = (c, r, bb[-1])
         if best is None or best[1][1] > sc * 0.98:
             break
         c, (g, sc, t), b_ = best
