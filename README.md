@@ -95,6 +95,15 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Only ingredients with complete data
+
+Generator: "Only ingredients with complete data" (and "…but allow missing
+choline", on by default - choline is not in the food tables used) leaves
+out foods with any unknown value among the nutrients checked (all of them
+with Extended nutrients on); the list shows each food's missing nutrients.
+The optimiser has the same option for its suggested additions and
+substitutions. Always-include and fixed-base items are kept.
+
 ## Printing a recipe
 
 **🖨️ Printable recipe** (Streamlit, Recipe tab) downloads an A4 page;

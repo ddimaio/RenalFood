@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30d"
+ENGINE_VERSION = "2026.10.30e"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -907,6 +907,12 @@ with tab_opt:
                                   "need: taking them out (all other amounts "
                                   "re-optimised) improves the score or costs "
                                   "under 1 %.")
+        o_full = st.checkbox(
+            "Suggest only ingredients with complete data (missing choline "
+            "allowed)", False, key="o_full",
+            help="Additions and substitutions use only foods without unknown "
+                 "values among the nutrients checked (all of them with "
+                 "Extended nutrients on).")
         max_add = st.slider("Max. additions to combine", 1, 6, 3,
                             key="o_max")
         cand_names = [n for n in names_all
@@ -953,6 +959,8 @@ with tab_opt:
                 before = rc.score_amounts(x0, vecs, ctx)
                 if do_sug:
                     cands = list(cdf.loc[cdf["Use"], "Ingredient"])
+                    if o_full:
+                        cands = rc.complete_only(cands, db, ss.ext)
                     bar = st.progress(0.0, text="Testing additions…")
 
                     def prog(i, total, name):
@@ -970,6 +978,8 @@ with tab_opt:
                     pool_s = (list(cdf.loc[cdf["Use"], "Ingredient"]) if do_sug
                               else [n for n in names_all
                                     if n not in ss.excluded])
+                    if o_full:
+                        pool_s = rc.complete_only(pool_s, db, ss.ext)
                     bar = st.progress(0.0, text="Testing substitutions…")
 
                     def prog_s(i, total, name):
@@ -1276,6 +1286,24 @@ with tab_gen:
                      and rc.ingredient_role(db[n]) != "binder"),
                     key=lambda n: (rc.ROLES.index(rc.ingredient_role(db[n])),
                                    n.lower()))
+    fc = st.columns([3, 2])
+    g_full = fc[0].checkbox(
+        "Only ingredients with complete data", False, key="g_full",
+        help="Leaves out foods with any unknown value among the nutrients "
+             "checked (all nutrients with Extended nutrients on). Values "
+             "assumed at the AAFCO minimum for complete foods count as "
+             "unknown. Always-include and fixed-base items are kept.")
+    g_full_ch = fc[1].checkbox(
+        "…but allow missing choline", True, key="g_full_ch",
+        disabled=not g_full,
+        help="Choline is not in the food tables used, so most foods lack "
+             "it; untick to require it too.")
+    _allow = ("choline",) if g_full_ch else ()
+    _miss = {n: rc.missing_data(db[n], ss.ext, _allow) for n in gnames}
+    if g_full:
+        st.caption(f"{sum(1 for n in gnames if not _miss[n])} of "
+                   f"{len(gnames)} ingredients have complete data"
+                   + (" (extended nutrients)" if ss.ext else "") + ".")
     st.caption("Untick **Use** for anything you do not want (e.g. animal "
                "products). Tick **Always include** to force an ingredient "
                "into every recipe – its amount is optimised but never below "
@@ -1283,7 +1311,8 @@ with tab_gen:
                "caps an ingredient whenever it is used. A forced "
                "protein, starch or vegetable fills that role. Roles are "
                "assigned automatically.")
-    _gkey = f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}"
+    _gkey = (f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}_{int(ss.ext)}_"
+             f"{int(g_full_ch)}")
     if ss.get("gen_key_last") != _gkey:      # fresh editor: current settings
         ss.gen_key_last = _gkey
         ss.gen_set_base = ss.gen_set
@@ -1297,9 +1326,12 @@ with tab_gen:
                       "Max g": pd.Series([ss.gen_set_base["max"].get(n)
                                           for n in gnames], dtype="float"),
                       "Role": [rc.ingredient_role(db[n]) for n in gnames],
-                      "Ingredient": gnames}),
+                      "Ingredient": gnames,
+                      "Missing data": [", ".join(_miss[n][:6]) +
+                                       ("…" if len(_miss[n]) > 6 else "")
+                                       for n in gnames]}),
         hide_index=True, **FULL, height=300,
-        disabled=["Role", "Ingredient"],
+        disabled=["Role", "Ingredient", "Missing data"],
         key=_gkey,
         column_config={"Min g": st.column_config.NumberColumn(
             "Min g", min_value=0.0, step=1.0, format="%g"),
@@ -1334,6 +1366,11 @@ with tab_gen:
                   for _, rw in frows.iterrows()}
         pool = list(gdf.loc[gdf["Use"] | gdf["Always include"],
                             "Ingredient"])
+        if g_full:
+            pool = rc.complete_only(
+                pool, db, ss.ext, g_full_ch,
+                keep=set(forced) | ({n for n, _ in ss.recipe}
+                                    if fixed_base else set()))
         max_each = {rw["Ingredient"]: float(rw["Max g"])
                     for _, rw in gdf.iterrows() if pd.notna(rw["Max g"])}
         clash = [n for n, m in forced.items()

@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30d"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30e"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -878,6 +878,25 @@ def save_excluded(excluded):
     p = load_prefs()
     p["excluded"] = sorted(excluded, key=str.lower)
     save_prefs(p)
+
+
+def missing_data(item, extended=False, allow=("choline",)):
+    """Nutrients without a real value for this ingredient among those the
+    app scores (basic, or all with extended=True). Values assumed at the
+    AAFCO minimum (complete foods) count as missing; keys in `allow` are
+    ignored (choline: not in the food tables used)."""
+    keys = KEYS if extended else BASE_KEYS
+    return [k for k in keys if k not in ("base_meq", "p_bind")
+            and k not in allow and item["per100g"].get(k) is None]
+
+
+def complete_only(names, db, extended=False, allow_choline=True,
+                  keep=()):
+    """names filtered to ingredients with complete data (keep = always
+    kept, e.g. forced or fixed ingredients)."""
+    allow = ("choline",) if allow_choline else ()
+    return [n for n in names if n in keep or n in db and
+            not missing_data(db[n], extended, allow)]
 
 
 def clean_gen_settings(d):
@@ -3426,6 +3445,16 @@ class GeneratorDialog(tk.Toplevel):
         self.lb.bind("<<ListboxSelect>>", lambda e: self.save_excl())
         self.lb.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
+        cf = ttk.Frame(frm)
+        cf.pack(fill="x", pady=(2, 0))
+        self.full_only = tk.BooleanVar(value=False)
+        self.full_ch = tk.BooleanVar(value=True)
+        ttk.Checkbutton(cf, variable=self.full_only,
+                        text="Only ingredients with complete data").pack(
+            side="left")
+        ttk.Checkbutton(cf, variable=self.full_ch,
+                        text="…but allow missing choline").pack(
+            side="left", padx=8)
         bb = ttk.Frame(frm)
         bb.pack(fill="x", pady=2)
         ttk.Button(bb, text="All", command=lambda: (self.lb.select_set(
@@ -3607,6 +3636,12 @@ class GeneratorDialog(tk.Toplevel):
                                  "for: " + ", ".join(clash), parent=self)
             return
         pool = [self.names[i] for i in self.lb.curselection()]
+        if self.full_only.get():
+            pool = complete_only(pool, app.db, app.ext.get(),
+                                 self.full_ch.get(),
+                                 keep=set(self.forced) |
+                                 ({n for n, _ in app.recipe}
+                                  if self.use_fixed.get() else set()))
         pool += [n for n in self.forced if n not in pool]
         if len(pool) < 2:
             messagebox.showerror("Generate", "Select more ingredients.",
@@ -3941,6 +3976,10 @@ class OptimiseDialog(tk.Toplevel):
         self.do_rem = tk.BooleanVar(value=True)
         ttk.Checkbutton(row, text="Test removals",
                         variable=self.do_rem).pack(side="left", padx=(8, 0))
+        self.full_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row, text="Only foods with complete data",
+                        variable=self.full_only).pack(side="left",
+                                                      padx=(8, 0))
         ttk.Label(row, text="   max. to combine").pack(side="left")
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
@@ -4025,6 +4064,8 @@ class OptimiseDialog(tk.Toplevel):
         try:
             if self.do_suggest.get():
                 cands = [self.cand_names[i] for i in self.cand.curselection()]
+                if self.full_only.get():
+                    cands = complete_only(cands, app.db, self.extended)
                 base, singles, combo = suggest_additions(
                     names, app.db, bounds, x0, ctx, cands, max_add, progress)
             else:
@@ -4037,6 +4078,8 @@ class OptimiseDialog(tk.Toplevel):
                 pool_s = ([self.cand_names[i] for i in self.cand.curselection()]
                           if self.do_suggest.get() else
                           [n for n in app.db if n not in load_excluded()])
+                if self.full_only.get():
+                    pool_s = complete_only(pool_s, app.db, self.extended)
                 subs = suggest_substitutions(
                     names, app.db, bounds, base, ctx, pool_s,
                     lambda i, t, nm: progress(i, t, "swap " + nm))
