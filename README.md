@@ -113,6 +113,10 @@ Optimise tab (Streamlit) / **Optimise…** (desktop), in steps:
 5. **Fine-tune yourself** – add or remove specific foods and re-optimise,
    starting from the option picked.
 
+`imports/dafy_v_integra_renal.json` (also in the library): Dafy V-Integra
+Renal, a phosphorus-free vitamin-mineral balancer (vegetarian; mostly
+calcium, potassium and magnesium carbonates). From the manufacturer's label.
+
 ## Only ingredients with complete data
 
 Generator: "Only ingredients with complete data" (and "…but allow missing
