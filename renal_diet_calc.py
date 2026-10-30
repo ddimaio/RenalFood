@@ -4664,7 +4664,7 @@ class OptimiseDialog(tk.Toplevel):
     def __init__(self, app):
         super().__init__(app)
         self.app = app
-        self.title("Optimise recipe")
+        self.title(f"Optimise recipe  (v{ENGINE_VERSION})")
         self.transient(app)
         stage = app.stage.get()
         ctx0 = app.score_context()
@@ -4704,6 +4704,7 @@ class OptimiseDialog(tk.Toplevel):
         ing = ttk.LabelFrame(frm, text="Recipe ingredients (g/day)",
                              padding=6)
         ing.pack(fill="x", pady=6)
+        self._ing = ing
         for c, h in enumerate(("Ingredient", "Current", "Min", "Max",
                                "Lock at current", "Max from")):
             ttk.Label(ing, text=h, font=("TkDefaultFont", 10, "bold")).grid(
@@ -4770,8 +4771,9 @@ class OptimiseDialog(tk.Toplevel):
                     row=0, column=c * 2 + 1, padx=6)
                 self.aims[k] = var
 
-        of = ttk.LabelFrame(frm, text="Goal", padding=6)
-        of.pack(fill="x", pady=(4, 0))
+        of = ttk.LabelFrame(frm, text="Goal – renal targets or match a "
+                                      "commercial reference diet", padding=6)
+        of.pack(fill="x", pady=(4, 0), before=self._ing)
         self.refs = load_references()
         objs = ["Renal targets"] + (["Match a reference diet",
                                      "Renal targets + reference diet"]
@@ -5417,7 +5419,7 @@ class App(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Renal Diet Composition Calculator (dogs)")
+        self.title(f"Renal Diet Composition Calculator (dogs)  –  v{ENGINE_VERSION}")
         self.geometry("1500x860")
         self._style()
         self.db = load_db()
