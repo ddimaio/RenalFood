@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.31g"
+ENGINE_VERSION = "2026.10.31f"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -949,10 +949,6 @@ with tab_opt:
             help="Additions and swaps use only foods without unknown values "
                  "among the nutrients checked (all of them with Extended "
                  "nutrients on).")
-        o_ox = cc4[1].checkbox(
-            "Allow high-oxalate foods (spinach, chard…)", False, key="o_ox",
-            help=f"Foods with ≥ {rc.HIGH_OXALATE:g} mg oxalate per 100 g are "
-                 "left out of additions and swaps unless ticked.")
         cand_names = [n for n in names_all
                       if n not in dict(ss.recipe)
                       and db[n]["category"] != "binder"
@@ -1001,8 +997,6 @@ with tab_opt:
                 cands = list(cdf.loc[cdf["Use"], "Ingredient"])
                 if o_full:
                     cands = rc.complete_only(cands, db, ss.ext)
-                if not o_ox:
-                    cands = rc.low_oxalate_only(cands, db)
                 steps = 1 + do_sug + do_subs + do_rem
                 step = [0]
 
@@ -1314,10 +1308,6 @@ with tab_gen:
         disabled=not g_full,
         help="Choline is not in the food tables used, so most foods lack "
              "it; untick to require it too.")
-    g_ox = fc[0].checkbox(
-        "Allow high-oxalate foods (spinach, chard…)", False, key="g_ox",
-        help=f"Foods with ≥ {rc.HIGH_OXALATE:g} mg oxalate per 100 g are left "
-             "out unless ticked (Always-include items are kept).")
     _allow = ("choline",) if g_full_ch else ()
     _miss = {n: rc.missing_data(db[n], ss.ext, _allow) for n in gnames}
     if g_full:
@@ -1391,10 +1381,6 @@ with tab_gen:
                 pool, db, ss.ext, g_full_ch,
                 keep=set(forced) | ({n for n, _ in ss.recipe}
                                     if fixed_base else set()))
-        if not g_ox:
-            pool = rc.low_oxalate_only(
-                pool, db, keep=set(forced) | ({n for n, _ in ss.recipe}
-                                              if fixed_base else set()))
         max_each = {rw["Ingredient"]: float(rw["Max g"])
                     for _, rw in gdf.iterrows() if pd.notna(rw["Max g"])}
         clash = [n for n, m in forced.items()

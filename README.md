@@ -177,8 +177,6 @@ ingredient breakdown and named in the assessment. Background: Cook &
 Atiee, "Understanding and Addressing Canine Calcium Oxalate Urolithiasis",
 Today's Veterinary Practice, Jan/Feb 2026.
 
-
-High-oxalate foods are left out of generated recipes and optimiser additions/swaps unless *Allow high-oxalate foods* is ticked (Always-include and fixed-base items are kept).
 ## Reference diets
 
 `renal_references.json` holds commercial renal diets for comparison only

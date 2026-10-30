@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31g"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1276,18 +1276,6 @@ def missing_data(item, extended=False, allow=("choline",)):
     keys = KEYS if extended else BASE_KEYS
     return [k for k in keys if k not in ("base_meq", "p_bind")
             and k not in allow and item["per100g"].get(k) is None]
-
-
-def high_oxalate(item):
-    v = item["per100g"].get("oxalate")
-    return v is not None and v >= HIGH_OXALATE
-
-
-def low_oxalate_only(names, db, keep=()):
-    """names without high-oxalate foods (>= HIGH_OXALATE mg/100 g, e.g.
-    spinach, chard); keep = always kept (forced / fixed items)."""
-    return [n for n in names if n in keep or n not in db
-            or not high_oxalate(db[n])]
 
 
 def complete_only(names, db, extended=False, allow_choline=True,
@@ -4237,13 +4225,9 @@ class GeneratorDialog(tk.Toplevel):
         cf.pack(fill="x", pady=(2, 0))
         self.full_only = tk.BooleanVar(value=False)
         self.full_ch = tk.BooleanVar(value=True)
-        self.allow_ox = tk.BooleanVar(value=False)
         ttk.Checkbutton(cf, variable=self.full_only,
                         text="Only ingredients with complete data").pack(
             side="left")
-        ttk.Checkbutton(cf, variable=self.allow_ox,
-                        text="Allow high-oxalate foods (spinach, chard…)"
-                        ).pack(side="right")
         ttk.Checkbutton(cf, variable=self.full_ch,
                         text="…but allow missing choline").pack(
             side="left", padx=8)
@@ -4436,10 +4420,6 @@ class GeneratorDialog(tk.Toplevel):
                                  keep=set(self.forced) |
                                  ({n for n, _ in app.recipe}
                                   if self.use_fixed.get() else set()))
-        if not self.allow_ox.get():
-            pool = low_oxalate_only(pool, app.db, keep=set(self.forced) | (
-                {n for n, _ in app.recipe} if self.use_fixed.get()
-                else set()))
         pool += [n for n in self.forced if n not in pool]
         if len(pool) < 2:
             messagebox.showerror("Generate", "Select more ingredients.",
@@ -4815,11 +4795,6 @@ class OptimiseDialog(tk.Toplevel):
         ttk.Checkbutton(row, text="Only foods with complete data",
                         variable=self.full_only).pack(side="left",
                                                       padx=(8, 0))
-        self.allow_ox = tk.BooleanVar(value=False)
-        ttk.Checkbutton(row0, text="Allow high-oxalate foods (spinach, "
-                                   "chard…)",
-                        variable=self.allow_ox).pack(side="left",
-                                                     padx=(16, 0))
         ttk.Label(row, text="   max. to combine").pack(side="left")
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
@@ -4934,8 +4909,6 @@ class OptimiseDialog(tk.Toplevel):
                 cands = [self.cand_names[i] for i in self.cand.curselection()]
                 if self.full_only.get():
                     cands = complete_only(cands, app.db, self.extended)
-                if not self.allow_ox.get():
-                    cands = low_oxalate_only(cands, app.db)
                 base, singles, combo = suggest_additions(
                     names, app.db, bounds, x0, ctx, cands, max_add, progress)
             else:
@@ -4950,8 +4923,6 @@ class OptimiseDialog(tk.Toplevel):
                           [n for n in app.db if n not in load_excluded()])
                 if self.full_only.get():
                     pool_s = complete_only(pool_s, app.db, self.extended)
-                if not self.allow_ox.get():
-                    pool_s = low_oxalate_only(pool_s, app.db)
                 subs = suggest_substitutions(
                     names, app.db, bounds, base, ctx, pool_s,
                     lambda i, t, nm: progress(i, t, "swap " + nm))
