@@ -29,7 +29,8 @@
    "vit_c": null,
    "epa_dha": null,
    "base_meq": 0,
-   "p_bind": 0
+   "p_bind": 0,
+   "oxalate": null
   },
   "assume_aafco": true
  }

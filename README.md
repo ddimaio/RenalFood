@@ -95,6 +95,17 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Oxalate
+
+Oxalate (mg/100 g) is tracked for library foods (`oxalate_fill.py`;
+source: Oxalosis & Hyperoxaluria Foundation food list 2024). Recipes are
+penalised above 50 mg/1000 kcal (app judgement - no canine standard; weight
+"Oxalate ≤ limit" editable) and foods ≥100 mg/100 g (spinach, chard, chia,
+sweet potato, peanut butter, buckwheat, okra) are flagged red in the
+ingredient breakdown and named in the assessment. Background: Cook &
+Atiee, "Understanding and Addressing Canine Calcium Oxalate Urolithiasis",
+Today's Veterinary Practice, Jan/Feb 2026.
+
 ## Reference diets
 
 `renal_references.json` holds commercial renal diets for comparison only

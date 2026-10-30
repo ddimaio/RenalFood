@@ -2,7 +2,7 @@
  {
   "name": "Rice, white, raw (dry, unenriched)",
   "category": "food",
-  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked. Filled from AFCD R3 F007682 (Rice, white, uncooked): i.",
+  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked. Filled from AFCD R3 F007682 (Rice, white, uncooked): i. Oxalate: OHF 2024 (boiled value x dry-matter ratio).",
   "per100g": {
    "kcal": 365,
    "water": 11.6,
@@ -47,7 +47,8 @@
    "mn": 1.088,
    "zn": 1.09,
    "se": 15.1,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 3.1
   }
  }
 ]

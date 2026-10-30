@@ -2,7 +2,7 @@
  {
   "name": "Cauliflower, boiled",
   "category": "food",
-  "note": "From AFCD R3 F002377 (Cauliflower, fresh, boiled, drained).",
+  "note": "From AFCD R3 F002377 (Cauliflower, fresh, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 25.3,
    "water": 92.3,
@@ -48,13 +48,14 @@
    "mn": 0.13,
    "zn": 0.2,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.3
   }
  },
  {
   "name": "Cucumber, peeled, raw",
   "category": "food",
-  "note": "From AFCD R3 F003319 (Cucumber, common, peeled, raw).",
+  "note": "From AFCD R3 F003319 (Cucumber, common, peeled, raw). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 12.0,
    "water": 96.2,
@@ -100,13 +101,14 @@
    "mn": null,
    "zn": 0.4,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.2
   }
  },
  {
   "name": "Celery, raw",
   "category": "food",
-  "note": "Chop finely (stringy). From AFCD R3 F002390 (Celery, fresh, raw).",
+  "note": "Chop finely (stringy). From AFCD R3 F002390 (Celery, fresh, raw). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 17.7,
    "water": 94.9,
@@ -152,7 +154,8 @@
    "mn": 0.14,
    "zn": 0.19,
    "i": 0.0,
-   "se": 1.5
+   "se": 1.5,
+   "oxalate": 25.0
   }
  },
  {
@@ -204,7 +207,8 @@
    "mn": 0.235,
    "zn": 0.28,
    "i": 2.1,
-   "se": 0.5
+   "se": 0.5,
+   "oxalate": null
   }
  },
  {
@@ -256,7 +260,8 @@
    "mn": 0.067,
    "zn": 0.13,
    "i": 0.0,
-   "se": 0.8
+   "se": 0.8,
+   "oxalate": null
   }
  },
  {
@@ -308,7 +313,8 @@
    "mn": 0.09,
    "zn": 0.6,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
@@ -360,14 +366,15 @@
    "mn": 0.229,
    "zn": 0.34,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "veg"
  },
  {
   "name": "Asparagus, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000151 (Asparagus, green, boiled, drained).",
+  "note": "From AFCD R3 F000151 (Asparagus, green, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 24.9,
    "water": 91.5,
@@ -413,13 +420,14 @@
    "mn": 0.224,
    "zn": 0.22,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 5.6
   }
  },
  {
   "name": "Beetroot, boiled",
   "category": "food",
-  "note": "Moderate oxalate. From AFCD R3 F001014 (Beetroot, fresh, purple, peeled, boiled, drained).",
+  "note": "Moderate oxalate. From AFCD R3 F001014 (Beetroot, fresh, purple, peeled, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 59.8,
    "water": 84.8,
@@ -465,13 +473,14 @@
    "mn": 0.398,
    "zn": 0.65,
    "i": 1.6,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 56.5
   }
  },
  {
   "name": "Turnip, boiled",
   "category": "food",
-  "note": "From AFCD R3 F009339 (Turnip, white, peeled, fresh, boiled, no added fat).",
+  "note": "From AFCD R3 F009339 (Turnip, white, peeled, fresh, boiled, no added fat). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 24.1,
    "water": 92.4,
@@ -517,13 +526,14 @@
    "mn": null,
    "zn": 0.2,
    "i": 0.4,
-   "se": 0.2
+   "se": 0.2,
+   "oxalate": 2.6
   }
  },
  {
   "name": "Swede, boiled",
   "category": "food",
-  "note": "From AFCD R3 F009020 (Swede, peeled, fresh, boiled, drained).",
+  "note": "From AFCD R3 F009020 (Swede, peeled, fresh, boiled, drained). Oxalate: OHF 2024 (rutabaga).",
   "per100g": {
    "kcal": 23.9,
    "water": 91.1,
@@ -569,13 +579,14 @@
    "mn": null,
    "zn": 0.2,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.7
   }
  },
  {
   "name": "Parsnip, boiled",
   "category": "food",
-  "note": "From AFCD R3 F006327 (Parsnip, peeled, fresh, boiled, drained).",
+  "note": "From AFCD R3 F006327 (Parsnip, peeled, fresh, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 63.1,
    "water": 82.0,
@@ -621,7 +632,8 @@
    "mn": 0.161,
    "zn": 0.31,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 19.2
   }
  },
  {
@@ -673,13 +685,14 @@
    "mn": 0.247,
    "zn": 0.47,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
   "name": "Squash, summer (button), boiled",
   "category": "food",
-  "note": "From AFCD R3 F008810 (Squash, button, fresh, boiled, drained).",
+  "note": "From AFCD R3 F008810 (Squash, button, fresh, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 31.1,
    "water": 89.4,
@@ -725,13 +738,14 @@
    "mn": null,
    "zn": 0.23,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
   "name": "Butternut squash, boiled",
   "category": "food",
-  "note": "From AFCD R3 F007534 (Pumpkin, butternut, peeled, fresh, boiled, drained).",
+  "note": "From AFCD R3 F007534 (Pumpkin, butternut, peeled, fresh, boiled, drained). Oxalate: OHF 2024 (winter squash).",
   "per100g": {
    "kcal": 47.1,
    "water": 84.3,
@@ -777,13 +791,14 @@
    "mn": 0.135,
    "zn": 0.15,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
   "name": "Pak choi (bok choy), steamed",
   "category": "food",
-  "note": "From AFCD R3 F001302 (Bok choy, steamed).",
+  "note": "From AFCD R3 F001302 (Bok choy, steamed). Oxalate: OHF 2024 (leaves+stalks).",
   "per100g": {
    "kcal": 19.6,
    "water": 94.9,
@@ -829,13 +844,14 @@
    "mn": 0.276,
    "zn": 0.35,
    "i": 3.2,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.2
   }
  },
  {
   "name": "Chinese leaf cabbage, boiled",
   "category": "food",
-  "note": "From AFCD R3 F001993 (Cabbage, Chinese, boiled, drained).",
+  "note": "From AFCD R3 F001993 (Cabbage, Chinese, boiled, drained). Oxalate: OHF 2024 (cabbage).",
   "per100g": {
    "kcal": 11.0,
    "water": 95.5,
@@ -881,13 +897,14 @@
    "mn": null,
    "zn": 0.2,
    "i": 3.4,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.8
   }
  },
  {
   "name": "Swiss chard (silverbeet), boiled",
   "category": "food",
-  "note": "High oxalate - use sparingly. From AFCD R3 F008266 (Silverbeet, fresh, boiled, drained).",
+  "note": "High oxalate - use sparingly. From AFCD R3 F008266 (Silverbeet, fresh, boiled, drained). Oxalate: OHF 2024 (green chard, boiled; red chard ~680).",
   "per100g": {
    "kcal": 24.6,
    "water": 91.0,
@@ -933,13 +950,14 @@
    "mn": 1.21,
    "zn": 0.64,
    "i": 3.4,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 334.9
   }
  },
  {
   "name": "Okra, boiled",
   "category": "food",
-  "note": "From AFCD R3 F006194 (Okra, boiled, drained).",
+  "note": "From AFCD R3 F006194 (Okra, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 28.7,
    "water": 88.5,
@@ -985,13 +1003,14 @@
    "mn": null,
    "zn": 0.61,
    "i": 0.6,
-   "se": 0.7
+   "se": 0.7,
+   "oxalate": 100.0
   }
  },
  {
   "name": "Couscous, boiled",
   "category": "food",
-  "note": "From AFCD R3 F003235 (Couscous, boiled, no added fat or salt).",
+  "note": "From AFCD R3 F003235 (Couscous, boiled, no added fat or salt). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 161.8,
    "water": 60.0,
@@ -1037,13 +1056,14 @@
    "mn": 0.562,
    "zn": 0.49,
    "i": 0.4,
-   "se": 4.9
+   "se": 4.9,
+   "oxalate": 16.6
   }
  },
  {
   "name": "Quinoa, boiled",
   "category": "food",
-  "note": "Rinse before cooking (saponins). From AFCD R3 F007596 (Quinoa, cooked in water, no added salt).",
+  "note": "Rinse before cooking (saponins). From AFCD R3 F007596 (Quinoa, cooked in water, no added salt). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 103.3,
    "water": 75.4,
@@ -1089,13 +1109,14 @@
    "mn": null,
    "zn": 0.91,
    "i": 0.7,
-   "se": 1.3
+   "se": 1.3,
+   "oxalate": 61.1
   }
  },
  {
   "name": "Polenta (cornmeal), boiled",
   "category": "food",
-  "note": "From AFCD R3 F003227 (Cornmeal (polenta), boiled, no added fat or salt).",
+  "note": "From AFCD R3 F003227 (Cornmeal (polenta), boiled, no added fat or salt). Oxalate: OHF 2024 (dry polenta, diluted).",
   "per100g": {
    "kcal": 108.0,
    "water": 72.1,
@@ -1141,13 +1162,14 @@
    "mn": 0.27,
    "zn": 0.19,
    "i": 1.6,
-   "se": 2.3
+   "se": 2.3,
+   "oxalate": 2.0
   }
  },
  {
   "name": "Pearl barley, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000378 (Barley, pearl, boiled, no added fat or salt).",
+  "note": "From AFCD R3 F000378 (Barley, pearl, boiled, no added fat or salt). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 141.0,
    "water": 62.6,
@@ -1193,13 +1215,14 @@
    "mn": 1.03,
    "zn": 0.51,
    "i": 1.4,
-   "se": 7.1
+   "se": 7.1,
+   "oxalate": 10.7
   }
  },
  {
   "name": "Buckwheat, boiled",
   "category": "food",
-  "note": "From AFCD R3 F001918 (Buckwheat groats, cooked in water, no added salt).",
+  "note": "From AFCD R3 F001918 (Buckwheat groats, cooked in water, no added salt). Oxalate: OHF 2024 (cereal, cooked).",
   "per100g": {
    "kcal": 69.3,
    "water": 81.9,
@@ -1245,14 +1268,15 @@
    "mn": null,
    "zn": 0.62,
    "i": 0.7,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 123.5
   },
   "role": "starch"
  },
  {
   "name": "Millet, boiled",
   "category": "food",
-  "note": "From AFCD R3 F005690 (Millet, boiled, no added fat or salt).",
+  "note": "From AFCD R3 F005690 (Millet, boiled, no added fat or salt). Oxalate: OHF 2024 (whole, cooked).",
   "per100g": {
    "kcal": 116.4,
    "water": 71.0,
@@ -1298,13 +1322,14 @@
    "mn": null,
    "zn": 0.89,
    "i": 0.6,
-   "se": 4.3
+   "se": 4.3,
+   "oxalate": 36.8
   }
  },
  {
   "name": "Tapioca, boiled",
   "category": "food",
-  "note": "Very low in protein, P and K. From AFCD R3 F009089 (Tapioca, pearl or seed style, boiled, no added fat or salt).",
+  "note": "Very low in protein, P and K. From AFCD R3 F009089 (Tapioca, pearl or seed style, boiled, no added fat or salt). Oxalate: OHF 2024 (tapioca flour, diluted).",
   "per100g": {
    "kcal": 47.1,
    "water": 87.2,
@@ -1350,7 +1375,8 @@
    "mn": 0.277,
    "zn": 0.02,
    "i": 2.6,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 5.0
   },
   "role": "starch"
  },
@@ -1403,13 +1429,14 @@
    "mn": 0.18,
    "zn": 0.37,
    "i": 3.7,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
   "name": "Soya beans, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000459 (Bean, soya (soy), dried, boiled, drained).",
+  "note": "From AFCD R3 F000459 (Bean, soya (soy), dried, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 146.7,
    "water": 65.3,
@@ -1455,13 +1482,14 @@
    "mn": 1.1,
    "zn": 1.6,
    "i": 0.0,
-   "se": 9.0
+   "se": 9.0,
+   "oxalate": 45.3
   }
  },
  {
   "name": "Haricot beans, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000437 (Bean, haricot, dried, boiled, drained).",
+  "note": "From AFCD R3 F000437 (Bean, haricot, dried, boiled, drained). Oxalate: OHF 2024 (navy beans).",
   "per100g": {
    "kcal": 110.9,
    "water": 67.9,
@@ -1507,14 +1535,15 @@
    "mn": 0.56,
    "zn": 0.9,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": 55.8
   },
   "role": "protein"
  },
  {
   "name": "Butter (lima) beans, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000442 (Bean, lima, dried, boiled, drained).",
+  "note": "From AFCD R3 F000442 (Bean, lima, dried, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 84.8,
    "water": 73.7,
@@ -1560,13 +1589,14 @@
    "mn": 0.39,
    "zn": 0.7,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 10.6
   }
  },
  {
   "name": "Split peas, boiled",
   "category": "food",
-  "note": "From AFCD R3 F006544 (Pea, split, dried, boiled, drained).",
+  "note": "From AFCD R3 F006544 (Pea, split, dried, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 87.0,
    "water": 72.5,
@@ -1612,7 +1642,8 @@
    "mn": 0.24,
    "zn": 0.6,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": 4.1
   }
  },
  {
@@ -1664,7 +1695,8 @@
    "mn": null,
    "zn": 0.85,
    "i": 3.0,
-   "se": 39.7
+   "se": 39.7,
+   "oxalate": null
   }
  },
  {
@@ -1716,7 +1748,8 @@
    "mn": 0.004,
    "zn": 0.24,
    "i": 15.3,
-   "se": 5.7
+   "se": 5.7,
+   "oxalate": 0.0
   }
  },
  {
@@ -1768,14 +1801,15 @@
    "mn": 0.006,
    "zn": 0.73,
    "i": 19.0,
-   "se": 5.9
+   "se": 5.9,
+   "oxalate": 0.0
   },
   "role": "protein"
  },
  {
   "name": "Natural yoghurt (~3% fat)",
   "category": "food",
-  "note": "From AFCD R3 F009694 (Yoghurt, natural, regular fat (~3%)).",
+  "note": "From AFCD R3 F009694 (Yoghurt, natural, regular fat (~3%)). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 73.1,
    "water": 81.4,
@@ -1821,14 +1855,15 @@
    "mn": 0.004,
    "zn": 0.57,
    "i": 24.0,
-   "se": 2.4
+   "se": 2.4,
+   "oxalate": 2.4
   },
   "role": "protein"
  },
  {
   "name": "Peanut butter, no added salt or sugar",
   "category": "food",
-  "note": "Must be xylitol-free. From AFCD R3 F006579 (Peanut butter, smooth & crunchy, no added sugar or salt).",
+  "note": "Must be xylitol-free. From AFCD R3 F006579 (Peanut butter, smooth & crunchy, no added sugar or salt). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 628.1,
    "water": 1.5,
@@ -1874,13 +1909,14 @@
    "mn": 1.82,
    "zn": 2.84,
    "i": 17.5,
-   "se": 13.8
+   "se": 13.8,
+   "oxalate": 124.1
   }
  },
  {
   "name": "Chia seeds, dry",
   "category": "food",
-  "note": "High in phosphorus. From AFCD R3 F008209 (Seed, chia, dried).",
+  "note": "High in phosphorus. From AFCD R3 F008209 (Seed, chia, dried). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 436.2,
    "water": 5.6,
@@ -1926,7 +1962,8 @@
    "mn": 4.3,
    "zn": 5.4,
    "i": 0.0,
-   "se": 12.0
+   "se": 12.0,
+   "oxalate": 469.2
   }
  },
  {
@@ -1978,7 +2015,8 @@
    "mn": null,
    "zn": 0.01,
    "i": 0.0,
-   "se": 0.3
+   "se": 0.3,
+   "oxalate": 0.0
   }
  },
  {
@@ -2030,7 +2068,8 @@
    "mn": null,
    "zn": 0.01,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  }
 ]

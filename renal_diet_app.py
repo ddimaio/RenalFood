@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.29x"
+ENGINE_VERSION = "2026.10.30a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -279,7 +279,9 @@ LIGHT_LEGEND = ("🟢 fine, or a good source of a needed nutrient · 🟡 rich i
                 "meaningful source. Each cell is judged on that ingredient's "
                 "density per 1000 kcal against the targets; the TOTAL row "
                 "shows the recipe's own status. % of P: red when its share "
-                "of phosphorus is over 1.5× its share of calories.")
+                "of phosphorus is over 1.5× its share of calories. Oxalate: judged per "
+                "100 g of the food – 🟢 <25 mg, 🟡 25–99 mg, 🔴 ≥100 mg "
+                "(high-oxalate food).")
 TAG_COLOUR = {"ok": "color: #1b7a1b", "warn": "color: #b36b00",
               "bad": "color: #c0392b; font-weight: 600", "": ""}
 
@@ -1553,6 +1555,18 @@ targets by stage. Ingredient values approximate USDA FoodData Central.
 **Score** – weighted sum of squared relative deviations outside each target
 (0 = all met). Weights are this app's judgement calls, editable on the
 Optimise tab.
+
+**Oxalate** – dietary oxalate can form calcium-oxalate crystals, which
+are to be avoided in dogs with reduced kidney function or stone history
+(high-oxalate foods such as spinach, Swiss chard, sweet potato, peanuts,
+buckwheat and chia). There is no canine numeric limit: this app penalises
+oxalate above 50 mg/1000 kcal (its own judgement, scaled from human
+low-oxalate diets; weight editable on the Optimise tab) and flags foods
+≥100 mg/100 g. Values: Oxalosis & Hyperoxaluria Foundation food list
+(2024), approximate – plant oxalate varies with variety and cooking.
+[Cook & Atiee, Today's Veterinary Practice 2026]
+(https://todaysveterinarypractice.com/urology-renal-medicine/understanding-and-addressing-canine-calcium-oxalate-urolithiasis/)
+· [OHF oxalate list](https://ohf.org/wp-content/uploads/2024/02/Oxalate-List-022724.pdf)
 
 **Not checked** – trace minerals (Zn, Cu, Fe, I, Se), vitamin K, biotin,
 essential fatty-acid balance, amino-acid balance. A home-made renal diet

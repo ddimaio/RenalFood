@@ -41,7 +41,8 @@
    "phe_tyr": 0.0,
    "thr": 0.0,
    "trp": 0.0,
-   "val": 0.0
+   "val": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -93,13 +94,14 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Apple, peeled, raw",
   "category": "food",
-  "note": "Filled from AFCD R3 F000108 (Apple, red skin, peeled, raw), scaled x0.80 for water content: i.",
+  "note": "Filled from AFCD R3 F000108 (Apple, red skin, peeled, raw), scaled x0.80 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 48.0,
    "water": 86.7,
@@ -145,13 +147,14 @@
    "mn": 0.038,
    "zn": 0.05,
    "se": 0.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 1.4
   }
  },
  {
   "name": "Asparagus, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000151 (Asparagus, green, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06008 (アスパラガス 若茎 ゆで), scaled.",
+  "note": "From AFCD R3 F000151 (Asparagus, green, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06008 (アスパラガス 若茎 ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 24.9,
    "water": 91.5,
@@ -197,13 +200,14 @@
    "mn": 0.224,
    "zn": 0.22,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 5.6
   }
  },
  {
   "name": "Banana",
   "category": "food",
-  "note": "Filled from AFCD R3 F000262 (Banana, cavendish, peeled, raw): i.",
+  "note": "Filled from AFCD R3 F000262 (Banana, cavendish, peeled, raw): i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 89.0,
    "water": 74.9,
@@ -249,7 +253,8 @@
    "mn": 0.27,
    "zn": 0.15,
    "se": 1.0,
-   "i": 0.415
+   "i": 0.415,
+   "oxalate": 5.1
   }
  },
  {
@@ -301,13 +306,14 @@
    "mn": 0.09,
    "zn": 0.6,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
   "name": "Beetroot, boiled",
   "category": "food",
-  "note": "Moderate oxalate. From AFCD R3 F001014 (Beetroot, fresh, purple, peeled, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06244 (ビーツ 根 ゆで), scaled.",
+  "note": "Moderate oxalate. From AFCD R3 F001014 (Beetroot, fresh, purple, peeled, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06244 (ビーツ 根 ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 59.8,
    "water": 84.8,
@@ -353,7 +359,8 @@
    "mn": 0.398,
    "zn": 0.65,
    "i": 1.6,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 56.5
   }
  },
  {
@@ -386,14 +393,15 @@
    "vit_c": 10.0,
    "epa_dha": 225.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": null
   },
   "assume_aafco": true
  },
  {
   "name": "Broccoli, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F001900 (Broccoli, fresh, boiled, drained), scaled x1.43 for water content: i.",
+  "note": "Filled from AFCD R3 F001900 (Broccoli, fresh, boiled, drained), scaled x1.43 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 35.0,
    "water": 89.3,
@@ -439,7 +447,8 @@
    "mn": 0.194,
    "zn": 0.45,
    "se": 1.6,
-   "i": 1.14
+   "i": 1.14,
+   "oxalate": 6.7
   }
  },
  {
@@ -491,14 +500,15 @@
    "mn": 0.229,
    "zn": 0.34,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "veg"
  },
  {
   "name": "Buckwheat, boiled",
   "category": "food",
-  "note": "From AFCD R3 F001918 (Buckwheat groats, cooked in water, no added salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 01126 (そば そば米), scaled.",
+  "note": "From AFCD R3 F001918 (Buckwheat groats, cooked in water, no added salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 01126 (そば そば米), scaled. Oxalate: OHF 2024 (cereal, cooked).",
   "per100g": {
    "kcal": 69.3,
    "water": 81.9,
@@ -544,14 +554,15 @@
    "mn": 0.158,
    "zn": 0.62,
    "i": 0.7,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 123.5
   },
   "role": "starch"
  },
  {
   "name": "Butter (lima) beans, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000442 (Bean, lima, dried, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 04093 (らいまめ 全粒 ゆで), scaled.",
+  "note": "From AFCD R3 F000442 (Bean, lima, dried, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 04093 (らいまめ 全粒 ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 84.8,
    "water": 73.7,
@@ -597,13 +608,14 @@
    "mn": 0.39,
    "zn": 0.7,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 10.6
   }
  },
  {
   "name": "Butternut squash, boiled",
   "category": "food",
-  "note": "From AFCD R3 F007534 (Pumpkin, butternut, peeled, fresh, boiled, drained).",
+  "note": "From AFCD R3 F007534 (Pumpkin, butternut, peeled, fresh, boiled, drained). Oxalate: OHF 2024 (winter squash).",
   "per100g": {
    "kcal": 47.1,
    "water": 84.3,
@@ -649,13 +661,14 @@
    "mn": 0.135,
    "zn": 0.15,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
   "name": "Cabbage, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F002014 (Cabbage, white, boiled, drained), scaled x0.82 for water content: b5, i.",
+  "note": "Filled from AFCD R3 F002014 (Cabbage, white, boiled, drained), scaled x0.82 for water content: b5, i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 23.0,
    "water": 92.6,
@@ -701,7 +714,8 @@
    "mn": 0.205,
    "zn": 0.2,
    "se": 0.6,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 3.8
   }
  },
  {
@@ -753,7 +767,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -805,7 +820,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -857,7 +873,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -909,13 +926,14 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Carrot, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F002275 (Carrot, mature, peeled, fresh, boiled, drained): i.",
+  "note": "Filled from AFCD R3 F002275 (Carrot, mature, peeled, fresh, boiled, drained): i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 35.0,
    "water": 90.2,
@@ -961,13 +979,14 @@
    "mn": 0.155,
    "zn": 0.2,
    "se": 0.7,
-   "i": 0.673
+   "i": 0.673,
+   "oxalate": 11.5
   }
  },
  {
   "name": "Cauldron Authentic Tofu (organic, 396 g)",
   "category": "food",
-  "note": "Label per 100 g: 118 kcal, protein 13 g, fat 7.1 g, carb 1.0 g, fibre 1.9 g, salt 0.03 g, calcium 401 mg (calcium sulphate set). NOT on label, ESTIMATED from USDA firm calcium-set tofu scaled to 13 g protein: phosphorus 143 mg, potassium 178 mg, magnesium 44 mg; water by difference. Vitamins unknown. Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased): b1, b2, b3, b5, b6, folate, vit_c, vit_e, la, fe, cu, mn, zn, i, se, trp.",
+  "note": "Label per 100 g: 118 kcal, protein 13 g, fat 7.1 g, carb 1.0 g, fibre 1.9 g, salt 0.03 g, calcium 401 mg (calcium sulphate set). NOT on label, ESTIMATED from USDA firm calcium-set tofu scaled to 13 g protein: phosphorus 143 mg, potassium 178 mg, magnesium 44 mg; water by difference. Vitamins unknown. Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased): b1, b2, b3, b5, b6, folate, vit_c, vit_e, la, fe, cu, mn, zn, i, se, trp. Oxalate: OHF 2024 (tofu); varies by brand.",
   "per100g": {
    "kcal": 118.0,
    "water": 75.5,
@@ -1002,13 +1021,14 @@
    "zn": 1.39,
    "i": 2.21,
    "se": 4.42,
-   "trp": 0.142
+   "trp": 0.142,
+   "oxalate": 8.0
   }
  },
  {
   "name": "Cauliflower, boiled",
   "category": "food",
-  "note": "From AFCD R3 F002377 (Cauliflower, fresh, boiled, drained).",
+  "note": "From AFCD R3 F002377 (Cauliflower, fresh, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 25.3,
    "water": 92.3,
@@ -1054,13 +1074,14 @@
    "mn": 0.13,
    "zn": 0.2,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.3
   }
  },
  {
   "name": "Celery, raw",
   "category": "food",
-  "note": "Chop finely (stringy). From AFCD R3 F002390 (Celery, fresh, raw). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06119 (セロリ 葉柄 生), scaled.",
+  "note": "Chop finely (stringy). From AFCD R3 F002390 (Celery, fresh, raw). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06119 (セロリ 葉柄 生), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 17.7,
    "water": 94.9,
@@ -1106,13 +1127,14 @@
    "mn": 0.14,
    "zn": 0.19,
    "i": 0.0,
-   "se": 1.5
+   "se": 1.5,
+   "oxalate": 25.0
   }
  },
  {
   "name": "Chia seeds, dry",
   "category": "food",
-  "note": "High in phosphorus. From AFCD R3 F008209 (Seed, chia, dried). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 05046 (チアシード 乾), scaled.",
+  "note": "High in phosphorus. From AFCD R3 F008209 (Seed, chia, dried). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 05046 (チアシード 乾), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 436.2,
    "water": 5.6,
@@ -1158,13 +1180,14 @@
    "mn": 4.3,
    "zn": 5.4,
    "i": 0.0,
-   "se": 12.0
+   "se": 12.0,
+   "oxalate": 469.2
   }
  },
  {
   "name": "Chickpeas, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F002882 (Chickpea, dried, boiled, drained), scaled x1.19 for water content: i.",
+  "note": "Filled from AFCD R3 F002882 (Chickpea, dried, boiled, drained), scaled x1.19 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 164.0,
    "water": 60.2,
@@ -1210,13 +1233,14 @@
    "mn": 1.03,
    "zn": 1.53,
    "se": 3.7,
-   "i": 0.238
+   "i": 0.238,
+   "oxalate": 10.5
   }
  },
  {
   "name": "Chinese leaf cabbage, boiled",
   "category": "food",
-  "note": "From AFCD R3 F001993 (Cabbage, Chinese, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 06234 (はくさい 結球葉 ゆで), scaled.",
+  "note": "From AFCD R3 F001993 (Cabbage, Chinese, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 06234 (はくさい 結球葉 ゆで), scaled. Oxalate: OHF 2024 (cabbage).",
   "per100g": {
    "kcal": 11.0,
    "water": 95.5,
@@ -1262,7 +1286,8 @@
    "mn": 0.117,
    "zn": 0.2,
    "i": 3.4,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.8
   }
  },
  {
@@ -1314,7 +1339,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "se": 0.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -1366,7 +1392,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -1418,13 +1445,14 @@
    "mn": 0.004,
    "zn": 0.24,
    "i": 15.3,
-   "se": 5.7
+   "se": 5.7,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Courgette, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F009773 (Zucchini, green skin, fresh, unpeeled, boiled, drained), scaled x0.87 for water content: b1, b2, b3, b5, i, vit_a.",
+  "note": "Filled from AFCD R3 F009773 (Zucchini, green skin, fresh, unpeeled, boiled, drained), scaled x0.87 for water content: b1, b2, b3, b5, i, vit_a. Oxalate: OHF 2024 (summer squash).",
   "per100g": {
    "kcal": 15.0,
    "water": 94.8,
@@ -1470,13 +1498,14 @@
    "mn": 0.173,
    "zn": 0.33,
    "se": 0.2,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 4.0
   }
  },
  {
   "name": "Couscous, boiled",
   "category": "food",
-  "note": "From AFCD R3 F003235 (Couscous, boiled, no added fat or salt).",
+  "note": "From AFCD R3 F003235 (Couscous, boiled, no added fat or salt). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 161.8,
    "water": 60.0,
@@ -1522,13 +1551,14 @@
    "mn": 0.562,
    "zn": 0.49,
    "i": 0.4,
-   "se": 4.9
+   "se": 4.9,
+   "oxalate": 16.6
   }
  },
  {
   "name": "Cucumber, peeled, raw",
   "category": "food",
-  "note": "From AFCD R3 F003319 (Cucumber, common, peeled, raw). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 06065 (きゅうり 果実 生), scaled.",
+  "note": "From AFCD R3 F003319 (Cucumber, common, peeled, raw). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 06065 (きゅうり 果実 生), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 12.0,
    "water": 96.2,
@@ -1574,7 +1604,8 @@
    "mn": 0.0578,
    "zn": 0.4,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.2
   }
  },
  {
@@ -1626,13 +1657,14 @@
    "mn": 50.0,
    "zn": 250.0,
    "i": 6000.0,
-   "se": 150.0
+   "se": 150.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Daikon (white radish), boiled",
   "category": "food",
-  "note": "From Standard Tables of Food Composition in Japan 2023 (MEXT), 06135 （だいこん類） だいこん 根 皮なし ゆで.",
+  "note": "From Standard Tables of Food Composition in Japan 2023 (MEXT), 06135 （だいこん類） だいこん 根 皮なし ゆで. Oxalate: OHF 2024 (radish).",
   "per100g": {
    "kcal": 15.0,
    "water": 94.8,
@@ -1678,13 +1710,14 @@
    "mn": 0.05,
    "zn": 0.1,
    "i": 3.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 1.0
   }
  },
  {
   "name": "Edamame, boiled",
   "category": "food",
-  "note": "Shelled beans only. From Standard Tables of Food Composition in Japan 2023 (MEXT), 06016 えだまめ ゆで.",
+  "note": "Shelled beans only. From Standard Tables of Food Composition in Japan 2023 (MEXT), 06016 えだまめ ゆで. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 118.0,
    "water": 72.1,
@@ -1730,7 +1763,8 @@
    "mn": 0.74,
    "zn": 1.3,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 29.3
   }
  },
  {
@@ -1782,7 +1816,8 @@
    "mn": 0.011,
    "zn": 0.03,
    "se": 20.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -1834,7 +1869,8 @@
    "mn": 0.011,
    "zn": 0.03,
    "se": 20.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -1886,7 +1922,8 @@
    "mn": 0.055,
    "zn": 2.3,
    "se": 56.0,
-   "i": 81.5
+   "i": 81.5,
+   "oxalate": 0.0
   }
  },
  {
@@ -1938,7 +1975,8 @@
    "mn": 0.026,
    "zn": 1.05,
    "se": 30.8,
-   "i": 48.6
+   "i": 48.6,
+   "oxalate": 0.0
   }
  },
  {
@@ -1990,7 +2028,8 @@
    "mn": 0.028,
    "zn": 1.29,
    "se": 30.7,
-   "i": 57.4
+   "i": 57.4,
+   "oxalate": 0.0
   }
  },
  {
@@ -2036,7 +2075,8 @@
    "thr": 0.0,
    "trp": 0.0,
    "val": 0.0,
-   "la": 0.0
+   "la": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2069,7 +2109,8 @@
    "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2102,7 +2143,8 @@
    "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2135,7 +2177,8 @@
    "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2168,7 +2211,8 @@
    "vit_c": 0.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2219,7 +2263,8 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2271,13 +2316,14 @@
    "mn": 0.0,
    "zn": 0.01,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Green beans, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F000430 (Bean, green, fresh, boiled, drained), scaled x1.32 for water content: i.",
+  "note": "Filled from AFCD R3 F000430 (Bean, green, fresh, boiled, drained), scaled x1.32 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 35.0,
    "water": 89.2,
@@ -2323,13 +2369,14 @@
    "mn": 0.285,
    "zn": 0.25,
    "se": 0.2,
-   "i": 1.05
+   "i": 1.05,
+   "oxalate": 24.2
   }
  },
  {
   "name": "Haricot beans, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000437 (Bean, haricot, dried, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 04008 (いんげんまめ 全粒 ゆで), scaled.",
+  "note": "From AFCD R3 F000437 (Bean, haricot, dried, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 04008 (いんげんまめ 全粒 ゆで), scaled. Oxalate: OHF 2024 (navy beans).",
   "per100g": {
    "kcal": 110.9,
    "water": 67.9,
@@ -2375,7 +2422,8 @@
    "mn": 0.56,
    "zn": 0.9,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": 55.8
   },
   "role": "protein"
  },
@@ -2428,7 +2476,8 @@
    "mn": 0.0911,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2461,7 +2510,8 @@
    "vit_c": 50.0,
    "epa_dha": 0.0,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2494,14 +2544,15 @@
    "vit_c": null,
    "epa_dha": null,
    "base_meq": 0.0,
-   "p_bind": 0.0
+   "p_bind": 0.0,
+   "oxalate": null
   },
   "assume_aafco": true
  },
  {
   "name": "Kabocha squash, boiled",
   "category": "food",
-  "note": "From Standard Tables of Food Composition in Japan 2023 (MEXT), 06049 （かぼちゃ類） 西洋かぼちゃ 果実 ゆで.",
+  "note": "From Standard Tables of Food Composition in Japan 2023 (MEXT), 06049 （かぼちゃ類） 西洋かぼちゃ 果実 ゆで. Oxalate: OHF 2024 (winter squash).",
   "per100g": {
    "kcal": 80.0,
    "water": 75.7,
@@ -2547,13 +2598,14 @@
    "mn": 0.07,
    "zn": 0.3,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
   "name": "Lentils, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F005177 (Lentil, dried, boiled, drained), scaled x1.19 for water content: i.",
+  "note": "Filled from AFCD R3 F005177 (Lentil, dried, boiled, drained), scaled x1.19 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 116.0,
    "water": 69.6,
@@ -2599,7 +2651,8 @@
    "mn": 0.494,
    "zn": 1.27,
    "se": 2.8,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 8.3
   }
  },
  {
@@ -2651,7 +2704,8 @@
    "mn": 0.235,
    "zn": 0.28,
    "i": 2.1,
-   "se": 0.5
+   "se": 0.5,
+   "oxalate": null
   }
  },
  {
@@ -2703,7 +2757,8 @@
    "mn": 0.0,
    "zn": 0.07,
    "se": 0.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2755,7 +2810,8 @@
    "mn": 0.8,
    "zn": 0.3,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   }
  },
  {
@@ -2807,13 +2863,14 @@
    "mn": 0.247,
    "zn": 0.47,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
   "name": "Millet, boiled",
   "category": "food",
-  "note": "From AFCD R3 F005690 (Millet, boiled, no added fat or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu from Japan 2023 tables 01011 (きび 精白粒), scaled.",
+  "note": "From AFCD R3 F005690 (Millet, boiled, no added fat or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu from Japan 2023 tables 01011 (きび 精白粒), scaled. Oxalate: OHF 2024 (whole, cooked).",
   "per100g": {
    "kcal": 116.4,
    "water": 71.0,
@@ -2859,7 +2916,8 @@
    "mn": null,
    "zn": 0.89,
    "i": 0.6,
-   "se": 4.3
+   "se": 4.3,
+   "oxalate": 36.8
   }
  },
  {
@@ -2911,7 +2969,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
@@ -2963,13 +3022,14 @@
    "mn": 0.06,
    "zn": 0.2,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   }
  },
  {
   "name": "Mushrooms, chestnut (crimini), raw weight",
   "category": "food",
-  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Filled from AFCD R3 F005946 (Mushroom, common, fresh, raw), scaled x1.14 for water content: i.",
+  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Filled from AFCD R3 F005946 (Mushroom, common, fresh, raw), scaled x1.14 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 22.0,
    "water": 92.12,
@@ -3015,13 +3075,14 @@
    "se": 26.0,
    "met_cys": 0.054,
    "phe_tyr": 0.151,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, oyster, raw weight",
   "category": "food",
-  "note": "USDA SR26 11987 (Mushrooms, oyster, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. i from Japan 2023 tables 08026 (（ひらたけ類） ひらたけ 生), scaled.",
+  "note": "USDA SR26 11987 (Mushrooms, oyster, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. i from Japan 2023 tables 08026 (（ひらたけ類） ひらたけ 生), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 33.0,
    "water": 89.18,
@@ -3067,13 +3128,14 @@
    "se": 2.6,
    "met_cys": 0.07,
    "phe_tyr": 0.196,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, portobello, grilled",
   "category": "food",
-  "note": "USDA SR26 11243 (Mushrooms, portabella, grilled). Cooked weight, not UV-treated (UV 'vitamin D' mushrooms are much higher in vitamin D). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. i from Japan 2023 tables 08059 (マッシュルーム ブラウン種 生), scaled.",
+  "note": "USDA SR26 11243 (Mushrooms, portabella, grilled). Cooked weight, not UV-treated (UV 'vitamin D' mushrooms are much higher in vitamin D). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. i from Japan 2023 tables 08059 (マッシュルーム ブラウン種 生), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 29.0,
    "water": 90.66,
@@ -3119,13 +3181,14 @@
    "se": 21.9,
    "met_cys": 0.055,
    "phe_tyr": 0.17,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, shiitake, cooked",
   "category": "food",
-  "note": "USDA SR26 11269 (Mushrooms, shiitake, cooked, without salt). Cooked weight; always cook shiitake (raw can cause skin rash). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11269 (Mushrooms, shiitake, cooked, without salt). Cooked weight; always cook shiitake (raw can cause skin rash). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 56.0,
    "water": 83.48,
@@ -3171,13 +3234,14 @@
    "se": 24.8,
    "met_cys": 0.052,
    "phe_tyr": 0.111,
-   "i": null
+   "i": null,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, white (button), boiled",
   "category": "food",
-  "note": "USDA SR26 11261 (Mushrooms, white, cooked, boiled, drained, without salt). Cooked weight. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. i from Japan 2023 tables 08032 (マッシュルーム ゆで), scaled.",
+  "note": "USDA SR26 11261 (Mushrooms, white, cooked, boiled, drained, without salt). Cooked weight. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. i from Japan 2023 tables 08032 (マッシュルーム ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 28.0,
    "water": 91.08,
@@ -3223,7 +3287,8 @@
    "se": 11.9,
    "met_cys": 0.031,
    "phe_tyr": 0.091,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 1.3
   }
  },
  {
@@ -3275,13 +3340,14 @@
    "mn": 1.39,
    "zn": 1.9,
    "i": 0.0,
-   "se": 16.0
+   "se": 16.0,
+   "oxalate": null
   }
  },
  {
   "name": "Natural yoghurt (~3% fat)",
   "category": "food",
-  "note": "From AFCD R3 F009694 (Yoghurt, natural, regular fat (~3%)). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 13025 (＜牛乳及び乳製品＞ （発酵乳・乳酸菌飲料） ヨーグルト 全脂無糖), scaled.",
+  "note": "From AFCD R3 F009694 (Yoghurt, natural, regular fat (~3%)). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 13025 (＜牛乳及び乳製品＞ （発酵乳・乳酸菌飲料） ヨーグルト 全脂無糖), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 73.1,
    "water": 81.4,
@@ -3327,14 +3393,15 @@
    "mn": 0.004,
    "zn": 0.57,
    "i": 24.0,
-   "se": 2.4
+   "se": 2.4,
+   "oxalate": 2.4
   },
   "role": "protein"
  },
  {
   "name": "Oats, rolled, dry",
   "category": "food",
-  "note": "Filled from AFCD R3 F006143 (Oats, rolled, uncooked): i.",
+  "note": "Filled from AFCD R3 F006143 (Oats, rolled, uncooked): i. Oxalate: OHF 2024 (oat flour).",
   "per100g": {
    "kcal": 379.0,
    "water": 10.8,
@@ -3380,7 +3447,8 @@
    "mn": 3.63,
    "zn": 3.64,
    "se": 28.9,
-   "i": 72.7
+   "i": 72.7,
+   "oxalate": 32.7
   }
  },
  {
@@ -3432,14 +3500,15 @@
    "mn": 0.4,
    "zn": 0.6,
    "i": 1.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": null
   },
   "role": "protein"
  },
  {
   "name": "Okra, boiled",
   "category": "food",
-  "note": "From AFCD R3 F006194 (Okra, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 06033 (オクラ 果実 ゆで), scaled.",
+  "note": "From AFCD R3 F006194 (Okra, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 06033 (オクラ 果実 ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 28.7,
    "water": 88.5,
@@ -3485,7 +3554,8 @@
    "mn": 0.521,
    "zn": 0.61,
    "i": 0.6,
-   "se": 0.7
+   "se": 0.7,
+   "oxalate": 100.0
   }
  },
  {
@@ -3537,13 +3607,14 @@
    "mn": 0.0,
    "zn": 0.0,
    "se": 0.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Pak choi (bok choy), steamed",
   "category": "food",
-  "note": "From AFCD R3 F001302 (Bok choy, steamed). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06161 (チンゲンサイ 葉 ゆで), scaled.",
+  "note": "From AFCD R3 F001302 (Bok choy, steamed). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 06161 (チンゲンサイ 葉 ゆで), scaled. Oxalate: OHF 2024 (leaves+stalks).",
   "per100g": {
    "kcal": 19.6,
    "water": 94.9,
@@ -3589,13 +3660,14 @@
    "mn": 0.276,
    "zn": 0.35,
    "i": 3.2,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.2
   }
  },
  {
   "name": "Parsnip, boiled",
   "category": "food",
-  "note": "From AFCD R3 F006327 (Parsnip, peeled, fresh, boiled, drained).",
+  "note": "From AFCD R3 F006327 (Parsnip, peeled, fresh, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 63.1,
    "water": 82.0,
@@ -3641,13 +3713,14 @@
    "mn": 0.161,
    "zn": 0.31,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 19.2
   }
  },
  {
   "name": "Pasta, boiled (unenriched)",
   "category": "food",
-  "note": "Filled from AFCD R3 F006456 (Pasta, white wheat flour, boiled from dry, no added salt): i.",
+  "note": "Filled from AFCD R3 F006456 (Pasta, white wheat flour, boiled from dry, no added salt): i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 158.0,
    "water": 62.1,
@@ -3693,13 +3766,14 @@
    "mn": 0.322,
    "zn": 0.51,
    "se": 26.4,
-   "i": 4.4
+   "i": 4.4,
+   "oxalate": 18.8
   }
  },
  {
   "name": "Peanut butter, no added salt or sugar",
   "category": "food",
-  "note": "Must be xylitol-free. From AFCD R3 F006579 (Peanut butter, smooth & crunchy, no added sugar or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 05037 (らっかせい ピーナッツバター), scaled.",
+  "note": "Must be xylitol-free. From AFCD R3 F006579 (Peanut butter, smooth & crunchy, no added sugar or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 05037 (らっかせい ピーナッツバター), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 628.1,
    "water": 1.5,
@@ -3745,13 +3819,14 @@
    "mn": 1.82,
    "zn": 2.84,
    "i": 17.5,
-   "se": 13.8
+   "se": 13.8,
+   "oxalate": 124.1
   }
  },
  {
   "name": "Pearl barley, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000378 (Barley, pearl, boiled, no added fat or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5 from Japan 2023 tables 01170 (おおむぎ 押麦 めし), scaled.",
+  "note": "From AFCD R3 F000378 (Barley, pearl, boiled, no added fat or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5 from Japan 2023 tables 01170 (おおむぎ 押麦 めし), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 141.0,
    "water": 62.6,
@@ -3797,13 +3872,14 @@
    "mn": 1.03,
    "zn": 0.51,
    "i": 1.4,
-   "se": 7.1
+   "se": 7.1,
+   "oxalate": 10.7
   }
  },
  {
   "name": "Peas, green, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F006535 (Pea, green, fresh, boiled, drained), scaled x1.28 for water content: i.",
+  "note": "Filled from AFCD R3 F006535 (Pea, green, fresh, boiled, drained), scaled x1.28 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 84.0,
    "water": 77.9,
@@ -3849,7 +3925,8 @@
    "mn": 0.525,
    "zn": 1.19,
    "se": 1.9,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 2.5
   }
  },
  {
@@ -3901,13 +3978,14 @@
    "mn": 0.01,
    "zn": 0.0,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Polenta (cornmeal), boiled",
   "category": "food",
-  "note": "From AFCD R3 F003227 (Cornmeal (polenta), boiled, no added fat or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5 from Japan 2023 tables 01132 (とうもろこし コーンミール 黄色種), scaled.",
+  "note": "From AFCD R3 F003227 (Cornmeal (polenta), boiled, no added fat or salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5 from Japan 2023 tables 01132 (とうもろこし コーンミール 黄色種), scaled. Oxalate: OHF 2024 (dry polenta, diluted).",
   "per100g": {
    "kcal": 108.0,
    "water": 72.1,
@@ -3953,7 +4031,8 @@
    "mn": 0.27,
    "zn": 0.19,
    "i": 1.6,
-   "se": 2.3
+   "se": 2.3,
+   "oxalate": 2.0
   }
  },
  {
@@ -4005,7 +4084,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4057,7 +4137,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4109,14 +4190,15 @@
    "mn": null,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "starch"
  },
  {
   "name": "Potato, boiled, no skin",
   "category": "food",
-  "note": "Filled from AFCD R3 F007320 (Potato, pale skin, peeled, boiled, drained), scaled x1.22 for water content: i.",
+  "note": "Filled from AFCD R3 F007320 (Potato, pale skin, peeled, boiled, drained), scaled x1.22 for water content: i. Oxalate: OHF 2024 (white, boiled).",
   "per100g": {
    "kcal": 86.0,
    "water": 77.5,
@@ -4162,13 +4244,14 @@
    "mn": 0.14,
    "zn": 0.27,
    "se": 0.3,
-   "i": 1.58
+   "i": 1.58,
+   "oxalate": 23.1
   }
  },
  {
   "name": "Pumpkin, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F007554 (Pumpkin, peeled, fresh, boiled, drained), scaled x0.60 for water content: i.",
+  "note": "Filled from AFCD R3 F007554 (Pumpkin, peeled, fresh, boiled, drained), scaled x0.60 for water content: i. Oxalate: OHF 2024 (canned pumpkin).",
   "per100g": {
    "kcal": 20.0,
    "water": 93.7,
@@ -4214,13 +4297,14 @@
    "mn": 0.089,
    "zn": 0.23,
    "se": 0.2,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 5.8
   }
  },
  {
   "name": "Quinoa, boiled",
   "category": "food",
-  "note": "Rinse before cooking (saponins). From AFCD R3 F007596 (Quinoa, cooked in water, no added salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 01167 (キヌア 玄穀), scaled.",
+  "note": "Rinse before cooking (saponins). From AFCD R3 F007596 (Quinoa, cooked in water, no added salt). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 01167 (キヌア 玄穀), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 103.3,
    "water": 75.4,
@@ -4266,7 +4350,8 @@
    "mn": 0.686,
    "zn": 0.91,
    "i": 0.7,
-   "se": 1.3
+   "se": 1.3,
+   "oxalate": 61.1
   }
  },
  {
@@ -4318,7 +4403,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "se": 0.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4370,7 +4456,8 @@
    "mn": 0.067,
    "zn": 0.13,
    "i": 0.0,
-   "se": 0.8
+   "se": 0.8,
+   "oxalate": null
   }
  },
  {
@@ -4422,7 +4509,8 @@
    "mn": 0.0,
    "zn": 0.01,
    "i": 0.0,
-   "se": 0.3
+   "se": 0.3,
+   "oxalate": 0.0
   }
  },
  {
@@ -4474,13 +4562,14 @@
    "mn": 0.18,
    "zn": 0.37,
    "i": 3.7,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
   "name": "Rice, brown, boiled",
   "category": "food",
-  "note": "Filled from AFCD R3 F007641 (Rice, brown, boiled, no added salt), scaled x0.72 for water content: i.",
+  "note": "Filled from AFCD R3 F007641 (Rice, brown, boiled, no added salt), scaled x0.72 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 123.0,
    "water": 70.3,
@@ -4526,13 +4615,14 @@
    "mn": 0.905,
    "zn": 0.63,
    "se": 9.8,
-   "i": 7.06
+   "i": 7.06,
+   "oxalate": 5.6
   }
  },
  {
   "name": "Rice, white, boiled (unenriched)",
   "category": "food",
-  "note": "Filled from AFCD R3 F007661 (Rice, white, boiled or rice cooker, no added salt), scaled x0.83 for water content: i.",
+  "note": "Filled from AFCD R3 F007661 (Rice, white, boiled or rice cooker, no added salt), scaled x0.83 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 130.0,
    "water": 68.4,
@@ -4578,13 +4668,14 @@
    "mn": 0.472,
    "zn": 0.49,
    "se": 7.5,
-   "i": 2.15
+   "i": 2.15,
+   "oxalate": 1.1
   }
  },
  {
   "name": "Rice, white, raw (dry, unenriched)",
   "category": "food",
-  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked. Filled from AFCD R3 F007682 (Rice, white, uncooked): i.",
+  "note": "Dry weight before cooking; approx. USDA long-grain, unenriched. ~1 g dry = ~2.8 g cooked. Filled from AFCD R3 F007682 (Rice, white, uncooked): i. Oxalate: OHF 2024 (boiled value x dry-matter ratio).",
   "per100g": {
    "kcal": 365.0,
    "water": 11.6,
@@ -4630,7 +4721,8 @@
    "mn": 1.088,
    "zn": 1.09,
    "se": 15.1,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 3.1
   }
  },
  {
@@ -4682,7 +4774,8 @@
    "mn": 0.006,
    "zn": 0.73,
    "i": 19.0,
-   "se": 5.9
+   "se": 5.9,
+   "oxalate": 0.0
   },
   "role": "protein"
  },
@@ -4735,7 +4828,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 0.0
   }
  },
  {
@@ -4787,7 +4881,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4839,7 +4934,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4891,7 +4987,8 @@
    "mn": 0.03,
    "zn": 0.1,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   },
   "role": "other"
  },
@@ -4944,7 +5041,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4996,13 +5094,14 @@
    "mn": 0.12,
    "zn": 0.2,
    "i": 0.0,
-   "se": 6.0
+   "se": 6.0,
+   "oxalate": null
   }
  },
  {
   "name": "Soy milk, unsweetened",
   "category": "food",
-  "note": "Plain soy milk, no additives. From Standard Tables of Food Composition in Japan 2023 (MEXT), 04052 だいず ［その他］ 豆乳 豆乳.",
+  "note": "Plain soy milk, no additives. From Standard Tables of Food Composition in Japan 2023 (MEXT), 04052 だいず ［その他］ 豆乳 豆乳. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 43.0,
    "water": 90.8,
@@ -5048,14 +5147,15 @@
    "mn": 0.23,
    "zn": 0.3,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 3.7
   },
   "role": "protein"
  },
  {
   "name": "Soya beans, boiled",
   "category": "food",
-  "note": "From AFCD R3 F000459 (Bean, soya (soy), dried, boiled, drained).",
+  "note": "From AFCD R3 F000459 (Bean, soya (soy), dried, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 146.7,
    "water": 65.3,
@@ -5101,7 +5201,8 @@
    "mn": 1.1,
    "zn": 1.6,
    "i": 0.0,
-   "se": 9.0
+   "se": 9.0,
+   "oxalate": 45.3
   }
  },
  {
@@ -5153,13 +5254,14 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Spinach, boiled",
   "category": "food",
-  "note": "High oxalate and potassium. Filled from AFCD R3 F008760 (Spinach, Mature English, fresh, boiled, drained), scaled x1.06 for water content: i.",
+  "note": "High oxalate and potassium. Filled from AFCD R3 F008760 (Spinach, Mature English, fresh, boiled, drained), scaled x1.06 for water content: i. Oxalate: OHF 2024 (boiled, 1/2 cup).",
   "per100g": {
    "kcal": 23.0,
    "water": 91.2,
@@ -5205,13 +5307,14 @@
    "mn": 0.935,
    "zn": 0.76,
    "se": 1.5,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 566.7
   }
  },
  {
   "name": "Split peas, boiled",
   "category": "food",
-  "note": "From AFCD R3 F006544 (Pea, split, dried, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 04013 (えんどう 全粒 青えんどう ゆで), scaled.",
+  "note": "From AFCD R3 F006544 (Pea, split, dried, boiled, drained). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val from Japan 2023 tables 04013 (えんどう 全粒 青えんどう ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 87.0,
    "water": 72.5,
@@ -5257,13 +5360,14 @@
    "mn": 0.24,
    "zn": 0.6,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": 4.1
   }
  },
  {
   "name": "Squash, summer (button), boiled",
   "category": "food",
-  "note": "From AFCD R3 F008810 (Squash, button, fresh, boiled, drained).",
+  "note": "From AFCD R3 F008810 (Squash, button, fresh, boiled, drained). Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 31.1,
    "water": 89.4,
@@ -5309,7 +5413,8 @@
    "mn": null,
    "zn": 0.23,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
@@ -5361,13 +5466,14 @@
    "zn": 0.0,
    "se": 0.0,
    "mn": 0.0,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Swede, boiled",
   "category": "food",
-  "note": "From AFCD R3 F009020 (Swede, peeled, fresh, boiled, drained).",
+  "note": "From AFCD R3 F009020 (Swede, peeled, fresh, boiled, drained). Oxalate: OHF 2024 (rutabaga).",
   "per100g": {
    "kcal": 23.9,
    "water": 91.1,
@@ -5413,13 +5519,14 @@
    "mn": null,
    "zn": 0.2,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.7
   }
  },
  {
   "name": "Sweet potato, boiled, no skin",
   "category": "food",
-  "note": "Filled from AFCD R3 F009034 (Sweet potato, orange flesh, peeled, fresh, boiled, drained): i.",
+  "note": "Filled from AFCD R3 F009034 (Sweet potato, orange flesh, peeled, fresh, boiled, drained): i. Oxalate: OHF 2024 (baked/boiled; mashed without skin ~42).",
   "per100g": {
    "kcal": 76.0,
    "water": 80.1,
@@ -5465,13 +5572,14 @@
    "mn": 0.266,
    "zn": 0.2,
    "se": 0.2,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 126.4
   }
  },
  {
   "name": "Swiss chard (silverbeet), boiled",
   "category": "food",
-  "note": "High oxalate - use sparingly. From AFCD R3 F008266 (Silverbeet, fresh, boiled, drained).",
+  "note": "High oxalate - use sparingly. From AFCD R3 F008266 (Silverbeet, fresh, boiled, drained). Oxalate: OHF 2024 (green chard, boiled; red chard ~680).",
   "per100g": {
    "kcal": 24.6,
    "water": 91.0,
@@ -5517,13 +5625,14 @@
    "mn": 1.21,
    "zn": 0.64,
    "i": 3.4,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 334.9
   }
  },
  {
   "name": "Tapioca, boiled",
   "category": "food",
-  "note": "Very low in protein, P and K. From AFCD R3 F009089 (Tapioca, pearl or seed style, boiled, no added fat or salt). b5 from Japan 2023 tables 02057 (＜でん粉・でん粉製品＞ （でん粉製品） タピオカパール ゆで), scaled.",
+  "note": "Very low in protein, P and K. From AFCD R3 F009089 (Tapioca, pearl or seed style, boiled, no added fat or salt). b5 from Japan 2023 tables 02057 (＜でん粉・でん粉製品＞ （でん粉製品） タピオカパール ゆで), scaled. Oxalate: OHF 2024 (tapioca flour, diluted).",
   "per100g": {
    "kcal": 47.1,
    "water": 87.2,
@@ -5569,7 +5678,8 @@
    "mn": 0.277,
    "zn": 0.02,
    "i": 2.6,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 5.0
   },
   "role": "starch"
  },
@@ -5622,13 +5732,14 @@
    "mn": null,
    "zn": null,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 0.0
   }
  },
  {
   "name": "Tofu, firm (calcium-set)",
   "category": "food",
-  "note": "Calcium varies hugely with coagulant - check label. Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased), scaled x1.15 for water content: i.",
+  "note": "Calcium varies hugely with coagulant - check label. Filled from AFCD R3 F009176 (Tofu (soy bean curd), firm, as purchased), scaled x1.15 for water content: i. Oxalate: OHF 2024; varies by brand.",
   "per100g": {
    "kcal": 144.0,
    "water": 70.8,
@@ -5674,13 +5785,14 @@
    "mn": 1.181,
    "zn": 1.57,
    "se": 17.4,
-   "i": 2.63
+   "i": 2.63,
+   "oxalate": 8.0
   }
  },
  {
   "name": "Tofu, silken",
   "category": "food",
-  "note": "b5, vit_e, la, mn, i, se from Japan 2023 tables 04033 (だいず ［豆腐・油揚げ類］ 絹ごし豆腐).",
+  "note": "b5, vit_e, la, mn, i, se from Japan 2023 tables 04033 (だいず ［豆腐・油揚げ類］ 絹ごし豆腐). Oxalate: OHF 2024; varies by brand.",
   "per100g": {
    "kcal": 55.0,
    "water": 87.3,
@@ -5726,13 +5838,14 @@
    "la": 1.6,
    "mn": 0.34,
    "i": 1.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 8.0
   }
  },
  {
   "name": "Turnip, boiled",
   "category": "food",
-  "note": "From AFCD R3 F009339 (Turnip, white, peeled, fresh, boiled, no added fat). b5, cu from Japan 2023 tables 06039 (かぶ 根 皮なし ゆで), scaled.",
+  "note": "From AFCD R3 F009339 (Turnip, white, peeled, fresh, boiled, no added fat). b5, cu from Japan 2023 tables 06039 (かぶ 根 皮なし ゆで), scaled. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 24.1,
    "water": 92.4,
@@ -5778,7 +5891,8 @@
    "mn": null,
    "zn": 0.2,
    "i": 0.4,
-   "se": 0.2
+   "se": 0.2,
+   "oxalate": 2.6
   }
  },
  {
@@ -5830,7 +5944,8 @@
    "mn": 0.12,
    "zn": 0.1,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": null
   }
  },
  {
@@ -5882,7 +5997,8 @@
    "mn": 2.62,
    "zn": 0.85,
    "i": 3.0,
-   "se": 39.7
+   "se": 39.7,
+   "oxalate": null
   }
  },
  {
@@ -5932,7 +6048,8 @@
    "fe": 0.0,
    "cu": 0.0,
    "zn": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -5984,7 +6101,8 @@
    "mn": 0.02,
    "zn": 0.1,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   }
  }
 ]

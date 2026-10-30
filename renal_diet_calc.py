@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.29x"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -81,6 +81,7 @@ NUTRIENTS = [
     ("vit_e", "Vitamin E", "IU"),
     ("vit_c", "Vitamin C", "mg"),
     ("epa_dha", "EPA + DHA", "mg"),
+    ("oxalate", "Oxalate", "mg"),
     ("base_meq", "Added alkali (e.g. bicarbonate)", "mEq"),
     ("p_bind", "Phosphate binding (est.)", "mg P"),
     # ---- extended nutrients (optional check, off by default)
@@ -793,7 +794,15 @@ def fmt(v):
 
 
 # Extra limits that blood results can tighten (defaults = AAFCO)
-DEFAULT_LIMITS = {"ca_p": (1.0, 2.0), "ca_max": AAFCO_MAX["ca"]}
+# Oxalate: no canine standard exists. High-oxalate foods (spinach, chard,
+# sweet potato, peanuts...) are to be avoided in calcium-oxalate stone
+# formers (Cook & Atiee, Today's Vet Practice 2026) and oxalate crystals can
+# injure tubules in CKD. App default (judgement, scaled from human
+# low-oxalate diets of ~40-100 mg/day): 50 mg per 1000 kcal.
+OXALATE_MAX = 50.0
+HIGH_OXALATE = 100.0   # mg/100 g: ingredient flagged as high-oxalate
+DEFAULT_LIMITS = {"ca_p": (1.0, 2.0), "ca_max": AAFCO_MAX["ca"],
+                  "ox_max": OXALATE_MAX}
 
 
 def get_ranges(ctx=None):
@@ -836,6 +845,15 @@ def status_for(k, per1000, renal_mode, ranges=None):
         else:
             msgs.append("in renal range")
             tag = "ok"
+    elif k == "oxalate":
+        lim = R.get("ox_max", OXALATE_MAX) if isinstance(R, dict) \
+            else OXALATE_MAX
+        if per1000 > lim:
+            msgs.append(f"above low-oxalate limit ({lim:g})")
+            tag = "bad"
+        else:
+            msgs.append(f"≤ low-oxalate limit ({lim:g})")
+            tag = "ok"
     elif k in AAFCO:
         if per1000 < AAFCO[k]:
             msgs.append("below AAFCO min")
@@ -871,14 +889,15 @@ KI = {k: i for i, k in enumerate(KEYS)}
 OPT_WEIGHTS = {"energy": 10.0, "phosphorus": 5.0, "protein": 4.0,
                "ca_p": 3.0, "sodium": 1.0, "potassium": 1.0, "omega3": 1.0,
                "micros": 1.0, "vitamins": 1.0, "fat": 1.0, "fibre": 2.0,
-               "aim": 0.5, "acid": 0.0}
+               "aim": 0.5, "acid": 0.0, "oxalate": 2.0}
 WEIGHT_LABELS = {"energy": "Energy", "phosphorus": "Phosphorus",
                  "protein": "Protein", "ca_p": "Ca:P ratio",
                  "sodium": "Sodium", "potassium": "Potassium",
                  "omega3": "EPA+DHA", "micros": "Fat/Ca/Mg minimums",
                  "vitamins": "Vitamin minimums",
                  "fat": "Fat ≤55% kcal", "fibre": "Fibre ≤15 g/1000kcal",
-                 "aim": "Pull to aims", "acid": "Acid load (PRAL)"}
+                 "aim": "Pull to aims", "acid": "Acid load (PRAL)",
+                 "oxalate": "Oxalate ≤ limit"}
 # Optional daily food limit (g/day, a dog with a small appetite): penalty
 # weight for exceeding it. Same priority as hitting the energy target.
 FOOD_MAX_WEIGHT = 10.0
@@ -940,6 +959,17 @@ def _band(v, lo, hi):
     if hi is not None and v > hi:
         return ((v - hi) / hi) ** 2
     return 0.0
+
+
+def _ox_pen(v, lim):
+    """Oxalate above the limit: squared, scaled to 4x the limit (2x limit ->
+    0.06, 3x -> 0.25, 5x -> 1), growing linearly beyond 5x so that one
+    spinach-rich recipe does not swamp every other target. Unknown values
+    count as 0 (the known amount is already a minimum)."""
+    if v <= lim or lim <= 0:
+        return 0.0
+    d = (v - lim) / (4.0 * lim)
+    return d * d if d <= 1 else 2 * d - 1
 
 
 def per1000_from(g, vecs):
@@ -1166,6 +1196,8 @@ def _score_targets(g, vecs, ctx):
     if me > 0 and not {"fat", "protein", "carb", "fibre"} & unk:
         add("Fat % of calories", W["fat"], _band(fat_me / me, None, 0.55))
     add("Fibre (bulk)", W.get("fibre", 0), _band(per["fibre"], None, FIBRE_MAX))
+    add("Oxalate", W.get("oxalate", 0),
+        _ox_pen(per["oxalate"], R.get("ox_max", OXALATE_MAX)))
     if ctx.get("extended"):              # optional: amino acids, LA, trace
         we = W.get("extended", W["micros"]) * 0.5
         for k in EXT_KEYS:
@@ -2070,7 +2102,7 @@ def breakdown_extra_keys(extended=False):
     """Nutrients added to the breakdown in extended mode: every other
     nutrient (vitamins, minerals, amino acids, trace minerals...)."""
     if not extended:
-        return []
+        return ["oxalate"]
     return [k for k in KEYS if k not in _BRK_SHOWN
             and k not in ("base_meq", "p_bind")]
 
@@ -2171,6 +2203,9 @@ def nutrient_light(k, d, renal, R, aims):
         return _light_need(d, lo, hi)
     if k == "ca":
         return _light_need(d, AAFCO["ca"], R["ca_max"])
+    if k == "oxalate":
+        lim = R.get("ox_max", OXALATE_MAX)
+        return "r" if d > lim else ("a" if d > 0.5 * lim else "g")
     if k in AAFCO and k not in ("fat",):
         return _light_need(d, AAFCO[k], AAFCO_MAX.get(k))
     return None
@@ -2237,6 +2272,12 @@ def breakdown_lights(recipe, db, t, renal, ranges=None, aims=None,
                     sk = kc * g / 100 / tk
                     r_ = sp / sk if sk > 0 else (9 if sp > 0.05 else 0)
                     row[i] = "r" if r_ > 1.5 else "a" if r_ > 1.0 else "g"
+                continue
+            if k == "oxalate":                    # judged per 100 g of food
+                x = value(it, k)
+                if x is not None:
+                    row[i] = ("r" if x >= HIGH_OXALATE else
+                              "a" if x >= 25 else "g")
                 continue
             if k is None or k == "kcal" or kc < _MIN_KCAL:
                 continue
@@ -2370,6 +2411,25 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
                                  stage_note, fat_me / me_sum, ranges,
                                  (sctx or {}).get("blood_note", ""), extended,
                                  assumed)
+    # ---- oxalate
+    ox_lim = ranges.get("ox_max", OXALATE_MAX)
+    ox1000 = t["oxalate"] * k1000 if k1000 else 0.0
+    hi_ox = [(n, value(db[n], "oxalate")) for n, g in recipe
+             if n in db and g > 0 and (value(db[n], "oxalate") or 0)
+             >= HIGH_OXALATE]
+    if hi_ox or ox1000 > ox_lim:
+        res["notes"] += (
+            f"\n• Oxalate {ox1000:.0f} mg/1000 kcal (app limit {ox_lim:g})"
+            + (". High-oxalate ingredients: " + ", ".join(
+                f"{n} (~{v:.0f} mg/100 g)" for n, v in hi_ox) if hi_ox
+               else "")
+            + ". Dietary oxalate can form calcium-oxalate crystals; with "
+              "reduced kidney function they can damage the tubules. Prefer "
+              "low-oxalate foods (e.g. cauliflower, cabbage, courgette, "
+              "squash, white rice, eggs).")
+    if miss.get("oxalate"):
+        res["notes"] += ("\n• Oxalate unknown for " +
+                         ", ".join(miss["oxalate"]) + ".")
     zero = sorted({n for k in ASSUME_ZERO for n in assumed.get(k, [])})
     if zero:
         res["notes"] += ("\n• EPA+DHA not declared for " + ", ".join(zero) +

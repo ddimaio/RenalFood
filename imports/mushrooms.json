@@ -2,7 +2,7 @@
  {
   "name": "Mushrooms, white (button), boiled",
   "category": "food",
-  "note": "USDA SR26 11261 (Mushrooms, white, cooked, boiled, drained, without salt). Cooked weight. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11261 (Mushrooms, white, cooked, boiled, drained, without salt). Cooked weight. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 28.0,
    "water": 91.08,
@@ -48,13 +48,14 @@
    "se": 11.9,
    "met_cys": 0.031,
    "phe_tyr": 0.091,
-   "i": null
+   "i": null,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, chestnut (crimini), raw weight",
   "category": "food",
-  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Filled from AFCD R3 F005946 (Mushroom, common, fresh, raw), scaled x1.14 for water content: i.",
+  "note": "USDA SR26 11266 (Mushrooms, brown, italian, or crimini, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Filled from AFCD R3 F005946 (Mushroom, common, fresh, raw), scaled x1.14 for water content: i. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 22.0,
    "water": 92.12,
@@ -100,13 +101,14 @@
    "se": 26.0,
    "met_cys": 0.054,
    "phe_tyr": 0.151,
-   "i": 0.0
+   "i": 0.0,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, portobello, grilled",
   "category": "food",
-  "note": "USDA SR26 11243 (Mushrooms, portabella, grilled). Cooked weight, not UV-treated (UV 'vitamin D' mushrooms are much higher in vitamin D). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11243 (Mushrooms, portabella, grilled). Cooked weight, not UV-treated (UV 'vitamin D' mushrooms are much higher in vitamin D). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 29.0,
    "water": 90.66,
@@ -152,13 +154,14 @@
    "se": 21.9,
    "met_cys": 0.055,
    "phe_tyr": 0.17,
-   "i": null
+   "i": null,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, shiitake, cooked",
   "category": "food",
-  "note": "USDA SR26 11269 (Mushrooms, shiitake, cooked, without salt). Cooked weight; always cook shiitake (raw can cause skin rash). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11269 (Mushrooms, shiitake, cooked, without salt). Cooked weight; always cook shiitake (raw can cause skin rash). Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 56.0,
    "water": 83.48,
@@ -204,13 +207,14 @@
    "se": 24.8,
    "met_cys": 0.052,
    "phe_tyr": 0.111,
-   "i": null
+   "i": null,
+   "oxalate": 1.3
   }
  },
  {
   "name": "Mushrooms, oyster, raw weight",
   "category": "food",
-  "note": "USDA SR26 11987 (Mushrooms, oyster, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD.",
+  "note": "USDA SR26 11987 (Mushrooms, oyster, raw). Weigh raw, then cook. Plain only - no butter, oil, salt, garlic or onion. Shop-bought culinary mushrooms only; never wild-picked. Higher in potassium and phosphorus than most vegetables - keep portions small in CKD. Oxalate: OHF 2024.",
   "per100g": {
    "kcal": 33.0,
    "water": 89.18,
@@ -256,7 +260,8 @@
    "se": 2.6,
    "met_cys": 0.07,
    "phe_tyr": 0.196,
-   "i": null
+   "i": null,
+   "oxalate": 1.3
   }
  }
 ]
