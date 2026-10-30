@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30f"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30g"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1286,6 +1286,10 @@ def score_amounts(g, vecs, ctx):
                                          ctx["max_g"])
             if fa > 0:
                 terms["Food amount"] = fa
+        ox = ctx["weights"].get("oxalate", 0) * _ox_pen(
+            per["oxalate"], get_ranges(ctx).get("ox_max", OXALATE_MAX))
+        if ox > 0:                       # safety limit kept when matching
+            terms["Oxalate"] = ox
     else:
         _, terms = _score_targets(g, vecs, ctx)
         terms = dict(terms)
