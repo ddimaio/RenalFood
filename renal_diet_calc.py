@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31h"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31i"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1266,6 +1266,23 @@ def save_excluded(excluded):
     p = load_prefs()
     p["excluded"] = sorted(excluded, key=str.lower)
     save_prefs(p)
+
+
+def sync_excluded_list(win, event, lb, names):
+    """Refresh a food Listbox from the remembered exclusions when its
+    window gets focus (another window may have changed them)."""
+    if event is not None and event.widget is not win:
+        return
+    try:
+        ex = load_excluded()
+        for i, n in enumerate(names):
+            if (n in ex) == lb.selection_includes(i):
+                if n in ex:
+                    lb.selection_clear(i)
+                else:
+                    lb.select_set(i)
+    except Exception:
+        pass
 
 
 def missing_data(item, extended=False, allow=("choline",)):
@@ -4219,6 +4236,8 @@ class GeneratorDialog(tk.Toplevel):
             if n not in excluded:
                 self.lb.select_set(i)
         self.lb.bind("<<ListboxSelect>>", lambda e: self.save_excl())
+        self.bind("<FocusIn>", lambda e: self._sync_excl(e, self.lb,
+                                                         self.names))
         self.lb.pack(side="left", fill="both", expand=True)
         sb.pack(side="left", fill="y")
         cf = ttk.Frame(frm)
@@ -4304,6 +4323,9 @@ class GeneratorDialog(tk.Toplevel):
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left")
         self.protocol("WM_DELETE_WINDOW", self.close)
+
+    def _sync_excl(self, e, lb, names):
+        sync_excluded_list(self, e, lb, names)
 
     def save_excl(self):
         sel = set(self.lb.curselection())
@@ -4819,6 +4841,8 @@ class OptimiseDialog(tk.Toplevel):
             if n not in excluded:
                 self.cand.select_set(i)
         self.cand.bind("<<ListboxSelect>>", lambda e: self.save_excl())
+        self.bind("<FocusIn>", lambda e: sync_excluded_list(
+            self, e, self.cand, self.cand_names))
         self.cand.pack(fill="both", expand=True)
 
         bot = ttk.Frame(frm)
