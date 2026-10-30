@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30c"
+ENGINE_VERSION = "2026.10.30d"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -537,6 +537,17 @@ with tab_rec:
                 except ValueError as e:
                     st.error(str(e))
 
+        if ss.recipe:
+            st.download_button(
+                "🖨️ Printable recipe", rc.recipe_print_html(
+                    ss.recipe, db, need_now(), ss.stage, score_context(),
+                    ss.meals, ss.recipe_note, ss.bw, ss.factor),
+                file_name="recipe_print.html", mime="text/html",
+                key="print_recipe", **FULL,
+                help="Downloads an A4 page with ingredients (per day and per "
+                     "meal), key nutrients vs targets, assessment and "
+                     "feeding notes. Open it and press Print (or Ctrl+P / "
+                     "Share → Print on a phone).")
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,

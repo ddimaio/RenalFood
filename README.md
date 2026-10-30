@@ -95,6 +95,14 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Printing a recipe
+
+**🖨️ Printable recipe** (Streamlit, Recipe tab) downloads an A4 page;
+**Print…** (desktop, under the recipe) opens it in the browser. It has the
+dog and settings, ingredients (g/day, g/meal, kcal, tick boxes), key
+nutrients vs targets with status, the assessment, feeding notes and space
+for the vet's notes. Open it and press Print (or Ctrl+P).
+
 ## Meals per day
 
 Recipes are daily totals. Set **Meals per day** (sidebar / toolbar, default

@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -601,6 +601,183 @@ def import_references(items):
 
 def delete_reference(name):
     save_references([r for r in load_references() if r["name"] != name])
+
+
+PRINT_KEYS = ("protein", "fat", "fibre", "p", "ca", "na", "k", "mg",
+              "epa_dha", "oxalate", "vit_d")
+
+
+def _esc(x):
+    import html
+    return html.escape(str(x))
+
+
+def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
+                      note="", bw=None, factor=None, title="Renal diet recipe",
+                      dog_name=""):
+    """A self-contained, A4-formatted HTML page for printing a recipe:
+    dog & settings, ingredients (g/day, g/meal, kcal), key nutrients vs
+    targets, assessment, feeding notes and space for the vet."""
+    import datetime
+    meals = max(1, int(meals or 1))
+    a = analyse_recipe(recipe, db, need, stage_name, sctx, meals)
+    t, mass = a["totals"], a["mass"]
+    kcal = t["kcal"] or 0.0
+    k1000 = 1000.0 / kcal if kcal else 0.0
+    R = get_ranges(sctx)
+    renal = (sctx or {}).get("renal", STAGES[stage_name][0])
+    aims = (sctx or {}).get("aims") or AIMS.get(stage_name, {})
+    today = datetime.date.today().strftime("%d %b %Y")
+    # ---- ingredients
+    rows_i = []
+    for n, g in recipe:
+        if n not in db or g <= 0:
+            continue
+        kc = db[n]["per100g"]["kcal"]
+        rows_i.append(
+            "<tr><td>" + _esc(n) + "</td><td class=n>" + f"{g:.1f}" +
+            "</td>" + (f"<td class=n>{g / meals:.1f}</td>" if meals > 1
+                       else "") +
+            f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
+            "</td><td class=c>☐</td></tr>")
+    tot_row = (f"<tr class=tot><td>Total</td><td class=n>{mass:.0f}</td>" +
+               (f"<td class=n>{mass / meals:.0f}</td>" if meals > 1 else "")
+               + f"<td class=n>{kcal:.0f}</td><td></td></tr>")
+    # ---- nutrients
+    rows_n = []
+    for k in PRINT_KEYS:
+        if k not in t:
+            continue
+        v1000 = t[k] * k1000
+        if renal and k in RENAL:
+            tgt = f"{R[k][0]:g}–{R[k][1]:g}" + (
+                f" (aim {aims[k]:g})" if k in aims else "")
+        elif k == "oxalate":
+            tgt = f"≤ {R.get('ox_max', OXALATE_MAX):g}"
+        elif k in AAFCO:
+            tgt = f"≥ {AAFCO[k]:g}" + (f", ≤ {AAFCO_MAX[k]:g}"
+                                       if k in AAFCO_MAX else "")
+        else:
+            tgt = ""
+        stt, tag = status_for(k, v1000, renal, R)
+        if a["missing"].get(k):
+            stt = (stt + "; " if stt else "") + "data incomplete"
+        mark = {"ok": "✓", "warn": "!", "bad": "✗"}.get(tag, "")
+        rows_n.append(
+            f"<tr class={tag or 'none'}><td>{_esc(LABEL[k])}</td>"
+            f"<td>{_esc(UNIT[k])}</td><td class=n>{fmt(t[k])}</td>"
+            f"<td class=n>{fmt(v1000)}</td><td>{_esc(tgt)}</td>"
+            f"<td class=s>{mark} {_esc(stt)}</td></tr>")
+    capr = t["ca"] / t["p"] if t["p"] else None
+    if capr is not None:
+        lo_r, hi_r = R["ca_p"]
+        ok = lo_r <= capr <= hi_r
+        rows_n.append(f"<tr class={'ok' if ok else 'bad'}><td>Ca : P ratio"
+                      f"</td><td></td><td class=n>{capr:.2f}</td><td></td>"
+                      f"<td>{lo_r:g}–{hi_r:g}</td><td class=s>"
+                      f"{'✓' if ok else '✗'}</td></tr>")
+    prot_me = 3.5 * t["protein"]
+    fat_me = 8.5 * t["fat"]
+    carb_me = 3.5 * max(0.0, t["carb"] - t["fibre"])
+    me = prot_me + fat_me + carb_me or 1
+    split = (f"{prot_me / me * 100:.0f}% protein · {fat_me / me * 100:.0f}% "
+             f"fat · {carb_me / me * 100:.0f}% carbohydrate")
+    score = a.get("score")
+    gaps = [k for k, v in sorted((a.get("terms") or {}).items(),
+                                 key=lambda kv: -kv[1]) if v > 1e-3][:5]
+    notes = [ln[2:] if ln.startswith("• ") else ln
+             for ln in (a.get("notes") or "").splitlines() if ln.strip()]
+    per_meal_kcal = kcal / meals
+    dog = " · ".join(x for x in [
+        _esc(dog_name) if dog_name else "",
+        f"{bw:g} kg" if bw else "", _esc(stage_name),
+        f"energy need {need:.0f} kcal/day" if need else "",
+        f"MER factor {factor:g}" if factor else "",
+        f"{meals} meal{'s' if meals > 1 else ''}/day"] if x)
+    css = """
+@page { size: A4; margin: 14mm 13mm; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  color: #1d2733; font-size: 10.5pt; line-height: 1.35; margin: 0;
+  background: #fff; }
+.page { max-width: 186mm; margin: 0 auto; padding: 8mm 0; }
+h1 { font-size: 18pt; margin: 0 0 2pt; color: #12324a; }
+h2 { font-size: 11.5pt; margin: 14pt 0 5pt; color: #12324a;
+  border-bottom: 1.5pt solid #12324a; padding-bottom: 2pt;
+  text-transform: uppercase; letter-spacing: .04em; }
+.sub { color: #4a5a6a; margin-bottom: 6pt; }
+.box { border: 1pt solid #c9d3dd; border-radius: 4pt; padding: 6pt 8pt;
+  background: #f6f9fb; margin: 6pt 0; }
+table { width: 100%; border-collapse: collapse; margin: 3pt 0; }
+th, td { padding: 3pt 5pt; border-bottom: .6pt solid #d8dee5;
+  vertical-align: top; text-align: left; }
+th { background: #e9eff5; font-size: 9pt; text-transform: uppercase;
+  letter-spacing: .03em; color: #34495e; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+td.c { text-align: center; font-size: 12pt; color: #7a8896; }
+tr.tot td { font-weight: 700; border-top: 1.2pt solid #12324a; }
+tr.ok td.s { color: #1b6e20; } tr.warn td.s { color: #9a5b00; }
+tr.bad td.s { color: #a3170b; font-weight: 600; }
+.ingredients td:first-child { font-weight: 600; }
+.big td { font-size: 11.5pt; padding: 5pt; }
+ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
+.small { font-size: 8.5pt; color: #5a6875; }
+.lines { height: 45mm; border: 1pt solid #9fb0c0; border-radius: 4pt;
+  background: repeating-linear-gradient(#fff 0, #fff 7.4mm, #9fb0c0 7.4mm,
+  #9fb0c0 7.6mm); -webkit-print-color-adjust: exact;
+  print-color-adjust: exact; }
+.grid { display: flex; gap: 10pt; } .grid > div { flex: 1; }
+.noprint { position: fixed; top: 10px; right: 10px; }
+.noprint button { font-size: 12pt; padding: 8px 16px; border-radius: 6px;
+  border: 0; background: #12324a; color: #fff; cursor: pointer; }
+@media print { .noprint { display: none; } body { background: #fff; }
+  .page { padding: 0; } h2 { break-after: avoid; }
+  table, .box, ul { break-inside: avoid; } }
+"""
+    meal_hdr = "<th class=n>g / meal</th>" if meals > 1 else ""
+    html_ = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_esc(title)}</title><style>{css}</style></head><body>
+<div class="noprint"><button onclick="window.print()">🖨 Print</button></div>
+<div class="page">
+<h1>{_esc(title)}</h1>
+<div class="sub">{dog} · printed {today}</div>
+{f'<div class="box"><b>{_esc(note)}</b></div>' if note else ''}
+
+<h2>Ingredients</h2>
+<table class="ingredients big"><tr><th>Ingredient</th><th class=n>g / day</th>
+{meal_hdr}<th class=n>kcal / day</th><th>✓</th></tr>
+{''.join(rows_i)}{tot_row}</table>
+<div class="small">Weigh with kitchen scales. Amounts are for cooked foods
+where the name says so (e.g. "boiled"). {f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 else ''}
+Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
+
+<h2>Key nutrients</h2>
+<table><tr><th>Nutrient</th><th>Unit</th><th class=n>Per day</th>
+<th class=n>Per 1000 kcal</th><th>Target / 1000 kcal</th><th>Status</th></tr>
+{''.join(rows_n)}</table>
+<div class="small">Energy from {split}. Targets: ACVN renal ranges
+(renal stages), AAFCO adult minimums, app aims and blood-result
+adjustments in use when printed.</div>
+
+<h2>Assessment</h2>
+<ul>{''.join('<li>' + _esc(n) + '</li>' for n in notes) or '<li>–</li>'}</ul>
+
+<div class="grid">
+<div><h2>Feeding</h2><ul>
+<li>Split the daily amount into {meals} meal{'s' if meals > 1 else ''}.</li>
+<li>Change diets gradually over 7–10 days; never force-feed.</li>
+<li>Fresh water always available.</li>
+<li>Weigh the dog every 1–2 weeks; adjust amounts to keep weight stable.</li>
+<li>Give binders and supplements only as prescribed.</li></ul></div>
+<div><h2>Vet notes</h2><div class="lines"></div></div>
+</div>
+<p class="small" style="margin-top:12pt">Approximate tool – not veterinary
+advice. A home-made renal diet should be checked by a veterinarian or
+board-certified veterinary nutritionist.</p>
+</div></body></html>"""
+    return html_
 
 
 def reference_score(ref, ctx):
@@ -4507,7 +4684,8 @@ class App(tk.Tk):
         for txt, cmd in [("Change g", self.edit_amount),
                          ("Remove", self.remove_item), ("Clear", self.clear),
                          ("Save recipe", self.save_recipe),
-                         ("Load recipe", self.load_recipe)]:
+                         ("Load recipe", self.load_recipe),
+                         ("Print…", self.print_recipe)]:
             ttk.Button(r4, text=txt, command=cmd).pack(side="left", padx=1)
         r5 = ttk.Frame(rec)
         r5.pack(fill="x", pady=(2, 0))
@@ -4773,6 +4951,32 @@ class App(tk.Tk):
         else:
             self.recipe.append([n, g])
         self.refresh_recipe()
+
+    def print_recipe(self):
+        """Write the printable page to a temporary file and open it in the
+        web browser (print from there)."""
+        if not self.recipe:
+            messagebox.showinfo("Print", "The recipe is empty.")
+            return
+        import tempfile
+        import webbrowser
+        try:
+            bw = float(self.bw.get())
+        except ValueError:
+            bw = None
+        try:
+            factor = float(self.factor.get())
+        except ValueError:
+            factor = None
+        html_ = recipe_print_html(self.recipe, self.db, self.current_mer(),
+                                  self.stage.get(), self.score_context(),
+                                  self.meals_n(), self.recipe_note, bw,
+                                  factor)
+        fd, path = tempfile.mkstemp(suffix=".html", prefix="recipe_print_")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(html_)
+        import pathlib
+        webbrowser.open(pathlib.Path(path).resolve().as_uri())
 
     def meals_n(self):
         try:
