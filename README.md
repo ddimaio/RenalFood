@@ -95,6 +95,24 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Optimiser
+
+Optimise tab (Streamlit) / **Optimise…** (desktop), in steps:
+
+1. **Ingredients & limits** – min/max g per food, or lock an amount.
+2. **Goal** – renal targets, a reference diet, or both; energy target;
+   priorities and aims.
+3. **Changes allowed** – *Allow everything* (default) adjusts amounts and
+   tests adding, swapping and removing foods; untick it to choose. The
+   list of foods it may suggest is remembered.
+4. **Find options** → one list, **best first** (score, then rating), with
+   ★ on the recommended option. Each row says what changes ("+ Fish oil
+   3 g · − Lentils · Rice 150→60 g"). Pick one to see its amounts,
+   nutrients and remaining gaps, then **Apply** it. Nothing changes before
+   that, and Undo is on the Recipe tab.
+5. **Fine-tune yourself** – add or remove specific foods and re-optimise,
+   starting from the option picked.
+
 ## Only ingredients with complete data
 
 Generator: "Only ingredients with complete data" (and "…but allow missing

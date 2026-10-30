@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30j"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1815,6 +1815,82 @@ def rank_key(score, rating):
     """Sort key: score first (rounded, so tiny differences tie), then the
     higher rating."""
     return (round(score, 3), -rating)
+
+
+def _short(n):
+    for a, b in ((" (unenriched)", ""), (", boiled", ""), (", raw weight", ""),
+                 (", raw", ""),
+                 (", cooked", ""), (" (vegan omega-3)", ""),
+                 (" (calcium-set)", ""), (" (salmon)", "")):
+        n = n.replace(a, b)
+    return n.split(" (")[0]
+
+
+def describe_change(old_n, old_g, new_n, new_g, top=3):
+    """Short text of how a recipe differs from the current one: foods
+    added, removed (or cut to ~0) and big amount changes."""
+    old = dict(zip(old_n, old_g))
+    new = dict(zip(new_n, new_g))
+    parts = [f"+ {_short(n)} {new[n]:.0f} g" for n in new_n
+             if old.get(n, 0) < 0.5 and new[n] >= 0.5]
+    parts += [f"− {_short(n)}" for n in old_n
+              if old[n] >= 0.5 and new.get(n, 0) < 0.5]
+    big = []
+    for n in new_n:
+        if n in old and old[n] >= 0.5 and new[n] >= 0.5:
+            d = new[n] - old[n]
+            if abs(d) >= max(10.0, 0.4 * old[n]):
+                big.append((abs(d), f"{_short(n)} {old[n]:.0f}→{new[n]:.0f} g"))
+    big.sort(reverse=True)
+    parts += [t for _, t in big[:top]]
+    return " · ".join(parts) or "small amount changes"
+
+
+OPTION_KINDS = ("Combination", "Swap", "Add", "Remove", "Amounts only")
+
+
+def optimiser_options(r, db):
+    """All optimiser results as one list of options, best first (score,
+    then rating). r: dict with ctx, names, x0, before, base, singles, combo,
+    subs, rems. Each option: kind, change, names, grams, score, terms,
+    rating, why, best. Also returns the current recipe as a baseline."""
+    ctx = r["ctx"]
+    c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
+    names, x0 = list(r["names"]), list(r["x0"])
+    vecs = [_vec(db[n]) for n in names]
+    s_cur, t_cur = score_amounts(x0, vecs, ctx)
+    current = {"kind": "Current", "change": "(as it is now)", "names": names,
+               "grams": x0, "score": s_cur, "terms": t_cur,
+               "rating": recipe_rating(names, x0, db, c0)[0], "why": ""}
+    raw = []
+    g, sc, t = r["base"]
+    raw.append(("Amounts only", names, g, sc, t))
+    combo = r.get("combo")
+    singles = r.get("singles") or []
+    if combo and combo[4] and not (len(combo[4]) == 1 and
+                                   combo[4][0] in [x[0] for x in singles]):
+        raw.append(("Combination", combo[0], combo[1], combo[2], combo[3]))
+    raw += [("Add", names + [c], gg, s_, tt) for c, gg, s_, tt in singles[:10]]
+    raw += [("Swap", nn, gg, s_, tt)
+            for o, n, nn, gg, s_, tt in (r.get("subs") or [])[:10]]
+    raw += [("Remove", nn, gg, s_, tt)
+            for rn, nn, gg, s_, tt in (r.get("rems") or [])[:10]]
+    opts, seen = [], set()
+    for kind, nn, gg, s_, tt in raw:
+        change = describe_change(names, x0, nn, gg)
+        sig = (change, round(s_, 3))        # same visible change & score
+        if sig in seen:
+            continue
+        seen.add(sig)
+        why = ", ".join(improvement_reasons(t_cur, tt)) or "–"
+        opts.append({"kind": kind, "names": list(nn), "grams": list(gg),
+                     "score": s_, "terms": tt,
+                     "rating": recipe_rating(nn, gg, db, c0)[0],
+                     "change": change, "why": why, "best": False})
+    opts.sort(key=lambda o: rank_key(o["score"], o["rating"]))
+    if opts:
+        opts[0]["best"] = True
+    return current, opts
 
 
 QUICK = {"use_scipy": False, "max_evals": 800}   # screening searches
@@ -4113,20 +4189,28 @@ class OptimiseDialog(tk.Toplevel):
             self.ref_pick.current(0)
         self.ref_pick.pack(side="left", padx=4)
 
-        sf = ttk.LabelFrame(frm, text="Suggest additional ingredients",
+        sf = ttk.LabelFrame(frm, text="Changes allowed",
                             padding=6)
         sf.pack(fill="both", expand=True, pady=4)
+        row0 = ttk.Frame(sf)
+        row0.pack(fill="x")
+        self.do_all = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row0, text="Allow everything (adjust amounts, add, "
+                                   "swap and remove foods)",
+                        variable=self.do_all,
+                        command=self._sync_all).pack(side="left")
         row = ttk.Frame(sf)
         row.pack(fill="x")
         self.do_suggest = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row, text="Test additions from the library",
-                        variable=self.do_suggest).pack(side="left")
         self.do_subs = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row, text="Test substitutions (same type)",
-                        variable=self.do_subs).pack(side="left", padx=(8, 0))
         self.do_rem = tk.BooleanVar(value=True)
-        ttk.Checkbutton(row, text="Test removals",
-                        variable=self.do_rem).pack(side="left", padx=(8, 0))
+        self._each = [ttk.Checkbutton(row, text=t, variable=v) for t, v in (
+            ("Add foods", self.do_suggest),
+            ("Swap foods (same type)", self.do_subs),
+            ("Remove foods", self.do_rem))]
+        for i, cb in enumerate(self._each):
+            cb.pack(side="left", padx=(0 if i == 0 else 8, 0))
+        self._sync_all()
         self.full_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(row, text="Only foods with complete data",
                         variable=self.full_only).pack(side="left",
@@ -4159,13 +4243,21 @@ class OptimiseDialog(tk.Toplevel):
 
         bot = ttk.Frame(frm)
         bot.pack(fill="x", pady=(8, 0))
-        self.run_btn = ttk.Button(bot, text="Run optimisation",
+        self.run_btn = ttk.Button(bot, text="Find options",
                                   command=self.run)
         self.run_btn.pack(side="left")
         ttk.Button(bot, text="Close", command=self.destroy).pack(side="left",
                                                                  padx=6)
         self.status = ttk.Label(bot, foreground="#555")
         self.status.pack(side="left", padx=10)
+
+    def _sync_all(self):
+        on = self.do_all.get()
+        for v in (self.do_suggest, self.do_subs, self.do_rem):
+            if on:
+                v.set(True)
+        for cb in self._each:
+            cb.state(["disabled"] if on else ["!disabled"])
 
     def save_excl(self):
         sel = set(self.cand.curselection())
@@ -4248,19 +4340,29 @@ class OptimiseDialog(tk.Toplevel):
 
 
 class ResultsWindow(tk.Toplevel):
+    """Optimiser results as one ranked list of options (best first), with
+    details, Apply option # and a panel to add/remove foods yourself."""
     def __init__(self, app, ctx, names, x0, before, base, singles, combo,
-                 bounds=None, title="Optimisation results", subs=(),
-                 rems=()):
+                 bounds=None, title="Optimiser – options, best first",
+                 subs=(), rems=()):
         super().__init__(app)
         self.app = app
         self.bounds = bounds
         self.subs = list(subs or [])
         self.rems = list(rems or [])
         self.title(title)
-        self.geometry("980x760")
+        self.geometry("1020x780")
         self.names, self.base, self.singles, self.combo = (names, base,
                                                            singles, combo)
+        self.x0 = list(x0)
         self.ctx = ctx
+        self.current, self.options = optimiser_options(
+            {"ctx": ctx, "names": names, "x0": x0, "base": base,
+             "singles": singles, "combo": combo, "subs": self.subs,
+             "rems": self.rems}, app.db)
+        if bounds is None:                  # result of "your changes"
+            for o in self.options:
+                o["kind"] = "Your changes"
         frm = ttk.Frame(self, padding=8)
         frm.pack(fill="both", expand=True)
         txt = tk.Text(frm, wrap="word", font=("TkFixedFont", 10))
@@ -4275,53 +4377,34 @@ class ResultsWindow(tk.Toplevel):
 
         b = ttk.Frame(self, padding=(8, 0, 8, 8))
         b.pack(fill="x")
-        ttk.Button(b, text="Apply optimised amounts",
-                   command=lambda: self.apply(names, base[0], base[1],
-                                              "Optimised recipe")).pack(
-            side="left")
-        if combo and combo[4]:
-            ttk.Button(b, text="Apply best combination",
-                       command=lambda: self.apply(
-                           combo[0], combo[1], combo[2],
-                           "Optimised + " + ", ".join(combo[4]))).pack(
-                side="left", padx=6)
-        if singles:
-            ttk.Label(b, text="  Single addition #").pack(side="left")
-            self.pick = tk.StringVar(value="1")
-            ttk.Spinbox(b, from_=1, to=len(singles), width=4,
-                        textvariable=self.pick).pack(side="left")
-            ttk.Button(b, text="Apply", command=self.apply_single).pack(
-                side="left", padx=4)
-        if self.rems:
-            ttk.Label(b, text="  Removal #").pack(side="left")
-            self.pick_r = tk.StringVar(value="1")
-            ttk.Spinbox(b, from_=1, to=min(10, len(self.rems)), width=4,
-                        textvariable=self.pick_r).pack(side="left")
-            ttk.Button(b, text="Apply", command=self.apply_rem).pack(
-                side="left", padx=4)
-        if self.subs:
-            ttk.Label(b, text="  Substitution #").pack(side="left")
-            self.pick_s = tk.StringVar(value="1")
-            ttk.Spinbox(b, from_=1, to=min(10, len(self.subs)), width=4,
-                        textvariable=self.pick_s).pack(side="left")
-            ttk.Button(b, text="Apply", command=self.apply_sub).pack(
-                side="left", padx=4)
+        self.pick = tk.StringVar(value="1")
+        if self.options:
+            ttk.Label(b, text="Option #").pack(side="left")
+            ttk.Spinbox(b, from_=1, to=len(self.options), width=4,
+                        textvariable=self.pick).pack(side="left", padx=4)
+            ttk.Button(b, text="Apply this option",
+                       command=self.apply_option).pack(side="left")
+            ttk.Label(b, foreground="#555",
+                      text="  (#1 = ★ recommended; nothing changes until you "
+                           "apply – Undo is on the main window)").pack(
+                side="left")
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
         ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
             self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
 
         if bounds is not None:
             mf = ttk.LabelFrame(self, padding=6,
-                                text="Add or remove ingredients and "
-                                     "re-optimise (min = max fixes the "
+                                text="Fine-tune yourself: add or remove foods "
+                                     "and re-optimise, starting from the "
+                                     "Option # above (min = max fixes the "
                                      "amount; blank = default)")
             mf.pack(fill="x", padx=8, pady=(0, 8))
             r = ttk.Frame(mf)
             r.pack(fill="x")
             self.m_pick = ttk.Combobox(
                 r, width=40, values=sorted(
-                    (n for n in app.db if n not in names
-                     and app.db[n]["per100g"]["kcal"] is not None),
+                    (n for n in app.db
+                     if app.db[n]["per100g"]["kcal"] is not None),
                     key=str.lower))
             self.m_pick.pack(side="left")
             ttk.Label(r, text=" min g").pack(side="left")
@@ -4334,18 +4417,13 @@ class ResultsWindow(tk.Toplevel):
                 side="left", padx=4)
             ttk.Button(r, text="Remove selected",
                        command=self.remove_manual).pack(side="left")
-            self.start = tk.StringVar(value="optimised")
-            if combo and combo[4]:
-                ttk.Label(r, text="   start from").pack(side="left")
-                ttk.Combobox(r, textvariable=self.start, width=12,
-                             state="readonly",
-                             values=("optimised", "best combination")).pack(
-                    side="left")
             r2 = ttk.Frame(mf)
             r2.pack(fill="x", pady=(4, 0))
             ttk.Label(r2, text="Remove").pack(side="left")
-            self.m_rm_pick = ttk.Combobox(r2, width=40, state="readonly",
-                                          values=list(names))
+            self.m_rm_pick = ttk.Combobox(
+                r2, width=40, state="readonly",
+                values=sorted({n for o in self.options for n in o["names"]}
+                              | set(names), key=str.lower))
             self.m_rm_pick.pack(side="left", padx=4)
             ttk.Button(r2, text="Remove from recipe",
                        command=self.add_removal).pack(side="left")
@@ -4355,6 +4433,18 @@ class ResultsWindow(tk.Toplevel):
             self.m_list.pack(fill="x", pady=4)
             ttk.Button(mf, text="Re-optimise with these",
                        command=self.run_manual).pack(anchor="w")
+
+    def picked(self):
+        try:
+            return self.options[int(self.pick.get()) - 1]
+        except (ValueError, IndexError):
+            return None
+
+    def apply_option(self):
+        o = self.picked()
+        if o:
+            self.apply(o["names"], o["grams"], o["score"],
+                       f"Optimised ({o['kind'].lower()}: {o['change'][:60]})")
 
     def add_removal(self):
         n = self.m_rm_pick.get().strip()
@@ -4408,115 +4498,88 @@ class ResultsWindow(tk.Toplevel):
             messagebox.showinfo("Add ingredient", "Add or remove at least "
                                 "one ingredient first.", parent=self)
             return
-        if self.start.get() == "best combination" and self.combo:
-            cn, cg, cs = self.combo[0], self.combo[1], self.combo[2]
-            extra = cn[len(self.names):]
-            cb = list(self.bounds) + [
-                (*default_bounds(self.app.db[n], self.ctx["kcal_target"]),
-                 False) for n in extra]
-        else:
-            cn, cg, cs = self.names, self.base[0], self.base[1]
-            cb = list(self.bounds)
-        adds = [(n, lo, hi) for n, (lo, hi) in self.manual.items()]
-        if len(self.manual_rm) >= len(cn) and not adds:
+        o = self.picked() or {"names": self.names, "grams": self.base[0],
+                              "score": self.base[1]}
+        cn, cg, cs = o["names"], o["grams"], o["score"]
+        bm = dict(zip(self.names, self.bounds))
+        cb = [bm.get(n) or (*default_bounds(self.app.db[n],
+                                            self.ctx["kcal_target"]), False)
+              for n in cn]
+        rm_ = [n for n in self.manual_rm if n in cn]
+        adds = [(n, lo, hi) for n, (lo, hi) in self.manual.items()
+                if n not in cn]
+        if not rm_ and not adds:
+            messagebox.showinfo("Add ingredient", "Those changes are already "
+                                "in this option.", parent=self)
+            return
+        if len(rm_) >= len(cn) and not adds:
             messagebox.showerror("Remove", "That would remove everything.",
                                  parent=self)
             return
         n2, g2, s2, t2 = remove_and_add(cn, self.app.db, cb, cg, self.ctx,
-                                        self.manual_rm, adds)
-        was = dict(zip(cn, cg))
+                                        rm_, adds)
+        was = dict(zip(self.names, self.x0))
         x0 = [was.get(n, 0.0) for n in n2]
         ResultsWindow(self.app, self.ctx, n2, x0, (cs,), (g2, s2, t2), [],
                       None, None, title="Optimised with your changes")
 
     def report(self, ctx, x0, before):
         db = self.app.db
-        names, (g, s, terms) = self.names, self.base
         L = []
         rm = ctx.get("ref_match")
         goal = ("every target met" if not rm else
                 f"same as {rm['name']} per 1000 kcal" +
                 ("" if rm["only"] else " and every renal target met"))
-        c0r = {k: v for k, v in ctx.items() if k != "ref_match"}
-        L.append(f"Score (0 = {goal}): current {before[0]:.3f} -> "
-                 f"optimised {s:.3f}   rating "
-                 f"{recipe_rating(names, g, db, c0r)[0]:.0f}/100")
-        L.append(f"Energy target: {ctx['kcal_target']:.0f} kcal/day\n")
+        cur = self.current
+        L.append(f"Score: 0 = {goal}. Ranked by score, then rating (0-100, "
+                 "higher = better).")
+        L.append(f"Energy target: {ctx['kcal_target']:.0f} kcal/day")
+        L.append(f"Current recipe: score {cur['score']:.3f}, rating "
+                 f"{cur['rating']:.0f}/100\n")
+        L.append("OPTIONS – best first (* = recommended)")
+        for i, o in enumerate(self.options, start=1):
+            L.append(f" {'*' if o['best'] else ' '}{i:>2}. {o['kind']:<12} "
+                     f"score {o['score']:.3f}  rating {o['rating']:.0f}/100  "
+                     f"{o['change']}")
+            if o["why"] != "–":
+                L.append(f"       improves: {o['why']}")
         ref = next((r for r in load_references() if rm and
                     r["name"] == rm["name"]), None)
-        if ref:
-            _, tot, miss = compute(list(zip(names, g)), db)[:3]
-            L.append(f"OPTIMISED RECIPE vs {ref['name']} (per 1000 kcal)")
-            for row in reference_rows(tot, ref, miss, ctx.get("extended")):
-                n_, u_, a_, b_, d_ = [str(x).replace("≥", ">=") for x in row]
-                L.append(f"  {n_:<26} {u_:<7} {a_:>10} {b_:>10} {d_:>7}")
-            c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
-            L.append(f"  Usual score (renal targets): reference "
-                     f"{reference_score(ref, c0)[0]:.3f}, this optimised "
-                     f"recipe {score_amounts(g, [_vec(db[n]) for n in names], c0)[0]:.3f}")
-            if rm["only"]:
-                L.append("  (matching the reference only - renal targets are "
-                         "not part of this score)")
+        c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
+        was = dict(zip(self.names, x0))
+        for i, o in enumerate(self.options, start=1):
+            names, g = o["names"], o["grams"]
+            L.append("\n" + "-" * 78)
+            L.append(f"OPTION #{i}{' (recommended)' if o['best'] else ''} – "
+                     f"{o['kind']}: score {o['score']:.3f} "
+                     f"{score_change(o['score'], cur['score'])}, rating "
+                     f"{o['rating']:.0f}/100")
+            w = max(len(n) for n in list(names) + list(self.names)) + 2
+            for n, b_ in zip(names, g):
+                a_ = was.get(n)
+                L.append(f"  {n:<{w}} "
+                         + ("    new  " if a_ is None else f"{a_:>7.1f} g")
+                         + f" → {b_:>7.1f} g")
+            for n in self.names:
+                if n not in names:
+                    L.append(f"  {n:<{w}} {was[n]:>7.1f} g →  removed")
             L.append("")
-        L.append("OPTIMISED DAILY AMOUNTS")
-        w = max(len(n) for n in names) + 2
-        for n, a, b in zip(names, x0, g):
-            L.append(f"  {n:<{w}} {a:>7.1f} g → {b:>7.1f} g")
-        dropped = [n for n, b in zip(names, g) if b < 0.1]
-        if dropped:
-            L.append("  (0 g = the optimiser would leave these out: "
-                     + ", ".join(dropped) + ")")
-        L.append("")
-        L += self.metrics(names, g, ctx)
-        L.append("\nREMAINING GAPS (largest first)")
-        L += self.gaps(terms)
-
-        if self.singles:
-            L.append("\nSUGGESTED ADDITIONS – each tested alone, all amounts "
-                     "re-optimised")
-            for i, (c, gg, ss, tt) in enumerate(self.singles[:10], start=1):
-                pct = (1 - ss / s) * 100 if s > 0 else 0
-                why = ", ".join(improvement_reasons(terms, tt)) or "–"
-                L.append(f"  {i:>2}. + {gg[-1]:.1f} g {c}  -> score {ss:.3f} "
-                         f"{score_change(ss, s)}  rating "
-                         f"{recipe_rating(names + [c], gg, db, c0r)[0]:.0f}/100"
-                         f"   improves: {why}")
-        elif self.combo is not None:
-            L.append("\nNo single library ingredient improved the score by "
-                     "≥2%.")
-
-        if self.rems:
-            L.append("\nSUGGESTED REMOVALS – the recipe does as well or "
-                     "better without these (other amounts re-optimised)")
-            for i, (rn_, nn, gg, ss, tt) in enumerate(self.rems[:10],
-                                                      start=1):
-                ch = (ss / s - 1) * 100 if s > 0 else 0
-                L.append(f"  {i:>2}. - {rn_}  score {ss:.3f} ({ch:+.0f}%)")
-
-        if self.subs:
-            L.append("\nSUGGESTED SUBSTITUTIONS – one ingredient swapped for "
-                     "another of the same type, all amounts re-optimised")
-            for i, (o, n, sn, sg, ss, tt) in enumerate(self.subs[:10],
-                                                       start=1):
-                pct = (1 - ss / s) * 100 if s > 0 else 0
-                why = ", ".join(improvement_reasons(terms, tt)) or "–"
-                L.append(f"  {i:>2}. {o} -> {sg[sn.index(n)]:.1f} g {n}  "
-                         f"score {ss:.3f} {score_change(ss, s)}  rating "
-                         f"{recipe_rating(sn, sg, db, c0r)[0]:.0f}/100"
-                         f"   improves: {why}")
-
-        if self.combo and self.combo[4]:
-            cn, cg, cs, ct, added = self.combo
-            L.append(f"\nBEST COMBINATION (adds {', '.join(added)})  → "
-                     f"score {cs:.3f}")
-            w2 = max(len(n) for n in cn) + 2
-            for n, a in zip(cn, cg):
-                tag = "  (new)" if n in added else ""
-                L.append(f"  {n:<{w2}} {a:>7.1f} g{tag}")
-            L.append("")
-            L += self.metrics(cn, cg, ctx)
-            L.append("\nREMAINING GAPS")
-            L += self.gaps(ct)
+            L += self.metrics(names, g, ctx)
+            L.append("  Remaining gaps: " + (", ".join(
+                f"{k} ({v:.3f})" for k, v in sorted(
+                    o["terms"].items(), key=lambda kv: -kv[1])[:6]
+                if v > 1e-4) or "none – all targets met"))
+            if ref:
+                _, tot, miss = compute(list(zip(names, g)), db)[:3]
+                L.append(f"\n  vs {ref['name']} (per 1000 kcal)")
+                for row in reference_rows(tot, ref, miss, ctx.get("extended")):
+                    n_, u_, a2, b2, d_ = [str(x).replace("≥", ">=")
+                                          for x in row]
+                    L.append(f"    {n_:<26} {u_:<7} {a2:>10} {b2:>10} "
+                             f"{d_:>7}")
+                L.append(f"    Usual score (renal targets): reference "
+                         f"{reference_score(ref, c0)[0]:.3f}, this option "
+                         f"{score_amounts(g, [_vec(db[n]) for n in names], c0)[0]:.3f}")
         L.append("\nNOTES\n  • Unknown nutrient values count as 0 here, so "
                  "items with missing data can look better than they are.\n"
                  "  • Gaps that no food in the library can close (often B12, "
@@ -4554,28 +4617,6 @@ class ResultsWindow(tk.Toplevel):
 
     def apply(self, names, g, score, label):
         self.app.apply_recipe(names, g, score, label, self.ctx, self)
-
-    def apply_rem(self):
-        try:
-            rn_, nn, gg, ss, tt = self.rems[int(self.pick_r.get()) - 1]
-        except (ValueError, IndexError):
-            return
-        self.apply(nn, gg, ss, f"Optimised - {rn_}")
-
-    def apply_sub(self):
-        try:
-            o, n, sn, sg, ss, tt = self.subs[int(self.pick_s.get()) - 1]
-        except (ValueError, IndexError):
-            return
-        self.apply(sn, sg, ss, f"Optimised, {o} -> {n}")
-
-    def apply_single(self):
-        try:
-            i = int(self.pick.get()) - 1
-            c, g, s, t = self.singles[i]
-        except (ValueError, IndexError):
-            return
-        self.apply(self.names + [c], g, s, f"Optimised + {c}")
 
 
 class RefCompareWindow(tk.Toplevel):

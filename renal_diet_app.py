@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30j"
+ENGINE_VERSION = "2026.10.31a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -837,21 +837,23 @@ with tab_blood:
 
 # ================================================================ OPTIMISE
 with tab_opt:
-    st.subheader("Optimise amounts & suggest additions")
+    st.subheader("Optimise the recipe")
     if not ss.recipe:
         st.info("Add the ingredients you want to use on the Recipe tab "
                 "first (or use Generate recipes).")
     else:
+        st.caption("Find better versions of the current recipe. Nothing "
+                   "changes until you press **Apply** on an option (Undo is "
+                   "on the Recipe tab).")
         ctx0 = score_context()
-        c1, c2 = st.columns([1, 2])
-        o_kcal = c1.number_input("Target energy (kcal/day)", 1.0, 10000.0,
-                                 value=float(round(ctx0["kcal_target"])),
-                                 key=f"o_kcal_{ss.tgt_ver}",
-                                 help="Covers the whole day – lock breakfast "
-                                      "kibble if it is in the recipe.")
+        _kkey = f"o_kcal_{ss.tgt_ver}"
+        _kcal_now = float(ss.get(_kkey, round(ctx0["kcal_target"])))
+
+        # ---- 1 · ingredients & limits
+        st.markdown("#### 1 · Ingredients & limits")
         rows = []
         for n, g in ss.recipe:
-            lo, hi = rc.default_bounds(db[n], o_kcal)
+            lo, hi = rc.default_bounds(db[n], _kcal_now)
             rows.append({"Ingredient": n, "Current g": g, "Min g": lo,
                          "Max g": max(hi, g),
                          "Lock": db[n]["category"] == "binder"})
@@ -861,29 +863,37 @@ with tab_opt:
                 f"{abs(hash(tuple(n for n, _ in ss.recipe)))}",
             disabled=["Ingredient", "Current g"],
             column_config={"Lock": st.column_config.CheckboxColumn(
-                "Lock at current", help="Binders are always locked.")})
+                "Lock at current", help="Keep this amount exactly (e.g. "
+                                        "breakfast kibble). Binders are "
+                                        "always locked.")})
 
+        # ---- 2 · goal
+        st.markdown("#### 2 · Goal")
         refs_o = rc.load_references()
         OBJ = ["Renal targets", "Match a reference diet",
                "Renal targets + reference diet"]
-        oc = st.columns([1, 2])
+        oc = st.columns(2)
         obj = oc[0].selectbox(
             "Objective", OBJ if refs_o else OBJ[:1], key="o_obj",
-            help="'Match a reference diet' changes amounts (and suggests "
-                 "additions/substitutions) to get as close as possible to "
-                 "the reference per 1000 kcal, keeping the energy target. "
+            help="'Match a reference diet' gets as close as possible to the "
+                 "reference per 1000 kcal, keeping the energy target. "
                  "'+ reference' keeps the renal targets and adds closeness "
                  "to the reference.")
+        o_kcal = oc[1].number_input("Target energy (kcal/day)", 1.0, 10000.0,
+                                    value=float(round(ctx0["kcal_target"])),
+                                    key=_kkey,
+                                    help="Covers the whole day – lock "
+                                         "breakfast kibble if it is in the "
+                                         "recipe.")
         o_ref = None
         if obj != OBJ[0]:
-            rn = oc[1].selectbox("Reference diet",
-                                 [r_["name"] for r_ in refs_o], key="o_ref")
+            rn = st.selectbox("Reference diet",
+                              [r_["name"] for r_ in refs_o], key="o_ref")
             o_ref = next(r_ for r_ in refs_o if r_["name"] == rn)
-            oc[1].caption("Closeness is weighted most for protein and "
-                          "phosphorus, then fat, calcium, sodium and "
-                          "potassium. Label values given only as 'added' "
-                          "count as minimums.")
-
+            st.caption("Closeness is weighted most for protein and "
+                       "phosphorus, then fat, calcium, sodium and potassium. "
+                       "Label values given only as 'added' count as "
+                       "minimums.")
         with st.expander("Priorities and aims"):
             wc = st.columns(5)
             weights = {}
@@ -906,56 +916,53 @@ with tab_opt:
                        "Aims are this app's editable defaults inside the "
                        "ACVN range, not published targets.")
 
-        do_sug = st.checkbox("Test additions from the library", True,
-                             key="o_sug")
-        do_subs = st.checkbox("Test substitutions (swap each ingredient for "
-                              "another of the same type)", True,
-                              key="o_subs",
-                              help="Each unlocked ingredient is replaced in "
-                                   "turn by every library food of the same "
-                                   "role (protein, starch, vegetable, oil, "
-                                   "supplement…) and all amounts are "
-                                   "re-optimised. Unticked foods below are "
-                                   "not used.")
-        do_rem = st.checkbox("Test removals (leave each ingredient out in "
-                             "turn)", True, key="o_rem",
-                             help="Lists ingredients the recipe does not "
-                                  "need: taking them out (all other amounts "
-                                  "re-optimised) improves the score or costs "
-                                  "under 1 %.")
-        o_full = st.checkbox(
-            "Suggest only ingredients with complete data (missing choline "
-            "allowed)", False, key="o_full",
-            help="Additions and substitutions use only foods without unknown "
-                 "values among the nutrients checked (all of them with "
-                 "Extended nutrients on).")
-        max_add = st.slider("Max. additions to combine", 1, 6, 3,
-                            key="o_max")
+        # ---- 3 · changes allowed
+        st.markdown("#### 3 · Changes allowed")
+        o_all = st.checkbox("Allow everything (adjust amounts, add, swap and "
+                            "remove foods)", True, key="o_all")
+        if o_all:
+            do_sug = do_subs = do_rem = True
+        else:
+            st.caption("Amounts are always adjusted.")
+            cc3 = st.columns(3)
+            do_sug = cc3[0].checkbox("Add foods", True, key="o_sug")
+            do_subs = cc3[1].checkbox("Swap foods (same type)", True,
+                                      key="o_subs")
+            do_rem = cc3[2].checkbox("Remove foods", True, key="o_rem")
+        cc4 = st.columns(2)
+        max_add = cc4[0].slider("Add up to … foods together", 1, 6, 3,
+                                key="o_max", disabled=not do_sug)
+        o_full = cc4[1].checkbox(
+            "Only foods with complete data (choline may be missing)", False,
+            key="o_full",
+            help="Additions and swaps use only foods without unknown values "
+                 "among the nutrients checked (all of them with Extended "
+                 "nutrients on).")
         cand_names = [n for n in names_all
                       if n not in dict(ss.recipe)
                       and db[n]["category"] != "binder"
                       and db[n]["per100g"]["kcal"] is not None]
-        cdf = st.data_editor(
-            pd.DataFrame({"Use": [n not in ss.opt_ex_base
-                                  for n in cand_names],
-                          "Role": [rc.ingredient_role(db[n])
-                                   for n in cand_names],
-                          "Ingredient": cand_names}),
-            hide_index=True, **FULL, height=250,
-            disabled=["Role", "Ingredient"],
-            key=f"o_cand_{ss.rec_ver}_{ss.opt_ex_ver}") \
-            if do_sug else None
-        if cdf is not None:
-            set_excluded(rc.merge_excluded(
-                ss.excluded, cand_names,
-                cdf.loc[~cdf["Use"], "Ingredient"]), "opt")
+        with st.expander(f"Foods it may suggest ({len(cand_names)} – untick "
+                         "to exclude; remembered)"):
+            cdf = st.data_editor(
+                pd.DataFrame({"Use": [n not in ss.opt_ex_base
+                                      for n in cand_names],
+                              "Role": [rc.ingredient_role(db[n])
+                                       for n in cand_names],
+                              "Ingredient": cand_names}),
+                hide_index=True, **FULL, height=250,
+                disabled=["Role", "Ingredient"],
+                key=f"o_cand_{ss.rec_ver}_{ss.opt_ex_ver}")
             st.caption("Unticked foods are remembered in this browser and "
                        "also left out of the recipe generator.")
+        set_excluded(rc.merge_excluded(ss.excluded, cand_names,
+                                       cdf.loc[~cdf["Use"], "Ingredient"]),
+                     "opt")
 
-        st.caption("With all tests on this can take up to a minute or two "
-                   "on the hosted app – leave the page alone until the "
-                   "results appear (clicking anything restarts the run).")
-        if st.button("Run optimisation", type="primary", key="o_run"):
+        st.caption("With everything allowed this can take up to a minute or "
+                   "two on the hosted app – leave the page alone until the "
+                   "options appear (clicking anything restarts the run).")
+        if st.button("Find options", type="primary", key="o_run"):
             ctx = {"kcal_target": o_kcal, "bw": ctx0.get("bw"),
                    "extended": ctx0.get("extended", False),
                    "max_g": ctx0.get("max_g"),
@@ -968,50 +975,51 @@ with tab_opt:
                     ctx, o_ref, "match" if obj == OBJ[1] else "both")
             names = list(bdf["Ingredient"])
             x0 = list(bdf["Current g"].astype(float))
-            bounds = [(float(r["Min g"]), float(r["Max g"]),
-                       bool(r["Lock"]) or db[r["Ingredient"]]["category"]
-                       == "binder") for _, r in bdf.iterrows()]
+            bounds = [(float(r_["Min g"]), float(r_["Max g"]),
+                       bool(r_["Lock"]) or db[r_["Ingredient"]]["category"]
+                       == "binder") for _, r_ in bdf.iterrows()]
             if any(lo > hi for lo, hi, _ in bounds):
                 st.error("A minimum is larger than its maximum.")
             else:
                 vecs = [rc._vec(db[n]) for n in names]
                 before = rc.score_amounts(x0, vecs, ctx)
-                if do_sug:
-                    cands = list(cdf.loc[cdf["Use"], "Ingredient"])
-                    if o_full:
-                        cands = rc.complete_only(cands, db, ss.ext)
-                    bar = st.progress(0.0, text="Testing additions…")
+                cands = list(cdf.loc[cdf["Use"], "Ingredient"])
+                if o_full:
+                    cands = rc.complete_only(cands, db, ss.ext)
+                steps = 1 + do_sug + do_subs + do_rem
+                step = [0]
+
+                def _bar(label):
+                    step[0] += 1
+                    b_ = st.progress(0.0, text=f"Step {step[0]}/{steps} – "
+                                               f"{label}…")
 
                     def prog(i, total, name):
-                        bar.progress(min(1.0, (i + 1) / max(1, total)),
-                                     text=f"Step 1/3 – additions "
-                                          f"{i + 1}/{total}: {name}")
+                        b_.progress(min(1.0, (i + 1) / max(1, total)),
+                                    text=f"Step {step[0]}/{steps} – {label} "
+                                         f"{i + 1}/{total}: {name}")
+                    return b_, prog
+                if do_sug:
+                    bar, prog = _bar("additions")
                     base, singles, combo = rc.suggest_additions(
                         names, db, bounds, x0, ctx, cands, max_add, prog)
                     bar.empty()
                 else:
-                    with st.spinner("Optimising…"):
+                    step[0] += 1
+                    with st.spinner(f"Step 1/{steps} – adjusting amounts…"):
                         base = rc.optimise(names, db, bounds, x0, ctx)
                     singles, combo = [], None
                 subs = []
                 if do_subs:
-                    pool_s = (list(cdf.loc[cdf["Use"], "Ingredient"]) if do_sug
-                              else [n for n in names_all
-                                    if n not in ss.excluded])
-                    if o_full:
-                        pool_s = rc.complete_only(pool_s, db, ss.ext)
-                    bar = st.progress(0.0, text="Testing substitutions…")
-
-                    def prog_s(i, total, name):
-                        bar.progress(min(1.0, (i + 1) / max(1, total)),
-                                     text=f"Step 2/3 – substitutions "
-                                          f"{i + 1}/{total}: {name}")
+                    bar, prog = _bar("swaps")
                     subs = rc.suggest_substitutions(names, db, bounds, base,
-                                                    ctx, pool_s, prog_s)
+                                                    ctx, cands, prog)
                     bar.empty()
                 rems = []
                 if do_rem:
-                    with st.spinner("Step 3/3 – testing removals…"):
+                    step[0] += 1
+                    with st.spinner(f"Step {step[0]}/{steps} – testing "
+                                    "removals…"):
                         rems = rc.suggest_removals(names, db, bounds, base,
                                                    ctx)
                 ss.opt_result = {"ctx": ctx, "names": names, "x0": x0,
@@ -1019,192 +1027,156 @@ with tab_opt:
                                  "singles": singles, "combo": combo,
                                  "bounds": bounds, "manual": None,
                                  "subs": subs, "rems": rems}
+                ss.pop("o_pick", None)
 
         r = ss.opt_result
         if r:
             ctx = r["ctx"]
-            g, s, terms = r["base"]
-            st.divider()
-            _c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
-            rt_o = rc.recipe_rating(r["names"], g, db, _c0)[0]
             rm_ = ctx.get("ref_match")
-            st.markdown(f"**Score:** current {r['before']:.3f} → optimised "
-                        f"**{s:.3f}**  " + (
-                            f"(0 = same as {rm_['name']} per 1000 kcal"
-                            + (")" if rm_["only"] else
-                               " and every renal target met)")
-                            if rm_ else "(0 = every target met)")
-                        + f" · rating **{rt_o:.0f}**/100")
-            if rm_:
-                ref_o = next((r_ for r_ in rc.load_references()
-                              if r_["name"] == rm_["name"]), None)
-                if ref_o:
-                    with st.expander(f"Optimised recipe vs {rm_['name']}",
-                                     expanded=True):
-                        _, tot_o, miss_o = rc.compute(
-                            list(zip(r["names"], g)), db)[:3]
-                        show_df(st, pd.DataFrame(
-                            rc.reference_rows(tot_o, ref_o, miss_o, ss.ext),
-                            columns=["Nutrient", "Unit", "Recipe /1000 kcal",
-                                     "Reference /1000 kcal", "Difference"]),
-                            hide_index=True, **FULL)
-                        _rs = rc.reference_score(ref_o, ctx)[0]
-                        _os = rc.score_amounts(
-                            g, [rc._vec(db[n]) for n in r["names"]],
-                            {k: v for k, v in ctx.items()
-                             if k != "ref_match"})[0]
-                        st.caption(f"Usual score (renal targets): reference "
-                                   f"{_rs:.3f} · this optimised recipe "
-                                   f"{_os:.3f}")
-                        if rm_["only"]:
-                            st.caption("Matching the reference only: renal "
-                                       "targets are not checked here – see "
-                                       "the status column and the Recipe "
-                                       "tab after applying.")
+            current, options = rc.optimiser_options(r, db)
 
-            def recipe_table(names, grams, new=()):
+            def recipe_table(names, grams, old=None):
+                old = old or {}
                 d_ = {"Ingredient": names,
+                      "was g": [round(old.get(n, 0.0), 1) for n in names],
                       "g/day": [round(x, 1) for x in grams]}
                 if ss.meals > 1:
                     d_["g/meal"] = [round(x / ss.meals, 1) for x in grams]
                 d_["kcal"] = [fmt_kcal(n, x) for n, x in zip(names, grams)]
-                d_[""] = ["new" if n in new else "" for n in names]
-                return pd.DataFrame(d_)
+                d_[""] = ["new" if n not in old else
+                          ("dropped" if x < 0.5 else "")
+                          for n, x in zip(names, grams)]
+                gone = [n for n in old if n not in names]
+                df_ = pd.DataFrame(d_)
+                if gone:
+                    df_ = pd.concat([df_, pd.DataFrame({
+                        "Ingredient": gone,
+                        "was g": [round(old[n], 1) for n in gone],
+                        "g/day": [0.0] * len(gone),
+                        **({"g/meal": [0.0] * len(gone)} if ss.meals > 1
+                           else {}),
+                        "kcal": [0] * len(gone),
+                        "": ["removed"] * len(gone)})], ignore_index=True)
+                return df_
 
             def key_values(names, grams):
                 vecs = [rc._vec(db[n]) for n in names]
                 kcal, per, _ = rc.per1000_from(grams, vecs)
+                R_ = rc.get_ranges(ctx)
                 out = []
-                for k in ("protein", "p", "na", "k", "ca", "epa_dha"):
-                    stt, _ = rc.status_for(k, per[k], ctx["renal"],
-                                           rc.get_ranges(ctx))
+                for k in ("protein", "p", "na", "k", "ca", "epa_dha",
+                          "oxalate"):
+                    stt, _ = rc.status_for(k, per[k], ctx["renal"], R_)
                     out.append({"Per 1000 kcal": rc.LABEL[k],
-                                "Value": f"{per[k]:.1f} {rc.UNIT[k]}",
+                                "Value": f"{per[k]:,.0f} {rc.UNIT[k]}",
                                 "Status": stt})
                 if per["p"]:
                     out.append({"Per 1000 kcal": "Ca:P ratio",
                                 "Value": f"{per['ca'] / per['p']:.2f}",
-                                "Status": "target 1–2"})
+                                "Status": f"target {R_['ca_p'][0]:g}–"
+                                          f"{R_['ca_p'][1]:g}"})
                 return pd.DataFrame(out)
 
             def gaps(tt):
                 items = [(k, round(v, 3)) for k, v in
                          sorted(tt.items(), key=lambda kv: -kv[1])
-                         if v > 1e-4][:8]
+                         if v > 1e-4][:6]
                 return ", ".join(f"{k} ({v})" for k, v in items) or \
                     "none – all targets met"
 
-            oc1, oc2 = st.columns(2)
-            with oc1:
-                st.markdown("**Optimised daily amounts**")
-                tb = recipe_table(r["names"], g)
-                tb.insert(1, "was g", [round(x, 1) for x in r["x0"]])
-                show_df(st, tb.drop(columns=[""]), hide_index=True,
-                             **FULL)
-                st.button("Apply optimised amounts", type="primary",
-                          key="o_apply",
-                          on_click=apply_recipe,
-                          args=(r["names"], g, s, "Optimised recipe", ctx))
-            with oc2:
-                show_df(st, key_values(r["names"], g), hide_index=True,
-                             **FULL)
-                st.caption("Remaining gaps: " + gaps(terms))
+            # ---- 4 · options
+            st.divider()
+            st.markdown("#### 4 · Options – best first")
+            meaning = ((f"0 = same as {rm_['name']} per 1000 kcal" +
+                        ("" if rm_["only"] else " and every renal target met"))
+                       if rm_ else "0 = every target met")
+            st.caption(f"Ranked by score ({meaning}), then rating. "
+                       f"★ = recommended. Current recipe: score "
+                       f"{current['score']:.3f} · rating "
+                       f"{current['rating']:.0f}/100.")
+            if not options:
+                st.info("No options found.")
+            else:
+                tbl = pd.DataFrame({
+                    "#": list(range(1, len(options) + 1)),
+                    "": ["★" if o["best"] else "" for o in options],
+                    "Type": [o["kind"] for o in options],
+                    "Change": [o["change"] for o in options],
+                    "Score": [f"{o['score']:.3f}" for o in options],
+                    "Rating": [f"{o['rating']:.0f}/100" for o in options],
+                    "Main improvements": [o["why"] for o in options]})
+                show_df(st, tbl, hide_index=True, **FULL,
+                        column_config={"#": st.column_config.NumberColumn(
+                            "#", width="small")})
+                labels = [f"#{i + 1}{' ★' if o['best'] else ''} · "
+                          f"{o['kind']} · {o['change'][:70]}"
+                          for i, o in enumerate(options)]
+                pick = st.selectbox("Details of option", range(len(options)),
+                                    format_func=lambda i: labels[i],
+                                    key="o_pick")
+                o = options[pick]
+                with st.container(border=True):
+                    st.markdown(f"**Option #{pick + 1} · {o['kind']}** – "
+                                f"score **{o['score']:.3f}** "
+                                f"{rc.score_change(o['score'], current['score'])}"
+                                f" · rating **{o['rating']:.0f}/100** (was "
+                                f"{current['rating']:.0f}/100)")
+                    oc1, oc2 = st.columns(2)
+                    show_df(oc1, recipe_table(o["names"], o["grams"],
+                                              dict(zip(r["names"], r["x0"]))),
+                            hide_index=True, **FULL)
+                    show_df(oc2, key_values(o["names"], o["grams"]),
+                            hide_index=True, **FULL)
+                    oc2.caption("Remaining gaps: " + gaps(o["terms"]))
+                    if rm_:
+                        ref_o = next((r_ for r_ in rc.load_references()
+                                      if r_["name"] == rm_["name"]), None)
+                        if ref_o:
+                            _, tot_o, miss_o = rc.compute(
+                                list(zip(o["names"], o["grams"])), db)[:3]
+                            st.markdown(f"**vs {rm_['name']}** (per 1000 kcal)")
+                            show_df(st, pd.DataFrame(
+                                rc.reference_rows(tot_o, ref_o, miss_o,
+                                                  ss.ext),
+                                columns=["Nutrient", "Unit",
+                                         "Recipe /1000 kcal",
+                                         "Reference /1000 kcal",
+                                         "Difference"]),
+                                hide_index=True, **FULL)
+                            _c0 = {k: v for k, v in ctx.items()
+                                   if k != "ref_match"}
+                            st.caption(
+                                "Usual score (renal targets): reference "
+                                f"{rc.reference_score(ref_o, ctx)[0]:.3f} · "
+                                "this option "
+                                f"{rc.score_amounts(o['grams'], [rc._vec(db[n]) for n in o['names']], _c0)[0]:.3f}")
+                    st.button(f"Apply option #{pick + 1}", type="primary",
+                              key="o_apply", on_click=apply_recipe,
+                              args=(o["names"], o["grams"], o["score"],
+                                    f"Optimised ({o['kind'].lower()}: "
+                                    f"{o['change'][:60]})", ctx))
 
-            if r["singles"]:
-                st.markdown("**Suggested additions** – each tested alone, "
-                            "all amounts re-optimised")
-                for i, (c, gg, ss_, tt) in enumerate(r["singles"][:10]):
-                    pct = (1 - ss_ / s) * 100 if s > 0 else 0
-                    why = ", ".join(rc.improvement_reasons(terms, tt)) or "–"
-                    cc = st.columns([5, 1])
-                    rt_s = rc.recipe_rating(r["names"] + [c], gg, db, _c0)[0]
-                    cc[0].write(f"{i + 1}. **+ {gg[-1]:.1f} g {c}** → score "
-                                f"{ss_:.3f} {rc.score_change(ss_, s)} · rating "
-                                f"{rt_s:.0f}/100 (was {rt_o:.0f}/100) · improves: "
-                                f"{why}")
-                    cc[1].button("Apply", key=f"o_s_{i}",
-                                 on_click=apply_recipe,
-                                 args=(r["names"] + [c], gg, ss_,
-                                       f"Optimised + {c}", ctx))
-            elif r["combo"] is not None:
-                st.info("No single library ingredient improved the score by "
-                        "≥2%.")
-            if r.get("rems"):
-                st.markdown("**Suggested removals** – the recipe does as well "
-                            "or better without these (other amounts "
-                            "re-optimised)")
-                for i, (rm_n, rn, rg, rs, rt) in enumerate(r["rems"][:10]):
-                    ch = (rs / s - 1) * 100 if s > 0 else 0
-                    cc = st.columns([5, 1])
-                    cc[0].write(f"{i + 1}. **− {rm_n}** → score {rs:.3f} "
-                                f"({ch:+.0f}%) · rating "
-                                f"{rc.recipe_rating(rn, rg, db, _c0)[0]:.0f}/100")
-                    cc[1].button("Apply", key=f"o_rem_{i}",
-                                 on_click=apply_recipe,
-                                 args=(rn, rg, rs, f"Optimised − {rm_n}",
-                                       ctx))
-            elif r.get("rems") is not None and st.session_state.get("o_rem"):
-                st.caption("Every ingredient is needed: removing any of them "
-                           "makes the score >1 % worse.")
-            if r.get("subs"):
-                st.markdown("**Suggested substitutions** – one ingredient "
-                            "swapped for another of the same type, all "
-                            "amounts re-optimised")
-                for i, (old_, new_, sn, sg, ss_, tt) in \
-                        enumerate(r["subs"][:10]):
-                    pct = (1 - ss_ / s) * 100 if s > 0 else 0
-                    why = ", ".join(rc.improvement_reasons(terms, tt)) or "–"
-                    gi = sn.index(new_)
-                    cc = st.columns([5, 1])
-                    rt_s = rc.recipe_rating(sn, sg, db, _c0)[0]
-                    cc[0].write(f"{i + 1}. **{old_} → {sg[gi]:.1f} g "
-                                f"{new_}** → score {ss_:.3f} "
-                                f"{rc.score_change(ss_, s)} · rating "
-                                f"{rt_s:.0f}/100 (was {rt_o:.0f}/100) · improves: "
-                                f"{why}")
-                    cc[1].button("Apply", key=f"o_sub_{i}",
-                                 on_click=apply_recipe,
-                                 args=(sn, sg, ss_,
-                                       f"Optimised, {old_} → {new_}", ctx))
-            elif r.get("subs") is not None and st.session_state.get("o_subs"):
-                st.caption("No substitution improved the score by ≥2%.")
-            if r["combo"] and r["combo"][4]:
-                cn, cg, cs, ct_, added = r["combo"]
-                st.markdown(f"**Best combination** (adds {', '.join(added)})"
-                            f" → score **{cs:.3f}** · rating "
-                            f"{rc.recipe_rating(cn, cg, db, _c0)[0]:.0f}/100")
-                cc = st.columns(2)
-                show_df(cc[0], recipe_table(cn, cg, added), hide_index=True,
-                                **FULL)
-                show_df(cc[1], key_values(cn, cg), hide_index=True,
-                                **FULL)
-                cc[1].caption("Remaining gaps: " + gaps(ct_))
-                st.button("Apply best combination", key="o_combo",
-                          on_click=apply_recipe,
-                          args=(cn, cg, cs, "Optimised + " + ", ".join(added),
-                                ctx))
+            # ---- 5 · fine-tune yourself
+            def bounds_for(nn):
+                bm = dict(zip(r["names"], r["bounds"]))
+                return [bm.get(n) or (*rc.default_bounds(
+                    db[n], ctx["kcal_target"]), False) for n in nn]
 
-            # ---- user's own additions
-            if r.get("bounds") is not None:
-                st.markdown("**Add or remove ingredients yourself** – any "
-                            "library ingredient; everything is re-optimised")
-                has_combo = bool(r["combo"] and r["combo"][4])
-                start = st.radio("Start from", ["Optimised recipe",
-                                                "Best combination"],
-                                 horizontal=True, key="o_man_start") \
-                    if has_combo else "Optimised recipe"
-                if start == "Best combination":
-                    base_n, base_g, base_s = (r["combo"][0], r["combo"][1],
-                                              r["combo"][2])
-                else:
-                    base_n, base_g, base_s = r["names"], g, s
-                opts = [n for n in names_all if n not in base_n
-                        and db[n]["per100g"]["kcal"] is not None]
-                rem_sel = st.multiselect("Ingredients to remove",
-                                         [n for n in base_n],
+            with st.expander("5 · Fine-tune yourself – add or remove "
+                             "specific foods and re-optimise",
+                             expanded=bool(r.get("manual"))):
+                base_o = options[ss.get("o_pick", 0) or 0] if options else \
+                    {"names": r["names"], "grams": r["base"][0],
+                     "score": r["base"][1], "kind": "Amounts only"}
+                st.caption(f"Starts from the option shown above "
+                           f"({base_o['kind']}).")
+                base_n, base_g, base_s = (base_o["names"], base_o["grams"],
+                                          base_o["score"])
+                opts_ = [n for n in names_all if n not in base_n
+                         and db[n]["per100g"]["kcal"] is not None]
+                rem_sel = st.multiselect("Foods to remove", list(base_n),
                                          key="o_man_rem")
-                sel = st.multiselect("Ingredients to add", opts,
-                                     key="o_man_sel")
+                sel = st.multiselect("Foods to add", opts_, key="o_man_sel")
                 med = None
                 if sel:
                     med = st.data_editor(
@@ -1225,49 +1197,44 @@ with tab_opt:
                                 "Max g", min_value=0.0, format="%g",
                                 help="Blank = default limit")})
                     st.caption("Leave both blank to let the optimiser choose "
-                               "the amount (it may choose 0 g if the "
-                               "ingredient does not help). Set Min g to make "
-                               "sure it is included; Min = Max for an exact "
-                               "amount.")
+                               "the amount (it may choose 0 g if the food "
+                               "does not help). Set Min g to make sure it is "
+                               "included; Min = Max for an exact amount.")
                 if (sel or rem_sel) and st.button("Re-optimise with these",
                                                   key="o_man_run"):
-                        adds = [(rw["Ingredient"],
-                                 None if pd.isna(rw["Min g"])
-                                 else float(rw["Min g"]),
-                                 None if pd.isna(rw["Max g"])
-                                 else float(rw["Max g"]))
-                                for _, rw in med.iterrows()] \
-                            if med is not None else []
-                        bad = [a for a, lo, hi in adds if lo is not None
-                               and hi is not None and lo > hi]
-                        if bad:
-                            st.error("Min g is larger than Max g for: "
-                                     + ", ".join(bad))
-                        else:
-                            bb = list(r["bounds"]) + [
-                                (*rc.default_bounds(db[n],
-                                                    ctx["kcal_target"]),
-                                 False) for n in base_n[len(r["names"]):]]
-                            if len(rem_sel) >= len(base_n) and not adds:
-                                st.error("That would remove everything.")
-                            else:
-                                with st.spinner("Optimising…"):
-                                    r["manual"] = (base_s,) + \
-                                        rc.remove_and_add(base_n, db, bb,
-                                                          base_g, ctx,
-                                                          rem_sel, adds)
+                    adds = [(rw["Ingredient"],
+                             None if pd.isna(rw["Min g"])
+                             else float(rw["Min g"]),
+                             None if pd.isna(rw["Max g"])
+                             else float(rw["Max g"]))
+                            for _, rw in med.iterrows()] \
+                        if med is not None else []
+                    bad = [a_ for a_, lo, hi in adds if lo is not None
+                           and hi is not None and lo > hi]
+                    if bad:
+                        st.error("Min g is larger than Max g for: "
+                                 + ", ".join(bad))
+                    elif len(rem_sel) >= len(base_n) and not adds:
+                        st.error("That would remove everything.")
+                    else:
+                        with st.spinner("Optimising…"):
+                            r["manual"] = (base_s,) + rc.remove_and_add(
+                                base_n, db, bounds_for(base_n), base_g, ctx,
+                                rem_sel, adds)
                 man = r.get("manual")
                 if man:
                     ms0, mn, mg, ms, mt = man
-                    new = [n for n in mn if n not in r["names"]]
-                    gone = [n for n in r["names"] if n not in mn]
-                    st.markdown(f"**With your changes** → score "
-                                f"**{ms:.3f}** (was {ms0:.3f})"
-                                + (f" · removed: {', '.join(gone)}"
-                                   if gone else ""))
+                    _c0 = {k: v for k, v in ctx.items() if k != "ref_match"}
+                    st.markdown(
+                        f"**With your changes** → score **{ms:.3f}** (was "
+                        f"{ms0:.3f}) · rating "
+                        f"{rc.recipe_rating(mn, mg, db, _c0)[0]:.0f}/100 · "
+                        + rc.describe_change(r["names"], r["x0"], mn, mg))
                     cc = st.columns(2)
-                    show_df(cc[0], recipe_table(mn, mg, new), hide_index=True,
-                            **FULL)
+                    show_df(cc[0], recipe_table(mn, mg,
+                                                dict(zip(r["names"],
+                                                         r["x0"]))),
+                            hide_index=True, **FULL)
                     show_df(cc[1], key_values(mn, mg), hide_index=True,
                             **FULL)
                     cc[1].caption("Remaining gaps: " + gaps(mt))
