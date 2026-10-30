@@ -1110,7 +1110,7 @@ with tab_opt:
                     rt_s = rc.recipe_rating(r["names"] + [c], gg, db, _c0)[0]
                     cc[0].write(f"{i + 1}. **+ {gg[-1]:.1f} g {c}** → score "
                                 f"{ss_:.3f} {rc.score_change(ss_, s)} · rating "
-                                f"{rt_s:.0f} (was {rt_o:.0f}) · improves: "
+                                f"{rt_s:.0f}/100 (was {rt_o:.0f}/100) · improves: "
                                 f"{why}")
                     cc[1].button("Apply", key=f"o_s_{i}",
                                  on_click=apply_recipe,
@@ -1128,7 +1128,7 @@ with tab_opt:
                     cc = st.columns([5, 1])
                     cc[0].write(f"{i + 1}. **− {rm_n}** → score {rs:.3f} "
                                 f"({ch:+.0f}%) · rating "
-                                f"{rc.recipe_rating(rn, rg, db, _c0)[0]:.0f}")
+                                f"{rc.recipe_rating(rn, rg, db, _c0)[0]:.0f}/100")
                     cc[1].button("Apply", key=f"o_rem_{i}",
                                  on_click=apply_recipe,
                                  args=(rn, rg, rs, f"Optimised − {rm_n}",
@@ -1150,7 +1150,7 @@ with tab_opt:
                     cc[0].write(f"{i + 1}. **{old_} → {sg[gi]:.1f} g "
                                 f"{new_}** → score {ss_:.3f} "
                                 f"{rc.score_change(ss_, s)} · rating "
-                                f"{rt_s:.0f} (was {rt_o:.0f}) · improves: "
+                                f"{rt_s:.0f}/100 (was {rt_o:.0f}/100) · improves: "
                                 f"{why}")
                     cc[1].button("Apply", key=f"o_sub_{i}",
                                  on_click=apply_recipe,
@@ -1162,7 +1162,7 @@ with tab_opt:
                 cn, cg, cs, ct_, added = r["combo"]
                 st.markdown(f"**Best combination** (adds {', '.join(added)})"
                             f" → score **{cs:.3f}** · rating "
-                            f"{rc.recipe_rating(cn, cg, db, _c0)[0]:.0f}")
+                            f"{rc.recipe_rating(cn, cg, db, _c0)[0]:.0f}/100")
                 cc = st.columns(2)
                 show_df(cc[0], recipe_table(cn, cg, added), hide_index=True,
                                 **FULL)
@@ -1429,7 +1429,7 @@ with tab_gen:
             vecs = [rc._vec(db[n]) for n in names]
             kcal, per, _ = rc.per1000_from(g, vecs)
             rt_, rparts = rc.recipe_rating(names, g, db, ctx)
-            title = (f"Recipe {i + 1} · score {s:.3f} · rating {rt_:.0f} · "
+            title = (f"Recipe {i + 1} · score {s:.3f} · rating {rt_:.0f}/100 · "
                      f"{sum(g):.0f} g/day · "
                      + ", ".join(n.split(",")[0] for n, a in zip(names, g)
                                  if rc.ingredient_role(db[n]) in

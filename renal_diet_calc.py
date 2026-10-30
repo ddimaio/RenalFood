@@ -2721,8 +2721,8 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None, meals=1):
                            else "all targets met"))
         rt, rp = recipe_rating(names, [g for n, g in recipe if n in db], db,
                                sctx)
-        summary.insert(1, ("Rating (tie-breaker, higher = better)", "/100",
-                           f"{rt:.0f}", " · ".join(
+        summary.insert(1, ("Rating (tie-breaker, higher = better)", "",
+                           f"{rt:.0f}/100", " · ".join(
                                f"{RATING_LABELS[k]} {rp[k] * 100:.0f}%"
                                for k in RATING_W)))
     res["summary"] = summary
@@ -4478,7 +4478,7 @@ class ResultsWindow(tk.Toplevel):
                 why = ", ".join(improvement_reasons(terms, tt)) or "–"
                 L.append(f"  {i:>2}. + {gg[-1]:.1f} g {c}  -> score {ss:.3f} "
                          f"{score_change(ss, s)}  rating "
-                         f"{recipe_rating(names + [c], gg, db, c0r)[0]:.0f}"
+                         f"{recipe_rating(names + [c], gg, db, c0r)[0]:.0f}/100"
                          f"   improves: {why}")
         elif self.combo is not None:
             L.append("\nNo single library ingredient improved the score by "
@@ -4501,7 +4501,7 @@ class ResultsWindow(tk.Toplevel):
                 why = ", ".join(improvement_reasons(terms, tt)) or "–"
                 L.append(f"  {i:>2}. {o} -> {sg[sn.index(n)]:.1f} g {n}  "
                          f"score {ss:.3f} {score_change(ss, s)}  rating "
-                         f"{recipe_rating(sn, sg, db, c0r)[0]:.0f}"
+                         f"{recipe_rating(sn, sg, db, c0r)[0]:.0f}/100"
                          f"   improves: {why}")
 
         if self.combo and self.combo[4]:
