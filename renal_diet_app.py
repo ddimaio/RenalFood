@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30i"
+ENGINE_VERSION = "2026.10.30j"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1406,7 +1406,7 @@ with tab_gen:
 
             def prog(text, i, total):
                 bar.progress(min(1.0, i / max(1, total)),
-                             text=f"{text} ({i}/{total})")
+                             text=(text if "/" in text else f"{text} ({i}/{total})"))
             res = rc.generate_recipes(
                 db, pool, ctx, gn, gmax,
                 [tuple(x) for x in ss.recipe] if fixed_base else (),

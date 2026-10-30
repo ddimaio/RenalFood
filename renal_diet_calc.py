@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30i"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30j"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -2113,7 +2113,8 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         cur_n, cur_g, cur_s = list(names), list(g), s
         cur_b = fx_b + fo_b + [bnd(n) for n in names[nb:]]
         if progress:
-            progress(f"Refining recipe {bi + 1}/{len(keep)}", bi, len(keep))
+            progress(f"Refining candidate {bi + 1}/{len(keep)} (best "
+                     f"{n_recipes} kept)", bi, len(keep))
 
         def allowed(c, strict=True):
             fams_in = {_family(n) for n in cur_n}
@@ -3804,7 +3805,7 @@ class GeneratorDialog(tk.Toplevel):
                 return
             self.pb["maximum"] = max(1, total)
             self.pb["value"] = i
-            self.status.config(text=f"{text} ({i}/{total})")
+            self.status.config(text=(text if "/" in text else f"{text} ({i}/{total})"))
             self.update()
 
         try:
