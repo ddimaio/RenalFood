@@ -351,6 +351,7 @@ def apply_recipe(names, g, score, label, ctx):
     set_recipe([(n, a) for n, a in zip(names, g) if a >= 0.1])
     ss.score_ctx = rc.store_score_context(ss.score_ctx, ctx, ss.stage,
                                           need_now())
+    ss.tgt_ver += 1          # optimiser priorities/aims show the new settings
     ss.recipe_note = (f"{label} – score {score:.3f} "
                       f"({ctx['kcal_target']:.0f} kcal/day, {ss.stage})")
     ss.applied = [list(r) for r in ss.recipe]
