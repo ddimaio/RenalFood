@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30e"
+ENGINE_VERSION = "2026.10.30f"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -936,6 +936,9 @@ with tab_opt:
             st.caption("Unticked foods are remembered in this browser and "
                        "also left out of the recipe generator.")
 
+        st.caption("With all tests on this can take up to a minute or two "
+                   "on the hosted app – leave the page alone until the "
+                   "results appear (clicking anything restarts the run).")
         if st.button("Run optimisation", type="primary", key="o_run"):
             ctx = {"kcal_target": o_kcal, "bw": ctx0.get("bw"),
                    "extended": ctx0.get("extended", False),
@@ -965,7 +968,8 @@ with tab_opt:
 
                     def prog(i, total, name):
                         bar.progress(min(1.0, (i + 1) / max(1, total)),
-                                     text=f"Testing {i + 1}/{total}: {name}")
+                                     text=f"Step 1/3 – additions "
+                                          f"{i + 1}/{total}: {name}")
                     base, singles, combo = rc.suggest_additions(
                         names, db, bounds, x0, ctx, cands, max_add, prog)
                     bar.empty()
@@ -984,14 +988,14 @@ with tab_opt:
 
                     def prog_s(i, total, name):
                         bar.progress(min(1.0, (i + 1) / max(1, total)),
-                                     text=f"Substitution {i + 1}/{total}: "
-                                          f"{name}")
+                                     text=f"Step 2/3 – substitutions "
+                                          f"{i + 1}/{total}: {name}")
                     subs = rc.suggest_substitutions(names, db, bounds, base,
                                                     ctx, pool_s, prog_s)
                     bar.empty()
                 rems = []
                 if do_rem:
-                    with st.spinner("Testing removals…"):
+                    with st.spinner("Step 3/3 – testing removals…"):
                         rems = rc.suggest_removals(names, db, bounds, base,
                                                    ctx)
                 ss.opt_result = {"ctx": ctx, "names": names, "x0": x0,

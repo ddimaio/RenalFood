@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30e"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1547,13 +1547,23 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         base = (mb[1], mb[2], mb[3]) if mb[2] < b0[1] else b0
     else:
         base = optimise(names, db, bounds, x0, ctx)
-    singles = []
+    # screen every candidate with a quick search, then re-optimise the
+    # most promising ones fully (5x faster than full searches throughout)
+    screened = []
     for idx, c in enumerate(candidates):
         if progress:
             progress(idx, len(candidates), c)
         lo, hi = default_bounds(db[c], ctx["kcal_target"])
         g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
-                           list(base[0]) + [0.0], ctx)
+                           list(base[0]) + [0.0], ctx, **QUICK)
+        if s < base[1] * 0.995 and g[-1] >= 0.1:
+            screened.append((s, c, g))
+    screened.sort(key=lambda r: r[0])
+    singles = []
+    for s0, c, g0 in screened[:REFINE_TOP]:
+        lo, hi = default_bounds(db[c], ctx["kcal_target"])
+        g, s, t = optimise(names + [c], db, bounds + [(lo, hi, False)],
+                           g0, ctx)
         if s < base[1] * 0.98 and g[-1] >= 0.1:
             singles.append((c, g, s, t))
     singles.sort(key=lambda r: r[2])
@@ -1569,7 +1579,7 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
                 continue
             lo, hi = default_bounds(db[c], ctx["kcal_target"])
             g, s, t = optimise(cur_n + [c], db, cur_b + [(lo, hi, False)],
-                               cur_g + [0.0], ctx)
+                               cur_g + [0.0], ctx, **QUICK)
             if g[-1] >= 0.1 and (best is None or s < best[2]):
                 best = (c, g, s, t)
         if best is None or best[2] > cur_s * 0.98:
@@ -1578,6 +1588,10 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
         cur_n, cur_b = cur_n + [best[0]], cur_b + [(lo, hi, False)]
         cur_g, cur_s, cur_t = best[1], best[2], best[3]
         added.append(best[0])
+    if added:                            # full search for the final mix
+        g, sc, t = optimise(cur_n, db, cur_b, cur_g, ctx)
+        if sc <= cur_s:
+            cur_g, cur_s, cur_t = g, sc, t
     if ctx.get("ref_match"):
         mr = match_reference(names, db, bounds, list(base[0]), ctx,
                              candidates, max_add)
@@ -1699,6 +1713,10 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
     return cur_n, g, sc, t, added
 
 
+QUICK = {"use_scipy": False, "max_evals": 800}   # screening searches
+REFINE_TOP = 15      # best screened candidates re-optimised fully
+
+
 def suggest_removals(names, db, bounds, base, ctx, progress=None,
                      tolerance=0.01):
     """Remove each free (unlocked) ingredient in turn and re-optimise the
@@ -1756,7 +1774,7 @@ def suggest_substitutions(names, db, bounds, base, ctx, candidates,
             if same_role and ingredient_role(db[c]) != r:
                 continue
             jobs.append((i, n, c))
-    out = []
+    screened = []
     for j, (i, n, c) in enumerate(jobs):
         if progress:
             progress(j, len(jobs), f"{n} → {c}")
@@ -1764,7 +1782,13 @@ def suggest_substitutions(names, db, bounds, base, ctx, candidates,
         nn = names[:i] + [c] + names[i + 1:]
         bb = bounds[:i] + [(lo, hi, False)] + bounds[i + 1:]
         x0 = list(g0[:i]) + [max(lo, 0.0)] + list(g0[i + 1:])
-        g, sc, t = optimise(nn, db, bb, x0, ctx)
+        g, sc, t = optimise(nn, db, bb, x0, ctx, **QUICK)
+        if sc < s0 * 0.995 and g[i] >= 0.1:
+            screened.append((sc, i, n, c, nn, bb, g))
+    screened.sort(key=lambda r: r[0])
+    out = []
+    for _, i, n, c, nn, bb, gq in screened[:REFINE_TOP]:
+        g, sc, t = optimise(nn, db, bb, gq, ctx)
         if sc < s0 * 0.98 and g[i] >= 0.1:
             out.append((n, c, nn, g, sc, t))
     out.sort(key=lambda r: r[4])
