@@ -496,7 +496,7 @@ with tab_rec:
                      if isinstance(r.Ingredient, str) and r.Ingredient in db
                      and pd.notna(r.g)]
         record_history()
-        uc = st.columns([1, 1, 3])
+        uc = st.columns(2)
         uc[0].button("↶ Undo", key="undo", on_click=undo,
                      disabled=ss.hist_pos <= 0, **FULL,
                      help="Undo the last recipe change (applied results, "
@@ -579,23 +579,32 @@ with tab_rec:
             t = a["totals"]
             k1000 = 1000 / t["kcal"] if t["kcal"] else 0
             with keyed("metrics"):
-                m = st.columns(5)
+                m = st.columns(3) + st.columns(3)
             m[0].metric("Score", f"{a['score']:.3f}" if a["score"]
                         is not None else "–", help="0 = all targets met")
-            if a.get("rating") is not None:
-                st.caption(f"**Rating {a['rating']:.0f}/100** (tie-breaker "
-                           "for equal scores; higher = better) – " +
-                           " · ".join(f"{rc.RATING_LABELS[k]} "
-                                      f"{a['rating_parts'][k] * 100:.0f}%"
-                                      for k in rc.RATING_W))
-            m[1].metric("kcal/day", f"{t['kcal']:.0f}",
-                        f"{t['kcal'] - need_now():+.0f} vs need")
-            m[2].metric("Protein g", f"{t['protein'] * k1000:.0f}",
+            rparts = a.get("rating_parts") or {}
+            m[1].metric("Rating", f"{a['rating']:.0f}/100"
+                        if a.get("rating") is not None else "–",
+                        help="Secondary score, higher = better: ranks recipes "
+                             "with the same score. " + " · ".join(
+                                 f"{rc.RATING_LABELS[k]} "
+                                 f"{rparts[k] * 100:.0f}%"
+                                 for k in rc.RATING_W if k in rparts))
+            _d = t["kcal"] - need_now()
+            m[2].metric("kcal/day", f"{t['kcal']:.0f}",
+                        f"{_d:+.0f} vs need" if abs(_d) >= 0.5 else
+                        "= need", delta_color="off" if abs(_d) < 0.5 else
+                        "normal")
+            m[3].metric("Protein g", f"{t['protein'] * k1000:.0f}",
                         help="per 1000 kcal")
-            m[3].metric("P mg (net)", f"{rc.net_p(t) * k1000:.0f}",
+            m[4].metric("P mg (net)", f"{rc.net_p(t) * k1000:.0f}",
                         help="phosphorus per 1000 kcal, net of any binder")
-            m[4].metric("Ca : P",
+            m[5].metric("Ca : P",
                         f"{t['ca'] / t['p']:.2f}" if t["p"] else "–")
+            if rparts:
+                st.caption("Rating: " + " · ".join(
+                    f"{rc.RATING_LABELS[k]} {rparts[k] * 100:.0f}%"
+                    for k in rc.RATING_W))
             st.subheader("Assessment")
             st.markdown("\n".join(
                 ("- " + ln[2:]) if ln.startswith("• ") else
