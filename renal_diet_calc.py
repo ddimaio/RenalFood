@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31e"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1198,7 +1198,31 @@ def reference_rows(totals, ref, missing=None, extended=True):
     return rows
 
 
-PREFS_PATH = os.path.join(APP_DIR, "renal_prefs.json")
+def _prefs_dir():
+    """A fixed per-user folder for remembered settings, so they survive
+    new download folders (Windows: %APPDATA%\\RenalFood, else
+    ~/.renalfood)."""
+    base = os.environ.get("APPDATA") if os.name == "nt" else None
+    d = os.path.join(base, "RenalFood") if base else \
+        os.path.join(os.path.expanduser("~"), ".renalfood")
+    try:
+        os.makedirs(d, exist_ok=True)
+        return d
+    except OSError:
+        return APP_DIR
+
+
+OLD_PREFS_PATH = os.path.join(APP_DIR, "renal_prefs.json")
+PREFS_PATH = os.path.join(_prefs_dir(), "renal_prefs.json")
+if not os.path.exists(PREFS_PATH) and os.path.exists(OLD_PREFS_PATH) \
+        and PREFS_PATH != OLD_PREFS_PATH:          # carry over old settings
+    try:
+        with open(OLD_PREFS_PATH, encoding="utf-8") as _f, \
+                open(PREFS_PATH, "w", encoding="utf-8") as _g:
+            _g.write(_f.read())
+    except OSError:
+        pass
+_PREFS_WARNED = []
 
 
 def load_prefs():
@@ -1215,8 +1239,15 @@ def save_prefs(prefs):
     try:
         with open(PREFS_PATH, "w", encoding="utf-8") as f:
             json.dump(prefs, f, indent=1, ensure_ascii=False)
-    except OSError:
-        pass
+    except OSError as e:
+        if not _PREFS_WARNED:               # tell the user once
+            _PREFS_WARNED.append(1)
+            try:
+                messagebox.showwarning(
+                    "Settings", "Could not save your remembered settings "
+                    f"(excluded foods etc.) to\n{PREFS_PATH}\n\n{e}")
+            except Exception:
+                pass
 
 
 def load_excluded():
@@ -4209,6 +4240,8 @@ class GeneratorDialog(tk.Toplevel):
         ttk.Label(bb, foreground="#555",
                   text="Unticked foods are remembered (also for the "
                        "optimiser's additions).").pack(side="left", padx=8)
+        ttk.Label(frm, foreground="#777", font=("TkDefaultFont", 8),
+                  text=f"Remembered settings: {PREFS_PATH}").pack(anchor="w")
 
         ff = ttk.LabelFrame(frm, text="Always include (amount optimised, "
                                       "at least the minimum)", padding=6)
