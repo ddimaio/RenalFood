@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.30a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.30b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -909,7 +909,7 @@ FIBRE_MAX = 15.0
 # targets. Confirm with your vet.
 AIMS = {"Stage 1 – non-proteinuric": {},
         "Stage 1 – proteinuric": {"protein": 40, "p": 900},
-        "Stage 2": {"protein": 45, "p": 900},
+        "Stage 2": {"protein": 45, "p": 800},   # ~commercial renal diets
         "Stage 3": {"protein": 40, "p": 700},
         "Stage 4": {"protein": 35, "p": 550}}
 MICROS = ("fat", "ca", "mg")
@@ -2314,10 +2314,12 @@ def food_limit_status(grams, max_g):
             "more energy-dense (less vegetable, a little more oil)")
 
 
-def analyse_recipe(recipe, db, need, stage_name, sctx=None):
+def analyse_recipe(recipe, db, need, stage_name, sctx=None, meals=1):
     """Everything the results screens show, independent of the GUI.
     Returns dict: mass, totals, missing, summary [(name, unit, value,
-    status)], rows [(values10, tag)], breakdown [13-tuples], notes."""
+    status)], rows [(values11, tag)] (… Per day, Per meal …), breakdown,
+    notes. meals = meals per day (per-meal amounts = per day / meals)."""
+    meals = max(1, int(meals or 1))
     ensure_caps(db)
     renal_mode, stage_note = STAGES[stage_name]
     if sctx and "renal" in sctx:
@@ -2326,6 +2328,7 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
     mass, t, miss = compute(recipe, db)
     extended = bool((sctx or {}).get("extended"))
     res = {"mass": mass, "totals": t, "missing": miss, "summary": [],
+           "meals": meals,
            "rows": [], "breakdown": [], "score": None, "terms": {},
            "breakdown_cols": breakdown_columns(extended)}
     if mass <= 0:
@@ -2365,6 +2368,10 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
          food_limit_status(need / kcal * mass if kcal > 0 and need else None,
                            (sctx or {}).get("max_g"))),
     ]
+    if meals > 1 and kcal > 0 and need:
+        summary.append((f"Per meal ({meals} meals/day)", "g · kcal",
+                        f"{fmt(need / kcal * mass / meals)} g · "
+                        f"{fmt(need / meals)} kcal", ""))
     if sctx and sctx["kcal_target"] > 0:
         names = [n for n, g in recipe if n in db]
         sc, terms = score_amounts([g for n, g in recipe if n in db],
@@ -2398,9 +2405,11 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None):
         if assumed.get(k):
             st = (st + "; " if st else "") + \
                 f"AAFCO min assumed ({len(assumed[k])})"
+        pmeal = pday / meals if pday is not None else None
         res["rows"].append(((LABEL[k], UNIT[k], inc + fmt(t[k]),
                              inc + fmt(per100), inc + fmt(perdm),
-                             inc + fmt(p1000), inc + fmt(pday), renal, aafco,
+                             inc + fmt(p1000), inc + fmt(pday),
+                             inc + fmt(pmeal), renal, aafco,
                              st), tag))
     res["breakdown"] = breakdown_rows(recipe, db, mass, t, extended)
     res["breakdown_lights"] = breakdown_lights(
@@ -4357,7 +4366,8 @@ class App(tk.Tk):
     RES_COLS = [("nutrient", "Nutrient", 230), ("unit", "Unit", 90),
                 ("total", "Recipe total", 170), ("per100", "/100 g fed", 95),
                 ("dm", "/100 g DM", 95), ("per1000", "/1000 kcal", 100),
-                ("day", "Per day", 90), ("renal", "Renal range", 110),
+                ("day", "Per day", 90), ("meal", "Per meal", 80),
+                ("renal", "Renal range", 110),
                 ("aafco", "AAFCO min", 100), ("status", "Status", 260)]
 
     BRK_COLS = BRK_COLS
@@ -4404,6 +4414,10 @@ class App(tk.Tk):
         self.max_g = tk.StringVar(value="")
         ttk.Entry(top, textvariable=self.max_g, width=6).pack(side="left",
                                                               padx=(2, 12))
+        ttk.Label(top, text="Meals/day").pack(side="left")
+        self.meals = tk.StringVar(value="2")
+        ttk.Spinbox(top, from_=1, to=6, textvariable=self.meals,
+                    width=3).pack(side="left", padx=(2, 12))
         ttk.Label(top, text="IRIS stage").pack(side="left")
         self.stage = tk.StringVar(value="Stage 2")
         cb = ttk.Combobox(top, textvariable=self.stage, values=list(STAGES),
@@ -4416,6 +4430,7 @@ class App(tk.Tk):
                              "minerals)").pack(side="left", padx=(0, 12))
         for var in (self.bw, self.factor, self.max_g):
             var.trace_add("write", lambda *a: self.recalc())
+        self.meals.trace_add("write", lambda *a: self.refresh_recipe())
         ttk.Button(top, text="Export results CSV",
                    command=self.export_results).pack(side="right")
         ttk.Button(top, text="Compare with reference…",
@@ -4466,13 +4481,15 @@ class App(tk.Tk):
         rec = ttk.LabelFrame(left, text="Recipe (double-click to change grams)",
                              padding=4)
         rec.pack(fill="both", expand=True, pady=(6, 0))
-        rtbox, self.rec_tree = scrolled_tree(rec, columns=("g", "kcal"),
+        rtbox, self.rec_tree = scrolled_tree(rec, columns=("g", "gm", "kcal"),
                                              height=10)
         self.rec_tree.heading("#0", text="Ingredient")
-        self.rec_tree.heading("g", text="g")
+        self.rec_tree.heading("g", text="g/day")
+        self.rec_tree.heading("gm", text="g/meal")
         self.rec_tree.heading("kcal", text="kcal")
         self.rec_tree.column("#0", width=200, minwidth=120, stretch=True)
         self.rec_tree.column("g", width=60, anchor="e", stretch=False)
+        self.rec_tree.column("gm", width=60, anchor="e", stretch=False)
         self.rec_tree.column("kcal", width=60, anchor="e", stretch=False)
         rtbox.pack(fill="both", expand=True)
         self.rec_tree.bind("<Double-Button-1>", lambda e: self.edit_amount())
@@ -4757,6 +4774,12 @@ class App(tk.Tk):
             self.recipe.append([n, g])
         self.refresh_recipe()
 
+    def meals_n(self):
+        try:
+            return max(1, int(float(self.meals.get())))
+        except (ValueError, AttributeError, tk.TclError):
+            return 1
+
     def record_history(self):
         h, p = self.hist, self.hist_pos
         cur = [list(r) for r in self.recipe]
@@ -4807,7 +4830,8 @@ class App(tk.Tk):
         for i, (n, g) in enumerate(self.recipe):
             kc = self.db[n]["per100g"]["kcal"] if n in self.db else None
             self.rec_tree.insert("", "end", iid=str(i), text=n, values=(
-                f"{g:g}", "?" if kc is None else f"{kc * g / 100:.0f}"))
+                f"{g:g}", f"{g / self.meals_n():.1f}",
+                "?" if kc is None else f"{kc * g / 100:.0f}"))
         self.recalc()
 
     def _sel_recipe(self):
@@ -4840,7 +4864,7 @@ class App(tk.Tk):
                                             initialfile="recipe.json")
         if path:
             d = {"items": self.recipe, "bw": self.bw.get(),
-                 "max_g": self.max_g.get(),
+                 "max_g": self.max_g.get(), "meals": self.meals_n(),
                  "factor": self.factor.get(), "stage": self.stage.get(),
                  "note": self.recipe_note}
             if self.score_ctx:
@@ -4864,6 +4888,7 @@ class App(tk.Tk):
                        if n in self.db]
         self.bw.set(d.get("bw", self.bw.get()))
         self.max_g.set(d.get("max_g", self.max_g.get()) or "")
+        self.meals.set(str(d.get("meals", self.meals.get())))
         self.factor.set(d.get("factor", self.factor.get()))
         if d.get("stage") in STAGES:
             self.stage.set(d["stage"])
@@ -4978,10 +5003,11 @@ class App(tk.Tk):
             note += "   (edited since)"
         self.info_lbl.config(text=note)
         a = analyse_recipe(self.recipe, self.db, self.current_mer(),
-                           self.stage.get(), self.score_context())
+                           self.stage.get(), self.score_context(),
+                           self.meals_n())
         for name, unit, val, status in a["summary"]:
             self.res.insert("", "end", values=(name, unit, val, "", "", "",
-                                               "", "", "", status),
+                                               "", "", "", "", status),
                             tags=("head",))
         for values, tag in a["rows"]:
             self.res.insert("", "end", tags=(tag,) if tag else (),

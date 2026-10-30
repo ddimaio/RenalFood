@@ -95,6 +95,12 @@ replaces silken tofu's estimated values with measured ones and fills
 missing amino acids, B5 and trace minerals of other foods (amino acids
 scaled by protein, the rest by dry matter).
 
+## Meals per day
+
+Recipes are daily totals. Set **Meals per day** (sidebar / toolbar, default
+2) to also see per-meal amounts: a per-meal recipe table, a "Per meal"
+column in the composition and g/meal in optimiser and generator results.
+
 ## Oxalate
 
 Oxalate (mg/100 g) is tracked for library foods (`oxalate_fill.py`;

@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.30a"
+ENGINE_VERSION = "2026.10.30b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -175,7 +175,8 @@ for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
                  "applied": None, "score_ctx": None, "opt_result": None,
                  "gen_result": None, "bw": 6.0, "factor": 1.6,
                  "stage": "Stage 2", "lib_ver": 0, "tgt_ver": 0,
-                 "blood_eval": None, "ext": False, "max_g": 0.0}.items():
+                 "blood_eval": None, "ext": False, "max_g": 0.0,
+                 "meals": 2}.items():
     ss.setdefault(key, val)
 db = ss.db
 
@@ -394,6 +395,7 @@ def load_recipe_cb():
     try:
         ss.bw = float(d.get("bw", ss.bw))
         ss.max_g = float(d.get("max_g") or 0.0)
+        ss.meals = int(d.get("meals") or ss.meals)
         ss.factor = float(d.get("factor", ss.factor))
     except ValueError:
         pass
@@ -427,6 +429,10 @@ with st.sidebar:
                     help="For a small appetite: the optimiser and generator "
                          "then prefer energy-dense recipes that fit in this "
                          "amount.")
+    st.number_input("Meals per day", 1, 6, step=1, key="meals",
+                    help="Recipes stay daily totals; per-meal amounts are "
+                         "the daily amounts divided by this number "
+                         "(nutrient balance per 1000 kcal is the same).")
     st.selectbox("IRIS stage", list(rc.STAGES), key="stage")
     st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal")
     st.caption(rc.STAGES[ss.stage][1])
@@ -491,6 +497,18 @@ with tab_rec:
                      disabled=ss.hist_pos >= len(ss.hist) - 1, **FULL)
         st.caption("Add a row at the bottom of the table; select rows and "
                    "press Delete to remove them.")
+        if ss.meals > 1 and ss.recipe:
+            pm = pd.DataFrame({
+                "Ingredient": [n for n, _ in ss.recipe],
+                "g per meal": [round(g / ss.meals, 1) for _, g in ss.recipe],
+                "kcal per meal": [fmt_kcal(n, g / ss.meals)
+                                  for n, g in ss.recipe]})
+            with st.expander(f"Per meal ({ss.meals} meals/day)",
+                             expanded=True):
+                show_df(st, pm, hide_index=True, **FULL)
+                st.caption("Daily amounts ÷ meals. If one meal is different "
+                           "(e.g. kibble at breakfast), split by hand – the "
+                           "daily totals are what count.")
 
         with st.expander("⚖️ Scale amounts to body weight"):
             st.write(f"Daily need {need_now():.0f} kcal "
@@ -514,7 +532,7 @@ with tab_rec:
 
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
-                       "max_g": str(ss.max_g),
+                       "max_g": str(ss.max_g), "meals": ss.meals,
                        "factor": str(ss.factor), "stage": ss.stage,
                        "note": ss.recipe_note}
             if ss.score_ctx:
@@ -533,7 +551,7 @@ with tab_rec:
                 st.warning(ss.pop("load_msg"))
 
     a = rc.analyse_recipe(ss.recipe, db, need_now(), ss.stage,
-                          score_context())
+                          score_context(), ss.meals)
     with right:
         if a["mass"] <= 0:
             st.info("Add ingredients to the recipe – or use **Generate "
@@ -562,9 +580,14 @@ with tab_rec:
         st.divider()
         ct, bt = st.tabs(["Composition", "Ingredient breakdown"])
         cols = ["Nutrient", "Unit", "Recipe total", "/100 g fed",
-                "/100 g DM", "/1000 kcal", "Per day", "Renal range",
-                "AAFCO min", "Status"]
+                "/100 g DM", "/1000 kcal", "Per day", "Per meal",
+                "Renal range", "AAFCO min", "Status"]
         comp = pd.DataFrame([v for v, _ in a["rows"]], columns=cols)
+        if ss.meals <= 1:
+            comp = comp.drop(columns=["Per meal"])
+            cols = [c for c in cols if c != "Per meal"]
+            a["rows"] = [(tuple(x for j, x in enumerate(v) if j != 7), tg)
+                         for v, tg in a["rows"]]
         tags = [tg for _, tg in a["rows"]]
         bcols = [c for _, c, _ in a.get("breakdown_cols", rc.BRK_COLS)]
         brk = pd.DataFrame(a["breakdown"], columns=bcols)
@@ -989,10 +1012,13 @@ with tab_opt:
                                        "tab after applying.")
 
             def recipe_table(names, grams, new=()):
-                return pd.DataFrame({
-                    "Ingredient": names, "g/day": [round(x, 1) for x in grams],
-                    "kcal": [fmt_kcal(n, x) for n, x in zip(names, grams)],
-                    "": ["new" if n in new else "" for n in names]})
+                d_ = {"Ingredient": names,
+                      "g/day": [round(x, 1) for x in grams]}
+                if ss.meals > 1:
+                    d_["g/meal"] = [round(x / ss.meals, 1) for x in grams]
+                d_["kcal"] = [fmt_kcal(n, x) for n, x in zip(names, grams)]
+                d_[""] = ["new" if n in new else "" for n in names]
+                return pd.DataFrame(d_)
 
             def key_values(names, grams):
                 vecs = [rc._vec(db[n]) for n in names]
@@ -1336,6 +1362,8 @@ with tab_gen:
                     "Ingredient": names,
                     "Role": [rc.ingredient_role(db[n]) for n in names],
                     "g/day": [round(x, 1) for x in g],
+                    **({"g/meal": [round(x / ss.meals, 1) for x in g]}
+                       if ss.meals > 1 else {}),
                     "kcal": [fmt_kcal(n, x) for n, x in zip(names, g)],
                     "": ["fixed" if j < gr["n_fixed"] else
                          "forced" if n in gr.get("forced", []) else ""
