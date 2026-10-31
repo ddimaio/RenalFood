@@ -116,6 +116,9 @@ Optimise tab (Streamlit) / **Optimise…** (desktop), in steps:
 `imports/dafy_v_integra_renal.json` (also in the library): Dafy V-Integra
 Renal, a phosphorus-free vitamin-mineral balancer (vegetarian; mostly
 calcium, potassium and magnesium carbonates). From the manufacturer's label.
+`imports/dafy_v_integra_renal_met.json` (also in the library): Dafy V-Integra
+Renal Met, the same balancer with added DL-methionine (5.8%), for recipes
+low in methionine (e.g. plant-based). From the manufacturer's label.
 
 ## Recommended maximum amounts
 
@@ -129,7 +132,7 @@ each value came from and flags current amounts above it; the generator and
 suggested additions use it too. Concentrated EPA+DHA oils (fish, algal)
 get a max from the upper limit of 2800 mg EPA+DHA per 1000 kcal of the
 energy target. Set so far: ThorneVet B ComplexVET (1 chew per 11 kg =
-0.176 g/kg), Dafy V-Integra Renal (label table) and V-Integra Adult
+0.176 g/kg), Dafy V-Integra Renal and Renal Met (label table) and V-Integra Adult
 (7 g up to 10 kg - only that band is known).
 
 ## Only ingredients with complete data

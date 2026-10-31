@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31j"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.10.31k"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -444,6 +444,7 @@ OXALATE_DEFAULTS = {
     'Cucumber, peeled, raw': 4.2,
     'Dafy V-Integra Adult Dog homemade diet balancer': 0,
     'Dafy V-Integra Renal homemade diet balancer': 0,
+    'Dafy V-Integra Renal Met homemade diet balancer': 0,
     'Daikon (white radish), boiled': 1,
     'Edamame, boiled': 29.3,
     'Egg white, cooked (boiled/poached, no fat)': 0,
@@ -519,6 +520,8 @@ MAX_DOSE_DEFAULTS = {
     'Dafy V-Integra Adult Dog homemade diet balancer': '10:7',
     'ThorneVet B ComplexVET soft chew (2 g)': '0.176/kg',
     'Dafy V-Integra Renal homemade diet balancer': '5:4, 10:8, 15:10, 25:15, 40:20, 60:28',
+    'Dafy V-Integra Renal Met homemade diet balancer':
+        '5:4, 10:8, 15:10, 25:15, 40:20, 60:28',
 }
 
 
