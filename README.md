@@ -120,6 +120,9 @@ calcium, potassium and magnesium carbonates). From the manufacturer's label.
 Renal Met, the same balancer with added DL-methionine (5.8%), for recipes
 low in methionine (e.g. plant-based). From the manufacturer's label.
 
+`imports/tahini.json` (also in the library): plain tahini from hulled, roasted
+sesame (USDA SR26 12166). Oxalate left unknown (no reliable value).
+
 ## Recommended maximum amounts
 
 An ingredient can carry a recommended maximum (label dose) in g/day:
