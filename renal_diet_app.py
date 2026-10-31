@@ -449,9 +449,9 @@ with st.sidebar:
                "diet should be balanced by a vet nutritionist.")
 layout_css(ss.get("layout", "Auto"))
 
-tab_rec, tab_blood, tab_opt, tab_gen, tab_lib, tab_about = st.tabs(
-    ["🍲 Recipe & analysis", "🩸 Blood results", "⚙️ Optimise",
-     "✨ Generate recipes", "📚 Ingredient library", "ℹ️ About"])
+tab_rec, tab_blood, tab_gen, tab_opt, tab_lib, tab_about = st.tabs(
+    ["🍲 Recipe & analysis", "🩸 Blood results", "✨ Generate recipes",
+     "⚙️ Optimise", "📚 Ingredient library", "ℹ️ About"])
 
 names_all = sorted(db, key=str.lower)
 
