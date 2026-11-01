@@ -123,11 +123,6 @@ low in methionine (e.g. plant-based). From the manufacturer's label.
 `imports/tahini.json` (also in the library): plain tahini from hulled, roasted
 sesame (USDA SR26 12166). Oxalate left unknown (no reliable value).
 
-`imports/omni_sweet_potato_quinoa.json` (also in the library): Omni Sweet
-Potato & Quinoa Loaf, plant-based complete wet food, from the label. Energy
-estimated; Ca, P, Na, K, Mg not declared; flagged as a complete food
-(AAFCO minimums assumed for missing extended nutrients).
-
 ## Recommended maximum amounts
 
 An ingredient can carry a recommended maximum (label dose) in g/day:
