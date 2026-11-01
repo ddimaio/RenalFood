@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.10.31k"
+ENGINE_VERSION = "2026.11.01"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -207,6 +207,52 @@ if not ss.ex_loaded:
             ss.opt_ex_ver += 1
 
 
+# ---- optimiser: share the generator's exclusions (default) or keep its own
+#      list - remembered in this browser and in renal_prefs.json
+LS_OPT = "renalfood_opt_excluded"
+if "opt_share" not in ss:
+    ss.opt_share = rc.opt_shares_exclusions()
+    ss.opt_own = rc.load_excluded("opt_excluded")
+    ss.opt_own_base = set(ss.opt_own)
+    ss.opt_loaded = streamlit_js_eval is None
+if not ss.opt_loaded:
+    raw = streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{LS_OPT}') || 'null'",
+        key="ls_get_opt")
+    if raw is not None:
+        ss.opt_loaded = True
+        try:
+            got = json.loads(raw)
+        except (TypeError, ValueError):
+            got = None
+        if isinstance(got, dict):
+            ss.opt_share = bool(got.get("share", True))
+            ss.opt_own = set(got.get("excluded", []))
+            ss.opt_own_base = set(ss.opt_own)
+            ss.opt_ex_ver += 1
+
+
+def set_opt_own(new):
+    """Store the optimiser's own exclusion list (sharing switched off)."""
+    new = set(new)
+    if new != ss.opt_own:
+        ss.opt_own = new
+        rc.save_excluded(new, "opt_excluded")
+
+
+def set_opt_share():
+    """Checkbox callback: switch between the shared list and the
+    optimiser's own list (which starts as a copy of the shared one)."""
+    on = ss.o_share
+    if not on and not ss.opt_own:
+        set_opt_own(ss.excluded)
+    ss.opt_share = on
+    rc.set_opt_shares_exclusions(on)
+    ss.opt_own_base = set(ss.opt_own)
+    ss.opt_ex_base = set(ss.excluded)
+    ss.opt_ex_ver += 1
+
+
 # ---- generator settings per ingredient (Always include, Min g, Max g),
 #      remembered the same way
 LS_GEN = "renalfood_gen"
@@ -246,6 +292,7 @@ def set_excluded(new, source):
     rc.save_excluded(ss.excluded)
     if source == "gen":
         ss.opt_ex_base = set(new)
+        ss.opt_own_base = set(ss.opt_own)   # rebuilt editor keeps own edits
         ss.opt_ex_ver += 1
     else:
         ss.gen_ex_base = set(new)
@@ -261,6 +308,14 @@ def store_excluded_in_browser():
         js_expressions=f"localStorage.setItem('{LS_KEY}', {json.dumps(val)})"
                        " || 1",
         key=f"ls_set_excluded_{abs(hash(val))}")
+    if ss.opt_loaded:
+        val = json.dumps({"share": ss.opt_share,
+                          "excluded": sorted(ss.opt_own, key=str.lower)},
+                         ensure_ascii=False)
+        streamlit_js_eval(
+            js_expressions=f"localStorage.setItem('{LS_OPT}', "
+                           f"{json.dumps(val)}) || 1",
+            key=f"ls_set_opt_{abs(hash(val))}")
     if ss.gen_loaded:
         val = json.dumps(ss.gen_set, ensure_ascii=False, sort_keys=True)
         streamlit_js_eval(
@@ -955,8 +1010,15 @@ with tab_opt:
                       and db[n]["per100g"]["kcal"] is not None]
         with st.expander(f"Foods it may suggest ({len(cand_names)} – untick "
                          "to exclude; remembered)"):
+            ss.o_share = ss.opt_share
+            st.checkbox("Use the recipe generator's exclusions (one shared "
+                        "list)", key="o_share", on_change=set_opt_share,
+                        help="Untick to give the optimiser its own list of "
+                             "excluded foods; the generator's list is then "
+                             "left as it is.")
+            _base = ss.opt_ex_base if ss.opt_share else ss.opt_own_base
             cdf = st.data_editor(
-                pd.DataFrame({"Use": [n not in ss.opt_ex_base
+                pd.DataFrame({"Use": [n not in _base
                                       for n in cand_names],
                               "Role": [rc.ingredient_role(db[n])
                                        for n in cand_names],
@@ -964,11 +1026,17 @@ with tab_opt:
                 hide_index=True, **FULL, height=250,
                 disabled=["Role", "Ingredient"],
                 key=f"o_cand_{ss.rec_ver}_{ss.opt_ex_ver}")
-            st.caption("Unticked foods are remembered in this browser and "
-                       "also left out of the recipe generator.")
-        set_excluded(rc.merge_excluded(ss.excluded, cand_names,
-                                       cdf.loc[~cdf["Use"], "Ingredient"]),
-                     "opt")
+            st.caption("Unticked foods are remembered in this browser"
+                       + (" and also left out of the recipe generator."
+                          if ss.opt_share else
+                          " (optimiser only – the generator keeps its own "
+                          "list)."))
+        _unt = cdf.loc[~cdf["Use"], "Ingredient"]
+        if ss.opt_share:
+            set_excluded(rc.merge_excluded(ss.excluded, cand_names, _unt),
+                         "opt")
+        else:
+            set_opt_own(rc.merge_excluded(ss.opt_own, cand_names, _unt))
 
         st.caption("With everything allowed this can take up to a minute or "
                    "two on the hosted app – leave the page alone until the "
@@ -1363,8 +1431,11 @@ with tab_gen:
                 **{rw["Ingredient"]: float(rw["Max g"])
                    for _, rw in gdf.iterrows() if pd.notna(rw["Max g"])}}})
     st.caption("Your ticks and Min/Max values are remembered in this "
-               "browser; unticked foods are also left out of the optimiser's "
-               "suggested additions.")
+               "browser" + ("; unticked foods are also left out of the "
+                            "optimiser's suggested additions."
+                            if ss.opt_share else
+                            ". The optimiser keeps its own excluded list "
+                            "(see Optimise → Foods it may suggest)."))
 
     if st.button("Generate", type="primary", key="g_run"):
         ctx = score_context(gk)

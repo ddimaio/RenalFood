@@ -104,7 +104,10 @@ Optimise tab (Streamlit) / **Optimise…** (desktop), in steps:
    priorities and aims.
 3. **Changes allowed** – *Allow everything* (default) adjusts amounts and
    tests adding, swapping and removing foods; untick it to choose. The
-   list of foods it may suggest is remembered.
+   list of foods it may suggest is remembered. *Use the recipe generator's
+   exclusions* (on by default) shares one excluded list with the
+   generator; untick it to give the optimiser its own list (starts as a
+   copy) without changing the generator's.
 4. **Find options** → one list, **best first** (score, then rating), with
    ★ on the recommended option. Each row says what changes ("+ Fish oil
    3 g · − Lentils · Rice 150→60 g"). Pick one to see its amounts,

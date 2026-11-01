@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.10.31k"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.01"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1253,9 +1253,28 @@ def save_prefs(prefs):
                 pass
 
 
-def load_excluded():
-    """Foods the user unticked for the generator / optimiser additions."""
-    return set(load_prefs().get("excluded", []))
+def load_excluded(key="excluded"):
+    """Foods the user unticked for the generator / optimiser additions.
+    key="opt_excluded": the optimiser's own list, used when it does not
+    share the generator's exclusions (see opt_shares_exclusions)."""
+    return set(load_prefs().get(key, []))
+
+
+def opt_shares_exclusions():
+    """True (default): the optimiser uses the generator's excluded foods;
+    False: it keeps its own list (prefs 'opt_excluded')."""
+    return bool(load_prefs().get("opt_share_excluded", True))
+
+
+def set_opt_shares_exclusions(on):
+    p = load_prefs()
+    p["opt_share_excluded"] = bool(on)
+    save_prefs(p)
+
+
+def opt_excluded_key():
+    """Prefs key of the list the optimiser currently uses."""
+    return "excluded" if opt_shares_exclusions() else "opt_excluded"
 
 
 def merge_excluded(old, shown, unticked):
@@ -1265,19 +1284,20 @@ def merge_excluded(old, shown, unticked):
     return (set(old) - shown) | (set(unticked) & shown)
 
 
-def save_excluded(excluded):
+def save_excluded(excluded, key="excluded"):
     p = load_prefs()
-    p["excluded"] = sorted(excluded, key=str.lower)
+    p[key] = sorted(excluded, key=str.lower)
     save_prefs(p)
 
 
-def sync_excluded_list(win, event, lb, names):
+def sync_excluded_list(win, event, lb, names, key="excluded"):
     """Refresh a food Listbox from the remembered exclusions when its
-    window gets focus (another window may have changed them)."""
+    window gets focus (another window may have changed them). key may be
+    a callable returning the prefs key (the optimiser's list can change)."""
     if event is not None and event.widget is not win:
         return
     try:
-        ex = load_excluded()
+        ex = load_excluded(key() if callable(key) else key)
         for i, n in enumerate(names):
             if (n in ex) == lb.selection_includes(i):
                 if n in ex:
@@ -4882,24 +4902,27 @@ class OptimiseDialog(tk.Toplevel):
             0, "end"), self.save_excl())).pack(side="right")
         ttk.Button(row, text="None", command=lambda: (self.cand.select_clear(
             0, "end"), self.save_excl())).pack(side="right", padx=4)
-        ttk.Label(sf, foreground="#555",
-                  text="Candidates (click to include/exclude, e.g. untick "
-                       "animal products; remembered, also for the "
-                       "generator):").pack(anchor="w", pady=(4, 0))
+        self.share_ex = tk.BooleanVar(value=opt_shares_exclusions())
+        ttk.Checkbutton(sf, variable=self.share_ex, command=self._share_changed,
+                        text="Use the recipe generator's exclusions (one "
+                             "shared list)").pack(anchor="w", pady=(4, 0))
+        self.cand_lbl = ttk.Label(sf, foreground="#555")
+        self.cand_lbl.pack(anchor="w")
+        self._cand_text()
         self.cand_names = sorted(
             (n for n in app.db if n not in dict(app.recipe)
              and app.db[n]["category"] != "binder"
              and app.db[n]["per100g"]["kcal"] is not None), key=str.lower)
         self.cand = tk.Listbox(sf, selectmode="multiple", height=9,
                                exportselection=False)
-        excluded = load_excluded()
+        excluded = load_excluded(opt_excluded_key())
         for i, n in enumerate(self.cand_names):
             self.cand.insert("end", n)
             if n not in excluded:
                 self.cand.select_set(i)
         self.cand.bind("<<ListboxSelect>>", lambda e: self.save_excl())
         self.bind("<FocusIn>", lambda e: sync_excluded_list(
-            self, e, self.cand, self.cand_names))
+            self, e, self.cand, self.cand_names, opt_excluded_key))
         self.cand.pack(fill="both", expand=True)
 
         bot = ttk.Frame(frm)
@@ -4942,9 +4965,28 @@ class OptimiseDialog(tk.Toplevel):
 
     def save_excl(self):
         sel = set(self.cand.curselection())
+        key = opt_excluded_key()
         save_excluded(merge_excluded(
-            load_excluded(), self.cand_names,
-            [n for i, n in enumerate(self.cand_names) if i not in sel]))
+            load_excluded(key), self.cand_names,
+            [n for i, n in enumerate(self.cand_names) if i not in sel]), key)
+
+    def _cand_text(self):
+        self.cand_lbl.config(
+            text="Candidates (click to include/exclude, e.g. untick animal "
+                 "products; remembered" + (", shared with the generator):"
+                                           if self.share_ex.get() else
+                                           ", optimiser only):"))
+
+    def _share_changed(self):
+        """Switch between the shared list and the optimiser's own list;
+        the own list starts as a copy of the shared one."""
+        on = self.share_ex.get()
+        if not on and "opt_excluded" not in load_prefs():
+            save_excluded(load_excluded(), "opt_excluded")
+        set_opt_shares_exclusions(on)
+        self._cand_text()
+        sync_excluded_list(self, None, self.cand, self.cand_names,
+                           opt_excluded_key())
 
     def run(self):
         app = self.app
@@ -5001,7 +5043,8 @@ class OptimiseDialog(tk.Toplevel):
             if self.do_subs.get():
                 pool_s = ([self.cand_names[i] for i in self.cand.curselection()]
                           if self.do_suggest.get() else
-                          [n for n in app.db if n not in load_excluded()])
+                          [n for n in app.db if n not in
+                           load_excluded(opt_excluded_key())])
                 if self.full_only.get():
                     pool_s = complete_only(pool_s, app.db, self.extended)
                 subs = suggest_substitutions(
