@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02c"
+ENGINE_VERSION = "2026.11.02d"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -356,9 +356,17 @@ def score_context(kcal=None):
     return ctx
 
 
-def set_recipe(recipe):
+def set_recipe(recipe, plan=None):
+    """Set the day recipe. plan: an active meal plan (a different recipe
+    per meal) whose merged day is `recipe`; None ends any active plan."""
     ss.recipe = [[n, float(g)] for n, g in recipe]
+    ss.plan = plan
     ss.rec_ver += 1                      # rebuild the editor widget
+
+
+def set_plan(plan):
+    """Activate / update a meal plan; the day recipe is its merged day."""
+    set_recipe(rc.meal_plan_day(plan), plan)
 
 
 # ---- undo / redo of recipe changes (this session)
@@ -367,15 +375,19 @@ ss.setdefault("hist", [])
 ss.setdefault("hist_pos", -1)
 
 
+ss.setdefault("plan", None)
+
+
 def _snap():
     return {"recipe": [list(r) for r in ss.recipe], "note": ss.recipe_note,
-            "applied": ss.applied}
+            "applied": ss.applied, "plan": ss.plan}
 
 
 def record_history():
     """Remember the recipe if it changed since the current history point."""
     h, p = ss.hist, ss.hist_pos
-    if p >= 0 and h[p]["recipe"] == ss.recipe:
+    if p >= 0 and h[p]["recipe"] == ss.recipe and \
+            h[p].get("plan") == ss.plan:
         return
     del h[p + 1:]                         # a new change drops the redo part
     h.append(_snap())
@@ -387,7 +399,7 @@ def record_history():
 def _restore(pos):
     snap = ss.hist[pos]
     ss.hist_pos = pos
-    set_recipe(snap["recipe"])
+    set_recipe(snap["recipe"], snap.get("plan"))
     ss.recipe_note = snap["note"]
     ss.applied = snap["applied"]
 
@@ -402,8 +414,11 @@ def redo():
         _restore(ss.hist_pos + 1)
 
 
-def apply_recipe(names, g, score, label, ctx):
-    set_recipe([(n, a) for n, a in zip(names, g) if a >= 0.1])
+def apply_recipe(names, g, score, label, ctx, plan=None):
+    if plan is not None:
+        set_plan(plan)
+    else:
+        set_recipe([(n, a) for n, a in zip(names, g) if a >= 0.1])
     ss.score_ctx = rc.store_score_context(ss.score_ctx, ctx, ss.stage,
                                           need_now())
     ss.tgt_ver += 1          # optimiser priorities/aims show the new settings
@@ -448,6 +463,9 @@ def load_recipe_cb():
     d = json.load(up)
     missing = [n for n, _ in d.get("items", []) if n not in db]
     set_recipe([(n, float(g)) for n, g in d.get("items", []) if n in db])
+    pl = rc.plan_from_json(d["plan"], db) if d.get("plan") else None
+    if pl:
+        set_plan(pl)
     try:
         ss.bw = float(d.get("bw", ss.bw))
         ss.max_g = float(d.get("max_g") or 0.0)
@@ -510,6 +528,57 @@ tab_rec, tab_blood, tab_gen, tab_opt, tab_lib, tab_about = st.tabs(
 
 names_all = sorted(db, key=str.lower)
 
+def _stop_plan():
+    set_recipe(ss.recipe)
+    st.toast("Meal plan ended – the recipe is now one list")
+
+
+def plan_editor(cfg):
+    """Recipe tab while a meal plan is active: one editable table per meal
+    (+ at serving, + fixed base); the day recipe is their merged total."""
+    pl = ss.plan
+    if ss.get("plan_base_ver") != ss.rec_ver:   # stable editor inputs
+        ss.plan_base = pl
+        ss.plan_base_ver = ss.rec_ver
+    base = ss.plan_base
+    st.caption("🍱 **Meal plan active** – each meal is its own recipe (cook "
+               "and freeze separately); amounts are one day's portion. Only "
+               "the whole day is balanced – the analysis on the right is "
+               "the day total.")
+    tags = (["fixed"] if base.get("fixed") else []) + \
+        list(range(len(base["meals"]))) + ["serving"]
+    items = []
+    cur = rc.plan_items(pl)
+    for t in tags:
+        rows = [(n, g) for tt, n, g in rc.plan_items(base) if tt == t]
+        now = [(n, g) for tt, n, g in cur if tt == t]
+        kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100 for n, g in now)
+        pp = sum(g * (db[n]["per100g"]["p"] or 0) / 100 for n, g in now)
+        lab = rc.plan_tag_label(t)
+        extra = (f" · target {base['shares'][t] * 100:.0f}% of home-made "
+                 "energy" if isinstance(t, int) else
+                 " · add to the meals, not before freezing"
+                 if t == "serving" else "")
+        st.markdown(f"**{lab}** · {sum(g for _, g in now):.0f} g · "
+                    f"{kc:.0f} kcal · {pp:.0f} mg P{extra}")
+        df = pd.DataFrame(rows or [], columns=["Ingredient", "g"])
+        df["Ingredient"] = df["Ingredient"].astype("object")
+        df["g"] = df["g"].astype("float")
+        ed = st.data_editor(df, key=f"plan_{t}_{ss.rec_ver}",
+                            num_rows="dynamic", **FULL, hide_index=True,
+                            column_config=cfg)
+        items += [(t, r.Ingredient, float(r.g)) for r in ed.itertuples()
+                  if isinstance(r.Ingredient, str) and r.Ingredient in db
+                  and pd.notna(r.g)]
+    newp = rc.plan_from_items(items, base["shares"], pl.get("score"),
+                              pl.get("terms"))
+    if rc.plan_items(newp) != rc.plan_items(pl):
+        ss.plan = newp
+        ss.recipe = [[n, g] for n, g in rc.meal_plan_day(newp)]
+    st.button("Stop using the meal plan (keep one list)", key="plan_stop",
+              on_click=_stop_plan, **FULL)
+
+
 # ================================================================ RECIPE
 with tab_rec:
     _m = view("mob", "dog")
@@ -534,22 +603,25 @@ with tab_rec:
         if ss.get("rec_base_ver") != ss.rec_ver:
             ss.rec_base = [list(r) for r in ss.recipe]
             ss.rec_base_ver = ss.rec_ver
-        df = pd.DataFrame(ss.rec_base or [], columns=["Ingredient", "g"])
-        df["Ingredient"] = df["Ingredient"].astype("object")
-        df["g"] = df["g"].astype("float")
-        ed = st.data_editor(
-            df, key=f"rec_{ss.rec_ver}", num_rows="dynamic",
-            **FULL, hide_index=True,
-            column_config={
-                "Ingredient": st.column_config.SelectboxColumn(
-                    "Ingredient", options=names_all, required=True,
-                    width="medium"),
-                "g": st.column_config.NumberColumn(
-                    "g/day", min_value=0.0, step=0.5, format="%.1f",
-                    required=True)})
-        ss.recipe = [[r.Ingredient, float(r.g)] for r in ed.itertuples()
-                     if isinstance(r.Ingredient, str) and r.Ingredient in db
-                     and pd.notna(r.g)]
+        _cfg_rec = {
+            "Ingredient": st.column_config.SelectboxColumn(
+                "Ingredient", options=names_all, required=True,
+                width="medium"),
+            "g": st.column_config.NumberColumn(
+                "g/day", min_value=0.0, step=0.5, format="%.1f",
+                required=True)}
+        if ss.plan:
+            plan_editor(_cfg_rec)
+        else:
+            df = pd.DataFrame(ss.rec_base or [], columns=["Ingredient", "g"])
+            df["Ingredient"] = df["Ingredient"].astype("object")
+            df["g"] = df["g"].astype("float")
+            ed = st.data_editor(
+                df, key=f"rec_{ss.rec_ver}", num_rows="dynamic",
+                **FULL, hide_index=True, column_config=_cfg_rec)
+            ss.recipe = [[r.Ingredient, float(r.g)] for r in ed.itertuples()
+                         if isinstance(r.Ingredient, str)
+                         and r.Ingredient in db and pd.notna(r.g)]
         record_history()
         uc = st.columns(2)
         uc[0].button("↶ Undo", key="undo", on_click=undo,
@@ -560,7 +632,7 @@ with tab_rec:
                      disabled=ss.hist_pos >= len(ss.hist) - 1, **FULL)
         st.caption("Add a row at the bottom of the table; select rows and "
                    "press Delete to remove them.")
-        if ss.meals > 1 and ss.recipe:
+        if ss.meals > 1 and ss.recipe and not ss.plan:
             pm = pd.DataFrame({
                 "Ingredient": [n for n, _ in ss.recipe],
                 "g per meal": [round(g / ss.meals, 1) for _, g in ss.recipe],
@@ -587,7 +659,10 @@ with tab_rec:
                 try:
                     new, s = rc.scale_to_target(ss.recipe, db, tgt,
                                                 set(fixed) | set(binders))
-                    set_recipe(new)
+                    if ss.plan:          # scale every meal alike
+                        set_plan(rc.plan_rescale(ss.plan, ss.recipe, new))
+                    else:
+                        set_recipe(new)
                     st.toast(f"Scaled ×{s:.2f} to {tgt:.0f} kcal/day")
                     st.rerun()
                 except ValueError as e:
@@ -604,6 +679,17 @@ with tab_rec:
                      "meal), key nutrients vs targets, assessment and "
                      "feeding notes. Open it and press Print (or Ctrl+P / "
                      "Share → Print on a phone).")
+            if ss.plan:
+                st.download_button(
+                    "🖨️ Printable meal plan (batch per meal)",
+                    rc.meal_plan_print_html(
+                        ss.plan, db, dict(score_context(),
+                                          stage_name=ss.stage), 7),
+                    file_name="meal_plan_print.html", mime="text/html",
+                    key="print_plan", **FULL,
+                    help="Each meal as its own recipe card with a 7-day "
+                         "batch, the at-serving supplements and the day "
+                         "check.")
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,
@@ -611,6 +697,8 @@ with tab_rec:
                        "note": ss.recipe_note}
             if ss.score_ctx:
                 payload["optimiser"] = ss.score_ctx
+            if ss.plan:
+                payload["plan"] = rc.plan_to_json(ss.plan)
             st.download_button("Download recipe (.json)",
                                json.dumps(payload, indent=1,
                                           ensure_ascii=False),
@@ -908,19 +996,29 @@ with tab_opt:
         st.markdown("#### 1 · Ingredients & limits")
         rows, recs = [], []
         _bw = ctx0.get("bw")
-        for n, g in ss.recipe:
+        _items = rc.plan_items(ss.plan) if ss.plan else \
+            [(None, n, g) for n, g in ss.recipe]
+        if ss.plan:
+            st.caption("🍱 **Meal plan active** – the optimiser keeps each "
+                       "meal's share of energy and scores the whole day. "
+                       "Foods are tried in each meal; supplements at "
+                       "serving; swaps stay within their meal.")
+        for t_, n, g in _items:
             lo, hi = rc.default_bounds(db[n], _kcal_now, _bw)
             rec = rc.recommended_max(db[n], _bw, _kcal_now)
             if rec:
                 recs.append((n, g, rec))
-            rows.append({"Ingredient": n, "Current g": g, "Min g": lo,
+            row_ = {"Meal": rc.plan_tag_label(t_)} if ss.plan else {}
+            row_.update({"Ingredient": n, "Current g": g, "Min g": lo,
                          "Max g": hi if rec else max(hi, g),
-                         "Lock": db[n]["category"] == "binder"})
+                         "Lock": db[n]["category"] == "binder"
+                         or t_ == "fixed"})
+            rows.append(row_)
         bdf = st.data_editor(
             pd.DataFrame(rows), hide_index=True, **FULL,
             key=f"o_bounds_{ss.rec_ver}_"
-                f"{abs(hash(tuple(n for n, _ in ss.recipe)))}",
-            disabled=["Ingredient", "Current g"],
+                f"{abs(hash(tuple((str(t_), n) for t_, n, _ in _items)))}",
+            disabled=["Meal", "Ingredient", "Current g"],
             column_config={"Lock": st.column_config.CheckboxColumn(
                 "Lock at current", help="Keep this amount exactly (e.g. "
                                         "breakfast kibble). Binders are "
@@ -1066,6 +1164,23 @@ with tab_opt:
                 if o_full:
                     cands = rc.complete_only(cands, db, ss.ext)
                 steps = 1 + do_sug + do_subs + do_rem
+            if not any(lo > hi for lo, hi, _ in bounds) and ss.plan:
+                b_ = st.progress(0.0, text="Optimising the meal plan…")
+
+                def prog_pl(i, total, name):
+                    b_.progress(min(1.0, (i + 1) / max(1, total)),
+                                text=f"Meal plan – {name} "
+                                     f"({i + 1}/{total})")
+                cur_p, opts_p = rc.plan_options(
+                    ss.plan, db, ctx, bounds, cands, do_sug, do_subs,
+                    do_rem, max_add, prog_pl)
+                b_.empty()
+                ss.opt_result = {"plan_mode": True, "ctx": ctx,
+                                 "current": cur_p, "options": opts_p,
+                                 "plan": ss.plan, "names": names, "x0": x0,
+                                 "bounds": bounds, "manual": None}
+                ss.pop("o_pick", None)
+            elif not any(lo > hi for lo, hi, _ in bounds):
                 step = [0]
 
                 def _bar(label):
@@ -1112,7 +1227,10 @@ with tab_opt:
         if r:
             ctx = r["ctx"]
             rm_ = ctx.get("ref_match")
-            current, options = rc.optimiser_options(r, db)
+            if r.get("plan_mode"):
+                current, options = r["current"], r["options"]
+            else:
+                current, options = rc.optimiser_options(r, db)
 
             def recipe_table(names, grams, old=None):
                 old = old or {}
@@ -1201,8 +1319,40 @@ with tab_opt:
                                 f" · rating **{o['rating']:.0f}/100** (was "
                                 f"{current['rating']:.0f}/100)")
                     oc1, oc2 = st.columns(2)
-                    show_df(oc1, recipe_table(o["names"], o["grams"],
-                                              dict(zip(r["names"], r["x0"]))),
+                    if o.get("plan"):          # meal by meal
+                        was_ = {}
+                        for t_, n_, g_ in rc.plan_items(r["plan"]):
+                            was_[(str(t_), n_)] = g_
+                        for t_ in (["fixed"] if o["plan"]["fixed"] else []) \
+                                + list(range(len(o["plan"]["meals"]))) \
+                                + ["serving"]:
+                            its = [(n_, g_) for tt, n_, g_ in
+                                   rc.plan_items(o["plan"]) if tt == t_]
+                            gone_ = [(n_, g_) for tt, n_, g_ in
+                                     rc.plan_items(r["plan"]) if tt == t_
+                                     and n_ not in dict(its)]
+                            if not its and not gone_:
+                                continue
+                            kc_ = sum(g_ * (db[n_]["per100g"]["kcal"] or 0)
+                                      / 100 for n_, g_ in its)
+                            oc1.markdown(f"**{rc.plan_tag_label(t_)}** · "
+                                         f"{kc_:.0f} kcal")
+                            show_df(oc1, pd.DataFrame(
+                                {"Ingredient": [n_ for n_, _ in its]
+                                 + [n_ for n_, _ in gone_],
+                                 "was g": [round(was_.get((str(t_), n_), 0),
+                                                 1) for n_, _ in its]
+                                 + [round(g_, 1) for _, g_ in gone_],
+                                 "g/day": [round(g_, 1) for _, g_ in its]
+                                 + [0.0] * len(gone_),
+                                 "": ["new" if (str(t_), n_) not in was_
+                                      else "" for n_, _ in its]
+                                 + ["removed"] * len(gone_)}),
+                                hide_index=True, **FULL)
+                    else:
+                        show_df(oc1, recipe_table(
+                            o["names"], o["grams"],
+                            dict(zip(r["names"], r["x0"]))),
                             hide_index=True, **FULL)
                     show_df(oc2, key_values(o["names"], o["grams"]),
                             hide_index=True, **FULL)
@@ -1233,7 +1383,8 @@ with tab_opt:
                               key="o_apply", on_click=apply_recipe,
                               args=(o["names"], o["grams"], o["score"],
                                     f"Optimised ({o['kind'].lower()}: "
-                                    f"{o['change'][:60]})", ctx))
+                                    f"{o['change'][:60]})", ctx,
+                                    o.get("plan")))
 
             # ---- 5 · fine-tune yourself
             def bounds_for(nn):
@@ -1242,9 +1393,14 @@ with tab_opt:
                     db[n], ctx["kcal_target"], ctx.get("bw")), False)
                         for n in nn]
 
-            with st.expander("5 · Fine-tune yourself – add or remove "
-                             "specific foods and re-optimise",
-                             expanded=bool(r.get("manual"))):
+            if r.get("plan_mode"):
+                st.caption("5 · Fine-tune a meal plan by adding or removing "
+                           "foods in the meal tables on the Recipe tab, then "
+                           "Find options again.")
+            else:
+              with st.expander("5 · Fine-tune yourself – add or remove "
+                               "specific foods and re-optimise",
+                               expanded=bool(r.get("manual"))):
                 base_o = options[ss.get("o_pick", 0) or 0] if options else \
                     {"names": r["names"], "grams": r["base"][0],
                      "score": r["base"][1], "kind": "Amounts only"}
@@ -1575,12 +1731,15 @@ with tab_gen:
                                          ("protein", "p", "na", "k", "ca",
                                           "epa_dha")))
                     bc_ = st.columns(2)
-                    bc_[0].button("Use as day recipe", key=f"p_apply_{i}",
+                    bc_[0].button("Use this meal plan", key=f"p_apply_{i}",
                                   on_click=apply_recipe,
                                   args=([n for n, _ in day],
                                         [g for _, g in day], p["score"],
-                                        f"Meal plan {i + 1} (whole day)",
-                                        pr["ctx"]))
+                                        f"Meal plan {i + 1}",
+                                        pr["ctx"], p),
+                                  help="Puts the plan on the Recipe tab "
+                                       "(shown meal by meal) and makes the "
+                                       "optimiser work per meal.")
                     bc_[1].download_button(
                         "🖨️ Printable meal plan",
                         rc.meal_plan_print_html(p, db, pr["ctx"], p_days),

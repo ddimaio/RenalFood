@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.02c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -3178,6 +3178,252 @@ def meal_plan_report(plans, db, ctx):
     return "\n".join(L)
 
 
+def plan_tag_label(tag):
+    return ("Fixed" if tag == "fixed" else "At serving" if tag == "serving"
+            else MEAL_NAMES[tag])
+
+
+def plan_items(plan):
+    """[(tag, name, grams)]: tag 'fixed', 0/1/2 (meal) or 'serving'."""
+    out = [("fixed", n, g) for n, g in plan.get("fixed", [])]
+    for j, m in enumerate(plan["meals"]):
+        out += [(j, n, g) for n, g in m]
+    out += [("serving", n, g) for n, g in plan.get("serving", [])]
+    return out
+
+
+def plan_from_items(items, shares, score=None, terms=None):
+    """Plan dict from [(tag, name, grams)] (amounts < 0.05 g dropped)."""
+    nm = len(shares)
+    p = {"fixed": [], "meals": [[] for _ in range(nm)], "serving": [],
+         "shares": list(shares), "score": score, "terms": terms or {}}
+    for tag, n, g in items:
+        if g < 0.05:
+            continue
+        if tag == "fixed":
+            p["fixed"].append((n, g))
+        elif tag == "serving":
+            p["serving"].append((n, g))
+        else:
+            p["meals"][int(tag)].append((n, g))
+    p["names"] = [n for _, n, _ in plan_items(p)]
+    p["grams"] = [g for _, _, g in plan_items(p)]
+    return p
+
+
+def plan_to_json(plan):
+    return {"shares": list(plan["shares"]),
+            "items": [[t, n, round(g, 2)] for t, n, g in plan_items(plan)]}
+
+
+def plan_from_json(d, db):
+    """Plan from plan_to_json() data (unknown foods skipped); None if
+    invalid."""
+    try:
+        items = [(t if t in ("fixed", "serving") else int(t), n, float(g))
+                 for t, n, g in d["items"] if n in db]
+        return plan_from_items(items, [float(x) for x in d["shares"]])
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+
+
+def plan_ctx(ctx, tags, shares):
+    groups = [[i for i, t in enumerate(tags) if t == j]
+              for j in range(len(shares))]
+    return dict(ctx, meal_groups=[(ix, sh) for ix, sh in zip(groups, shares)
+                                  if ix])
+
+
+def plan_score(plan, db, ctx):
+    it = plan_items(plan)
+    tags = [t for t, _, _ in it]
+    return score_amounts([g for _, _, g in it],
+                         [_vec(db[n]) for _, n, _ in it],
+                         plan_ctx(ctx, tags, plan["shares"]))
+
+
+def plan_describe(old, new):
+    """Change text per meal: 'Meal B: + Carrot 40 g · …'."""
+    parts = []
+    tags = ["fixed"] + list(range(len(old["shares"]))) + ["serving"]
+    oi, ni = plan_items(old), plan_items(new)
+    for t in tags:
+        o = [(n, g) for tt, n, g in oi if tt == t]
+        n_ = [(n, g) for tt, n, g in ni if tt == t]
+        if not o and not n_:
+            continue
+        d = describe_change([n for n, _ in o], [g for _, g in o],
+                            [n for n, _ in n_], [g for _, g in n_], top=2)
+        if d != "small amount changes":
+            parts.append(f"{plan_tag_label(t)}: {d}")
+    return " · ".join(parts) or "small amount changes"
+
+
+def plan_optimise(items, db, bounds, ctx, shares, quick=False):
+    """items [(tag, name, g)], bounds aligned [(lo, hi, locked)] ->
+    (items, score, terms)."""
+    tags = [t for t, _, _ in items]
+    names = [n for _, n, _ in items]
+    x0 = [g for _, _, g in items]
+    g, sc, t = optimise(names, db, bounds, x0, plan_ctx(ctx, tags, shares),
+                        **(QUICK if quick else {}))
+    return [(tg, n, a) for tg, n, a in zip(tags, names, g)], sc, t
+
+
+def plan_options(plan, db, ctx, bounds, candidates=(), do_add=True,
+                 do_subs=True, do_rem=True, max_add=3, progress=None):
+    """Optimiser for an active meal plan: the day total is scored and each
+    meal keeps its energy share. Foods are tried in each meal, supplements
+    'at serving'; swaps stay in the same meal and role; removals of any
+    unlocked item. bounds: aligned with plan_items(plan). Returns
+    (current, options) like optimiser_options; each option also has
+    'plan' (the new plan dict)."""
+    shares = plan["shares"]
+    items0 = plan_items(plan)
+    c0r = {k: v for k, v in ctx.items() if k != "ref_match"}
+
+    def prog(t, i, n):
+        if progress:
+            progress(i, n, t)
+
+    def mk(kind, items, sc, t):
+        p = plan_from_items(items, shares, sc, t)
+        return {"kind": kind, "plan": p, "names": p["names"],
+                "grams": p["grams"], "score": sc, "terms": t,
+                "rating": recipe_rating(p["names"], p["grams"], db,
+                                        c0r)[0]}
+    s_cur, t_cur = plan_score(plan, db, ctx)
+    current = mk("Current", items0, s_cur, t_cur)
+    prog("adjusting amounts", 0, 1)
+    base_items, s0, t0 = plan_optimise(items0, db, bounds, ctx, shares)
+    raw = [mk("Amounts only", base_items, s0, t0)]
+    bnd = list(bounds)
+    in_plan = {n for _, n, _ in base_items}
+
+    def dflt(n):
+        lo, hi = default_bounds(db[n], ctx["kcal_target"], ctx.get("bw"))
+        return (lo, hi, False)
+    # additions: each candidate in each meal (supplements at serving)
+    singles = []
+    if do_add:
+        cands = [c for c in candidates if c in db and c not in in_plan
+                 and db[c]["category"] != "binder"]
+        jobs = [(c, "serving") if db[c]["category"] == "supplement" else
+                (c, j) for c in cands
+                for j in (["serving"] if db[c]["category"] == "supplement"
+                          else range(len(shares)))]
+        scr = []
+        for k, (c, tg) in enumerate(jobs):
+            prog(f"additions – {c}", k, len(jobs))
+            it, sc, t = plan_optimise(base_items + [(tg, c, 0.0)], db,
+                                      bnd + [dflt(c)], ctx, shares,
+                                      quick=True)
+            if it[-1][2] >= 0.5 and round(sc, 3) <= round(s0, 3):
+                scr.append((sc, c, tg, it))
+        scr.sort(key=lambda r: r[0])
+        best_per_c = {}
+        for sc, c, tg, it in scr:
+            best_per_c.setdefault(c, (sc, c, tg, it))
+        r0 = recipe_rating([n for _, n, _ in base_items],
+                           [g for _, _, g in base_items], db, c0r)[0]
+        for sc, c, tg, it in sorted(best_per_c.values())[:REFINE_TOP]:
+            it2, sc2, t2 = plan_optimise(it, db, bnd + [dflt(c)], ctx,
+                                         shares)
+            if it2[-1][2] >= 0.5 and improves(
+                    sc2, s0, recipe_rating([n for _, n, _ in it2],
+                                           [g for _, _, g in it2], db,
+                                           c0r)[0], r0):
+                singles.append((sc2, c, tg, it2, t2))
+        singles.sort(key=lambda r: r[0])
+        raw += [mk("Add", it, sc, t) for sc, c, tg, it, t in singles[:10]]
+        # combination: greedy over the best singles
+        if len(singles) > 1 and max_add > 1:
+            cur_it, cur_b, cur_s, cur_t = singles[0][3], \
+                bnd + [dflt(singles[0][1])], singles[0][0], singles[0][4]
+            added = 1
+            for sc, c, tg, it, t in singles[1:]:
+                if added >= max_add:
+                    break
+                it2, sc2, t2 = plan_optimise(cur_it + [(tg, c, 0.0)], db,
+                                             cur_b + [dflt(c)], ctx, shares)
+                if it2[-1][2] >= 0.5 and sc2 < cur_s * 0.98:
+                    cur_it, cur_b, cur_s, cur_t = it2, cur_b + [dflt(c)], \
+                        sc2, t2
+                    added += 1
+            if added > 1:
+                raw.append(mk("Combination", cur_it, cur_s, cur_t))
+    # swaps within the same meal and role
+    if do_subs:
+        cands = [c for c in candidates if c in db and c not in in_plan]
+        jobs = []
+        for i, (tg, n, g) in enumerate(base_items):
+            if tg == "fixed" or bnd[i][2] or \
+                    db[n]["category"] == "binder":
+                continue
+            r = ingredient_role(db[n])
+            jobs += [(i, c) for c in cands if ingredient_role(db[c]) == r
+                     and (tg == "serving") == (db[c]["category"] ==
+                                               "supplement")]
+        scr = []
+        for k, (i, c) in enumerate(jobs):
+            prog(f"swaps – {base_items[i][1]} → {c}", k, len(jobs))
+            it = list(base_items)
+            it[i] = (it[i][0], c, it[i][2])
+            b2 = list(bnd)
+            b2[i] = dflt(c)
+            it2, sc, t = plan_optimise(it, db, b2, ctx, shares, quick=True)
+            if it2[i][2] >= 0.5 and round(sc, 3) <= round(s0, 3):
+                scr.append((sc, i, c, it2, b2))
+        scr.sort(key=lambda r: r[0])
+        for sc, i, c, it, b2 in scr[:REFINE_TOP]:
+            it2, sc2, t2 = plan_optimise(it, db, b2, ctx, shares)
+            if it2[i][2] >= 0.5 and improves(sc2, s0):
+                raw.append(mk("Swap", it2, sc2, t2))
+    # removals
+    if do_rem:
+        idx = [i for i, (tg, n, g) in enumerate(base_items)
+               if tg != "fixed" and not bnd[i][2]
+               and db[n]["category"] != "binder"]
+        for k, i in enumerate(idx):
+            prog(f"removals – {base_items[i][1]}", k, len(idx))
+            it = base_items[:i] + base_items[i + 1:]
+            if not any(t == base_items[i][0] for t, _, _ in it) and \
+                    base_items[i][0] != "serving":
+                continue                       # keep every meal non-empty
+            it2, sc, t = plan_optimise(it, db, bnd[:i] + bnd[i + 1:], ctx,
+                                       shares)
+            if sc <= s0 * 1.01 + 1e-6:
+                raw.append(mk("Remove", it2, sc, t))
+    opts, seen = [], set()
+    for o in raw:
+        o["change"] = plan_describe(plan, o["plan"])
+        sig = (o["change"], round(o["score"], 3))
+        if sig in seen:
+            continue
+        seen.add(sig)
+        o["why"] = ", ".join(improvement_reasons(t_cur, o["terms"])) or "–"
+        o["best"] = False
+        opts.append(o)
+    opts.sort(key=lambda o: rank_key(o["score"], o["rating"]))
+    if opts:
+        opts[0]["best"] = True
+    return current, opts
+
+
+def plan_rescale(plan, old_flat, new_flat):
+    """Scale plan items by the ratio of each food's day amount (after e.g.
+    'scale to body weight' on the merged recipe)."""
+    od, nd = dict(), dict()
+    for n, g in old_flat:
+        od[n] = od.get(n, 0) + g
+    for n, g in new_flat:
+        nd[n] = nd.get(n, 0) + g
+    items = [(t, n, g * (nd.get(n, 0) / od[n] if od.get(n) else 1.0))
+             for t, n, g in plan_items(plan)]
+    return plan_from_items(items, plan["shares"], plan.get("score"),
+                           plan.get("terms"))
+
+
 def meal_plan_print_html(plan, db, ctx, days=7, title="Renal meal plan",
                          dog_name=""):
     """A4 page for one meal plan: each meal as its own recipe card (one
@@ -5475,6 +5721,80 @@ class GeneratorDialog(tk.Toplevel):
         PlanResultsWindow(app, dict(ctx, stage_name=app.stage.get()), res)
 
 
+class PlanOptionsWindow(tk.Toplevel):
+    """Optimiser options for an active meal plan, best first."""
+    def __init__(self, app, ctx, plan, current, options):
+        super().__init__(app)
+        self.app, self.ctx, self.plan, self.options = app, ctx, plan, options
+        self.title("Optimiser – meal plan options, best first")
+        self.geometry("980x760")
+        frm = ttk.Frame(self, padding=8)
+        frm.pack(fill="both", expand=True)
+        txt = tk.Text(frm, wrap="word", font=("TkFixedFont", 10))
+        sb = ttk.Scrollbar(frm, command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        txt.pack(fill="both", expand=True)
+        L = [f"Current plan: day score {current['score']:.3f}, rating "
+             f"{current['rating']:.0f}/100. Ranked by score, then rating.",
+             "", "OPTIONS – best first (* = recommended)"]
+        for i, o in enumerate(options, start=1):
+            L.append(f" {'*' if o['best'] else ' '}{i:>2}. {o['kind']:<12} "
+                     f"score {o['score']:.3f}  rating {o['rating']:.0f}/100  "
+                     f"{o['change']}")
+        was = {(str(t), n): g for t, n, g in plan_items(plan)}
+        for i, o in enumerate(options, start=1):
+            L.append("\n" + "-" * 78)
+            L.append(f"OPTION #{i} – {o['kind']}: score {o['score']:.3f}, "
+                     f"rating {o['rating']:.0f}/100")
+            p = o["plan"]
+            tags = (["fixed"] if p["fixed"] else []) + \
+                list(range(len(p["meals"]))) + ["serving"]
+            for t in tags:
+                its = [(n, g) for tt, n, g in plan_items(p) if tt == t]
+                if not its:
+                    continue
+                kc = sum(g * (app.db[n]["per100g"]["kcal"] or 0) / 100
+                         for n, g in its)
+                L.append(f"  {plan_tag_label(t)} ({kc:.0f} kcal)")
+                for n, g in its:
+                    w_ = was.get((str(t), n))
+                    L.append(f"     {n:<44} "
+                             + ("   new " if w_ is None else f"{w_:>6.1f}")
+                             + f" → {g:>6.1f} g")
+            gaps = [(k, v) for k, v in sorted(o["terms"].items(),
+                                              key=lambda kv: -kv[1])
+                    if v > 1e-3]
+            L.append("  Remaining gaps: " + (", ".join(
+                f"{k} ({v:.3f})" for k, v in gaps[:5]) or "none"))
+        txt.insert("end", "\n".join(L))
+        make_readonly(txt)
+        text_copy_menu(txt)
+        self.txt = txt
+        b = ttk.Frame(self, padding=(8, 0, 8, 8))
+        b.pack(fill="x")
+        self.pick = tk.StringVar(value="1")
+        if options:
+            ttk.Label(b, text="Option #").pack(side="left")
+            ttk.Spinbox(b, from_=1, to=len(options), width=4,
+                        textvariable=self.pick).pack(side="left", padx=4)
+            ttk.Button(b, text="Apply this option",
+                       command=self.apply).pack(side="left")
+        ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
+        ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
+            self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
+
+    def apply(self):
+        try:
+            o = self.options[int(self.pick.get()) - 1]
+        except (ValueError, IndexError):
+            return
+        self.app.apply_recipe(o["names"], o["grams"], o["score"],
+                              f"Meal plan optimised ({o['kind'].lower()}: "
+                              f"{o['change'][:60]})", self.ctx, self,
+                              plan=o["plan"])
+
+
 class PlanResultsWindow(tk.Toplevel):
     def __init__(self, app, ctx, plans):
         super().__init__(app)
@@ -5498,7 +5818,7 @@ class PlanResultsWindow(tk.Toplevel):
         self.pick = tk.StringVar(value="1")
         ttk.Spinbox(b, from_=1, to=len(plans), width=4,
                     textvariable=self.pick).pack(side="left", padx=4)
-        ttk.Button(b, text="Use as day recipe", command=self.apply).pack(
+        ttk.Button(b, text="Use this meal plan", command=self.apply).pack(
             side="left")
         ttk.Label(b, text="   batch days").pack(side="left")
         self.days = tk.StringVar(value="7")
@@ -5522,8 +5842,8 @@ class PlanResultsWindow(tk.Toplevel):
             return
         day = meal_plan_day(p)
         self.app.apply_recipe([n for n, _ in day], [g for _, g in day],
-                              p["score"], f"Meal plan #{self.pick.get()} "
-                              "(whole day)", self.ctx, self)
+                              p["score"], f"Meal plan #{self.pick.get()}",
+                              self.ctx, self, plan=p)
 
     def print_one(self):
         import tempfile
@@ -5814,7 +6134,18 @@ class OptimiseDialog(tk.Toplevel):
             ttk.Label(ing, text=h, font=("TkDefaultFont", 10, "bold")).grid(
                 row=0, column=c, sticky="w", padx=4)
         self.rows = []
-        for r, (n, g) in enumerate(app.recipe, start=1):
+        self.plan = app.plan
+        self.row_tags = []
+        _rows = plan_items(app.plan) if app.plan else \
+            [(None, n, g) for n, g in app.recipe]
+        if app.plan:
+            ttk.Label(frm, foreground="#1b5e20",
+                      text="Meal plan active: the optimiser keeps each "
+                           "meal's share of energy and scores the whole "
+                           "day; foods are tried in each meal, supplements "
+                           "at serving.").pack(anchor="w", before=ing)
+        for r, (t_, n, g) in enumerate(_rows, start=1):
+            self.row_tags.append(t_)
             lo, hi = default_bounds(app.db[n], app.current_mer(),
                                     app.current_bw())
             rec = recommended_max(app.db[n], app.current_bw(),
@@ -5822,9 +6153,11 @@ class OptimiseDialog(tk.Toplevel):
             vmin = tk.StringVar(value=f"{lo:g}")
             vmax = tk.StringVar(value=f"{hi if rec else max(hi, g):g}")
             is_binder = app.db[n]["category"] == "binder"
-            lk = tk.BooleanVar(value=is_binder)
-            ttk.Label(ing, text=n + ("  (binder – vet dose, locked)"
-                                     if is_binder else "")).grid(
+            lk = tk.BooleanVar(value=is_binder or t_ == "fixed")
+            ttk.Label(ing, text=(f"[{plan_tag_label(t_)}] " if app.plan
+                                 else "") + n +
+                      ("  (binder – vet dose, locked)"
+                       if is_binder else "")).grid(
                 row=r, column=0, sticky="w", padx=4)
             ttk.Label(ing, text=f"{g:g}").grid(row=r, column=1, sticky="e",
                                                padx=4)
@@ -6055,6 +6388,22 @@ class OptimiseDialog(tk.Toplevel):
         def progress(i, total, name):
             self.status.config(text=f"Testing {i + 1}/{total}: {name}")
             self.update()
+
+        if self.plan:
+            cands = [self.cand_names[i] for i in self.cand.curselection()]
+            if self.full_only.get():
+                cands = complete_only(cands, app.db, self.extended)
+            try:
+                cur, opts = plan_options(
+                    self.plan, app.db, ctx, bounds, cands,
+                    self.do_suggest.get(), self.do_subs.get(),
+                    self.do_rem.get(), max_add, progress)
+            finally:
+                if self.winfo_exists():
+                    self.run_btn.state(["!disabled"])
+                    self.status.config(text="Done.")
+            PlanOptionsWindow(app, ctx, self.plan, cur, opts)
+            return
 
         try:
             if self.do_suggest.get():
@@ -6551,6 +6900,7 @@ class App(tk.Tk):
         self._style()
         self.db = load_db()
         self.recipe = []            # list of [name, grams]
+        self.plan = None            # active meal plan (recipe = its day)
         self.score_ctx = None       # settings from the last optimiser run
         self.recipe_note = ""       # e.g. "Optimised recipe – score 0.29"
         self.applied_recipe = None  # snapshot of the applied recipe
@@ -6682,6 +7032,10 @@ class App(tk.Tk):
                          ("Load recipe", self.load_recipe),
                          ("Print…", self.print_recipe)]:
             ttk.Button(r4, text=txt, command=cmd).pack(side="left", padx=1)
+        self.end_plan_btn = ttk.Button(r4, text="End meal plan",
+                                       command=self.end_plan)
+        self.end_plan_btn.pack(side="left", padx=1)
+        self.end_plan_btn.state(["disabled"])
         r5 = ttk.Frame(rec)
         r5.pack(fill="x", pady=(2, 0))
         self.undo_btn = ttk.Button(r5, text="Undo (Ctrl+Z)",
@@ -6943,6 +7297,27 @@ class App(tk.Tk):
         except ValueError:
             messagebox.showerror("Amount", "Enter grams as a number.")
             return
+        if self.plan:                     # add to a meal of the plan
+            nm = len(self.plan["meals"])
+            if self.db[n]["category"] == "supplement":
+                tag = "serving"
+            else:
+                letters = "ABC"[:nm]
+                a = simpledialog.askstring(
+                    "Meal plan", f"Add {n} to which meal? "
+                    f"({', '.join(letters)}; S = at serving)",
+                    initialvalue="A", parent=self)
+                if not a:
+                    return
+                a = a.strip().upper()[:1]
+                tag = "serving" if a == "S" else (
+                    letters.index(a) if a in letters else None)
+                if tag is None:
+                    return
+            items = plan_items(self.plan) + [(tag, n, g)]
+            self._set_plan(plan_from_items(items, self.plan["shares"]))
+            self.refresh_recipe()
+            return
         for r in self.recipe:
             if r[0] == n:
                 r[1] += g
@@ -6967,10 +7342,23 @@ class App(tk.Tk):
             factor = float(self.factor.get())
         except ValueError:
             factor = None
-        html_ = recipe_print_html(self.recipe, self.db, self.current_mer(),
-                                  self.stage.get(), self.score_context(),
-                                  self.meals_n(), self.recipe_note, bw,
-                                  factor)
+        html_ = None
+        if self.plan:
+            a = messagebox.askyesnocancel(
+                "Print", "Print the meal plan (each meal as a recipe card "
+                "with a 7-day batch)?\n\nNo = the day recipe with the full "
+                "analysis.", parent=self)
+            if a is None:
+                return
+            if a:
+                html_ = meal_plan_print_html(
+                    self.plan, self.db, dict(self.score_context(),
+                                             stage_name=self.stage.get()), 7)
+        if html_ is None:
+            html_ = recipe_print_html(self.recipe, self.db,
+                                      self.current_mer(), self.stage.get(),
+                                      self.score_context(), self.meals_n(),
+                                      self.recipe_note, bw, factor)
         fd, path = tempfile.mkstemp(suffix=".html", prefix="recipe_print_")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(html_)
@@ -6986,14 +7374,15 @@ class App(tk.Tk):
     def record_history(self):
         h, p = self.hist, self.hist_pos
         cur = [list(r) for r in self.recipe]
-        if p >= 0 and h[p]["recipe"] == cur:
+        if p >= 0 and h[p]["recipe"] == cur and h[p].get("plan") == self.plan:
             return
         if not h and cur:                # start point: the empty recipe
-            h.append({"recipe": [], "note": "", "applied": None})
+            h.append({"recipe": [], "note": "", "applied": None,
+                      "plan": None})
             p = 0
         del h[p + 1:]
         h.append({"recipe": cur, "note": self.recipe_note,
-                  "applied": self.applied_recipe})
+                  "applied": self.applied_recipe, "plan": self.plan})
         if len(h) > 50:
             del h[0]
         self.hist_pos = len(h) - 1
@@ -7002,6 +7391,7 @@ class App(tk.Tk):
         snap = self.hist[pos]
         self.hist_pos = pos
         self.recipe = [list(r) for r in snap["recipe"]]
+        self.plan = snap.get("plan")
         self.recipe_note = snap["note"]
         self.applied_recipe = snap["applied"]
         self.refresh_recipe()
@@ -7026,22 +7416,97 @@ class App(tk.Tk):
                                 if self.hist_pos < len(self.hist) - 1
                                 else ["disabled"])
 
+    def _sync_plan(self):
+        """Keep an active meal plan in step with the day recipe: amounts
+        changed elsewhere (e.g. scaling) rescale the meals; a different set
+        of foods (load, clear, generated recipe…) ends the plan."""
+        if not self.plan:
+            return
+        day = meal_plan_day(self.plan)
+        cur = [(n, g) for n, g in self.recipe]
+        if [(n, round(g, 1)) for n, g in day] == \
+                [(n, round(g, 1)) for n, g in cur]:
+            return
+        if sorted(n for n, _ in day) == sorted(n for n, _ in cur):
+            self.plan = plan_rescale(self.plan, day, cur)
+        else:
+            self.plan = None
+
+    def _set_plan(self, plan):
+        self.plan = plan
+        self.recipe = [[n, g] for n, g in meal_plan_day(plan)] if plan \
+            else self.recipe
+
+    def end_plan(self):
+        self.plan = None
+        self.refresh_recipe()
+
     def refresh_recipe(self):
+        self._sync_plan()
         self.record_history()
         self._update_undo_buttons()
+        if hasattr(self, "end_plan_btn"):
+            self.end_plan_btn.state(["!disabled"] if self.plan
+                                    else ["disabled"])
         self.rec_tree.delete(*self.rec_tree.get_children())
-        for i, (n, g) in enumerate(self.recipe):
-            kc = self.db[n]["per100g"]["kcal"] if n in self.db else None
-            self.rec_tree.insert("", "end", iid=str(i), text=n, values=(
-                f"{g:g}", f"{g / self.meals_n():.1f}",
-                "?" if kc is None else f"{kc * g / 100:.0f}"))
+        if self.plan:
+            items = plan_items(self.plan)
+            tags = (["fixed"] if self.plan.get("fixed") else []) + \
+                list(range(len(self.plan["meals"]))) + ["serving"]
+            for t in tags:
+                its = [(k, n, g) for k, (tt, n, g) in enumerate(items)
+                       if tt == t]
+                kc = sum(g * (self.db[n]["per100g"]["kcal"] or 0) / 100
+                         for _, n, g in its)
+                pp = sum(g * (self.db[n]["per100g"]["p"] or 0) / 100
+                         for _, n, g in its)
+                head = self.rec_tree.insert(
+                    "", "end", iid=f"h:{t}", open=True,
+                    text=f"{plan_tag_label(t)} – {pp:.0f} mg P",
+                    values=(f"{sum(g for _, _, g in its):.0f}", "",
+                            f"{kc:.0f}"))
+                for k, n, g in its:
+                    kc1 = self.db[n]["per100g"]["kcal"]
+                    self.rec_tree.insert(head, "end", iid=f"p:{k}", text=n,
+                                         values=(f"{g:g}", "",
+                                                 "?" if kc1 is None else
+                                                 f"{kc1 * g / 100:.0f}"))
+        else:
+            for i, (n, g) in enumerate(self.recipe):
+                kc = self.db[n]["per100g"]["kcal"] if n in self.db else None
+                self.rec_tree.insert("", "end", iid=str(i), text=n,
+                                     values=(f"{g:g}",
+                                             f"{g / self.meals_n():.1f}",
+                                             "?" if kc is None
+                                             else f"{kc * g / 100:.0f}"))
         self.recalc()
 
     def _sel_recipe(self):
         sel = self.rec_tree.selection()
-        return int(sel[0]) if sel else None
+        if not sel or ":" in sel[0]:
+            return None
+        return int(sel[0])
+
+    def _sel_plan_item(self):
+        sel = self.rec_tree.selection()
+        if self.plan and sel and sel[0].startswith("p:"):
+            return int(sel[0][2:])
+        return None
 
     def edit_amount(self):
+        k = self._sel_plan_item()
+        if k is not None:
+            items = plan_items(self.plan)
+            t, n, g0 = items[k]
+            g = simpledialog.askfloat("Amount", f"Grams of {n} "
+                                      f"({plan_tag_label(t)}):",
+                                      initialvalue=round(g0, 1),
+                                      minvalue=0, parent=self)
+            if g is not None:
+                items[k] = (t, n, g)
+                self._set_plan(plan_from_items(items, self.plan["shares"]))
+                self.refresh_recipe()
+            return
         i = self._sel_recipe()
         if i is None:
             return
@@ -7053,6 +7518,13 @@ class App(tk.Tk):
             self.refresh_recipe()
 
     def remove_item(self):
+        k = self._sel_plan_item()
+        if k is not None:
+            items = plan_items(self.plan)
+            items.pop(k)
+            self._set_plan(plan_from_items(items, self.plan["shares"]))
+            self.refresh_recipe()
+            return
         i = self._sel_recipe()
         if i is not None:
             self.recipe.pop(i)
@@ -7072,6 +7544,8 @@ class App(tk.Tk):
                  "note": self.recipe_note}
             if self.score_ctx:
                 d["optimiser"] = self.score_ctx
+            if self.plan:
+                d["plan"] = plan_to_json(self.plan)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(d, f, indent=1, ensure_ascii=False)
             if self.recipe == self.applied_recipe or not self.recipe_note:
@@ -7089,6 +7563,10 @@ class App(tk.Tk):
         missing = [n for n, _ in d.get("items", []) if n not in self.db]
         self.recipe = [[n, float(g)] for n, g in d.get("items", [])
                        if n in self.db]
+        self.plan = None
+        pl = plan_from_json(d["plan"], self.db) if d.get("plan") else None
+        if pl:
+            self._set_plan(pl)
         self.bw.set(d.get("bw", self.bw.get()))
         self.max_g.set(d.get("max_g", self.max_g.get()) or "")
         self.meals.set(str(d.get("meals", self.meals.get())))
@@ -7153,8 +7631,13 @@ class App(tk.Tk):
         except ValueError:
             return 0.0
 
-    def apply_recipe(self, names, g, score, label, ctx, parent):
-        self.recipe = [[n, float(a)] for n, a in zip(names, g) if a >= 0.1]
+    def apply_recipe(self, names, g, score, label, ctx, parent, plan=None):
+        if plan is not None:
+            self._set_plan(plan)
+        else:
+            self.plan = None
+            self.recipe = [[n, float(a)] for n, a in zip(names, g)
+                           if a >= 0.1]
         self.score_ctx = store_score_context(self.score_ctx, ctx,
                                              self.stage.get(),
                                              self.current_mer())

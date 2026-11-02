@@ -164,6 +164,20 @@ Recipe tab for the full analysis) and a printable page with each meal's
 batch for N days. Raw flours are left out of daily recipes and meal plans
 (they are for biscuits) unless forced.
 
+### Working with an active meal plan
+
+*Use this meal plan* (generator) makes the plan active. The Recipe tab /
+recipe list then shows the meals (Meal A, Meal B…, At serving, Fixed) with
+each meal's grams, energy and phosphorus; amounts and foods are edited per
+meal (desktop: adding a food asks which meal; supplements go to At
+serving). The analysis is the day total. The optimiser works per meal: the
+limits table lists each meal's items, foods are tried in each meal,
+supplements at serving, swaps stay within their meal, each meal keeps its
+energy share, and Apply keeps the plan. Scaling rescales every meal;
+loading or applying an ordinary recipe ends the plan (or *End meal plan* /
+*Stop using the meal plan*). Undo, save/load (`"plan"` in the recipe JSON)
+and the printable meal plan include it.
+
 ## Renal-friendly biscuits (treats)
 
 Generator → *Renal-friendly biscuits* (desktop: **Make: biscuits**;
