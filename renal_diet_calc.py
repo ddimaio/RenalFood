@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.02b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1747,10 +1747,34 @@ def _ref_terms(per, unk, targets):
     return terms
 
 
+MEAL_SPLIT_W = 20.0      # weight of the meal-energy-share penalty
+
+
+def meal_split_penalty(g, vecs, groups):
+    """groups: [(indices, share)] for the home-made meals of a meal plan;
+    penalty for each meal's share of their energy away from its target."""
+    ki = KI["kcal"]
+    kc = [sum(g[i] * (vecs[i][ki] or 0) / 100 for i in idx)
+          for idx, _ in groups]
+    tot = sum(kc)
+    if tot <= 0:
+        return 0.0
+    return MEAL_SPLIT_W * sum(((k / tot) - sh) ** 2 / sh ** 2
+                              for k, (_, sh) in zip(kc, groups))
+
+
 def score_amounts(g, vecs, ctx):
     """Penalty score for gram amounts g (0 = all targets met) and its
     terms; with ctx['ref_match'] also (or only) the distance to a
     reference diet."""
+    if ctx.get("meal_groups"):
+        sc, terms = score_amounts(g, vecs, {k: v for k, v in ctx.items()
+                                            if k != "meal_groups"})
+        ms = meal_split_penalty(g, vecs, ctx["meal_groups"])
+        if ms > 0:
+            terms = dict(terms)
+            terms["Meal energy split"] = ms
+        return sc + ms, terms
     rm = ctx.get("ref_match")
     if not rm:
         return _score_targets(g, vecs, ctx)
@@ -2595,6 +2619,8 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     if unlimited:
         max_ing = max_extra = UNLIMITED_CAP
         veg_max = UNLIMITED_CAP
+    pool = [n for n in pool if n in (forced or {}) or n in dict(fixed)
+            or not baking_only(db[n])]          # raw flours: biscuits only
     forced = {n: m for n, m in (forced or {}).items()
               if n in db and n not in [f for f, _ in fixed]}
     max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
@@ -2860,6 +2886,352 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             if len(out) >= n_recipes:
                 return _rank(out, db, ctx)
     return _rank(out, db, ctx)
+
+
+MEAL_NAMES = ("Meal A", "Meal B", "Meal C")
+_STARCH_KIND = {"somen": "wheat", "udon": "wheat", "pasta": "wheat",
+                "couscous": "wheat", "noodles": "wheat", "spaghetti": "wheat"}
+
+
+def _kind(name, role):
+    """Family for variety checks; wheat noodles/pasta count as one."""
+    f = _family(name)
+    if role == "starch":
+        if "rice" in name.lower():
+            return "rice"
+        return _STARCH_KIND.get(f, f)
+    return f
+
+
+def baking_only(item):
+    """Raw flours are for baking (biscuits), not for daily meals."""
+    return "flour" in item["name"].lower()
+
+
+def _meal_core(names, grams, db):
+    """Foods of a recipe that make up a cookable meal (no supplements,
+    no fixed base): [(name, grams)]."""
+    return [(n, g) for n, g in zip(names, grams)
+            if db[n]["category"] not in ("supplement", "binder")
+            and ingredient_role(db[n]) != "complete" and g >= 0.5]
+
+
+def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
+                       fixed=(), forced=None, max_each=None, progress=None,
+                       cancelled=lambda: False, max_ing=5):
+    """Meal plans of 2-3 different home-made recipes (to cook and freeze
+    separately) that are only balanced together: the DAY total is scored,
+    each meal keeps its share of the home-made energy (shares), meals use
+    different starches and vegetables (and proteins when possible).
+    Supplements (incl. fish/algal oil, balancers) are day-level 'add at
+    serving' items. fixed: [(name, g)] locked for the day (e.g. kibble
+    breakfast, biscuits). forced: {name: min g} - foods go into Meal A,
+    supplements are day-level. Returns [plan] best first; plan = dict(
+    meals=[[(name, g)]], serving=[(name, g)], fixed=[(name, g)],
+    names, grams (day, in optimiser order), score, terms)."""
+    shares = [float(x) for x in shares]
+    tot = sum(shares) or 1.0
+    shares = [x / tot for x in shares]
+    nm = len(shares)
+    forced = {n: m for n, m in (forced or {}).items() if n in db}
+    max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
+    f_food = {n: m for n, m in forced.items()
+              if db[n]["category"] != "supplement"}
+    f_supp = {n: m for n, m in forced.items() if n not in f_food}
+
+    def prog(text, i, total):
+        if progress:
+            progress(text, i, total)
+
+    # (1) varied single-meal bases from the normal generator (no extras)
+    base_pool = [n for n in pool if not baking_only(db[n])
+                 and ingredient_role(db[n]) != "complete"]
+    n_cand = max(6, 2 * n_plans * nm)
+    sub = lambda t, i, k: prog("Finding meal bases – " + t, i, k)  # noqa
+    cands = generate_recipes(db, base_pool, dict(ctx), n_cand, max_ing,
+                             (), sub, cancelled, n_veg=1, veg_max=2,
+                             veg_max_uses=3, max_each=max_each)
+    if cancelled():
+        return []
+    bases = []
+    for names, grams, sc, _ in cands:
+        core = _meal_core(names, grams, db)
+        if core and core not in bases:
+            bases.append(core)
+    if len(bases) < nm:
+        return []
+
+    roles = {n: ingredient_role(db[n]) for b in bases for n, _ in b}
+
+    def fams(b, role):
+        return {_kind(n, role) for n, _ in b if roles[n] == role}
+
+    def compatible(group, strict=True):
+        for i in range(len(group)):
+            for j in range(i + 1, len(group)):
+                a, b = group[i], group[j]
+                if fams(a, "veg") & fams(b, "veg"):
+                    return False
+                if strict and fams(a, "starch") & fams(b, "starch"):
+                    return False
+                if not strict and fams(a, "protein") & fams(b, "protein"):
+                    return False
+        return True
+
+    def same_protein(group):
+        ps = [fams(b, "protein") for b in group]
+        return sum(1 for i in range(len(ps)) for j in range(i + 1, len(ps))
+                   if ps[i] & ps[j])
+
+    import itertools
+    combos = [c for c in itertools.combinations(range(len(bases)), nm)
+              if compatible([bases[i] for i in c])] or \
+        [c for c in itertools.combinations(range(len(bases)), nm)
+         if compatible([bases[i] for i in c], strict=False)]
+    combos.sort(key=lambda c: same_protein([bases[i] for i in c]))
+    combos = combos[:max(8, 4 * n_plans)]
+    fx_n = [n for n, _ in fixed]
+    fx_g = [g for _, g in fixed]
+    supp_pool = [n for n in pool if db[n]["category"] == "supplement"
+                 and n not in f_supp]
+
+    def build(meals, serving):
+        names, x0, bnds, groups = list(fx_n), list(fx_g), \
+            [(g, g, True) for g in fx_g], []
+        for m in meals:
+            idx = []
+            for n, g in m:
+                lo, hi = default_bounds(db[n], ctx["kcal_target"],
+                                        ctx.get("bw"))
+                if n in max_each:
+                    hi = min(hi, max_each[n])
+                lo = max(lo, f_food.get(n) or 0.0) if m is meals[0] else lo
+                if ingredient_role(db[n]) == "protein":   # keep the meal's
+                    lo = max(lo, PLAN_PROTEIN_FLOOR.get(n, 0.0))  # protein
+                idx.append(len(names))
+                names.append(n)
+                x0.append(g)
+                bnds.append((lo, max(hi, lo), False))
+            groups.append(idx)
+        for n, g in serving:
+            lo, hi = default_bounds(db[n], ctx["kcal_target"], ctx.get("bw"))
+            if n in max_each:
+                hi = min(hi, max_each[n])
+            lo = max(lo, f_supp.get(n) or 0.0)
+            names.append(n)
+            x0.append(g)
+            bnds.append((lo, max(hi, lo), False))
+        c2 = dict(ctx, meal_groups=[(ix, sh) for ix, sh in
+                                    zip(groups, shares)])
+        return names, x0, bnds, groups, c2
+
+    def run(meals, serving, quick=False):
+        names, x0, bnds, groups, c2 = build(meals, serving)
+        kw = QUICK if quick else {}
+        g, sc, t = optimise(names, db, bnds, x0, c2, **kw)
+        return names, g, sc, t, groups
+
+    plans = []
+    PLAN_PROTEIN_FLOOR.clear()
+    for k, c in enumerate(combos):
+        if cancelled():
+            return []
+        prog("Pairing meals", k, len(combos))
+        # bases are sized for a whole day: scale to each meal's share and
+        # keep at least 60 % of that amount of the meal's protein food
+        meals = [[(n, g * sh) for n, g in bases[i]]
+                 for i, sh in zip(c, shares)]
+        PLAN_PROTEIN_FLOOR.clear()
+        for m in meals:
+            for n, g in m:
+                if roles.get(n) == "protein":
+                    PLAN_PROTEIN_FLOOR[n] = max(
+                        PLAN_PROTEIN_FLOOR.get(n, 0.0), round(0.6 * g, 1))
+        if f_food:      # forced foods go into Meal A
+            meals[0] += [(n, m or 5.0) for n, m in f_food.items()
+                         if n not in {x for x, _ in meals[0]}]
+        serving = [(n, m or 0.5) for n, m in f_supp.items()]
+        names, g, sc, t, groups = run(meals, serving, quick=True)
+        # greedy day-level supplements ("add at serving")
+        for _ in range(3):
+            if sc < 1e-4:
+                break
+            best = None
+            have = {_family(n) for n, _ in serving}
+            for sp in supp_pool:
+                if sp in [n for n, _ in serving] or _family(sp) in have:
+                    continue                # one product per brand/family
+                r = run(_split(names, g, groups, len(fx_n)),
+                        serving_of(names, g, groups, len(fx_n)) + [(sp, 0.0)],
+                        quick=True)
+                if r[1][-1] >= 0.1 and (best is None or r[2] < best[2]):
+                    best = r
+            if best is None or best[2] > sc * 0.97:
+                break
+            names, g, sc, t, groups = best
+            serving = serving_of(names, g, groups, len(fx_n))
+        plans.append((sc, c, _split(names, g, groups, len(fx_n)),
+                      serving_of(names, g, groups, len(fx_n)),
+                      dict(PLAN_PROTEIN_FLOOR)))
+    plans.sort(key=lambda p: p[0])
+    out, used = [], {}
+    for k, (sc0, c, meals, serving, floors) in enumerate(plans):
+        if cancelled():
+            return []
+        if any(used.get(i, 0) >= 2 for i in c):
+            continue
+        PLAN_PROTEIN_FLOOR.clear()
+        PLAN_PROTEIN_FLOOR.update(floors)
+        prog("Final optimisation", len(out), n_plans)
+        names, g, sc, t, groups = run(meals, serving)
+        meals_f = _split(names, g, groups, len(fx_n))
+        serv_f = serving_of(names, g, groups, len(fx_n))
+        # drop trivial amounts and re-optimise once
+        meals_f = [[(n, a) for n, a in m if a >= 5.0 or n in floors]
+                   for m in meals_f]
+        serv_f = [(n, a) for n, a in serv_f if a >= 0.1]
+        names, g, sc, t, groups = run(meals_f, serv_f)
+        for i in c:
+            used[i] = used.get(i, 0) + 1
+        out.append({"meals": [[(n, a) for n, a in m if a >= 0.5] for m in
+                              _split(names, g, groups, len(fx_n))],
+                    "serving": [(n, a) for n, a in
+                                serving_of(names, g, groups, len(fx_n))
+                                if a >= 0.05],
+                    "fixed": list(zip(fx_n, fx_g)), "names": names,
+                    "grams": g, "score": sc, "terms": t,
+                    "shares": shares})
+        if len(out) >= n_plans:
+            break
+    out.sort(key=lambda p: rank_key(p["score"], recipe_rating(
+        p["names"], p["grams"], db, ctx)[0]))
+    return out
+
+
+PLAN_PROTEIN_FLOOR = {}
+
+
+def _split(names, g, groups, nfx):
+    return [[(names[i], g[i]) for i in idx] for idx in groups]
+
+
+def serving_of(names, g, groups, nfx):
+    inmeal = {i for idx in groups for i in idx}
+    return [(names[i], g[i]) for i in range(nfx, len(names))
+            if i not in inmeal]
+
+
+def meal_plan_day(plan):
+    """Day recipe [(name, g)] of a plan with duplicates merged."""
+    d = {}
+    for n, g in plan["fixed"] + [x for m in plan["meals"] for x in m] + \
+            plan["serving"]:
+        d[n] = d.get(n, 0.0) + g
+    return [(n, round(g, 1)) for n, g in d.items() if g > 0]
+
+
+def meal_plan_report(plans, db, ctx):
+    """Plain text of generated meal plans."""
+    L = [f"{len(plans)} meal plans, best first. Each home-made meal is a "
+         "separate recipe to cook (and freeze); only the DAY total is "
+         "balanced – single meals are not meant to be complete. Amounts "
+         "are per day (one portion of each meal)."]
+    for i, p in enumerate(plans, start=1):
+        rt = recipe_rating(p["names"], p["grams"], db, ctx)[0]
+        L.append("")
+        L.append(f"PLAN {i}   day score {p['score']:.3f}   rating "
+                 f"{rt:.0f}/100")
+        vecs_all = {n: _vec(db[n]) for n in p["names"]}
+        if p["fixed"]:
+            L.append("  Fixed: " + ", ".join(f"{n} {g:g} g"
+                                             for n, g in p["fixed"]))
+        for j, (m, sh) in enumerate(zip(p["meals"], p["shares"])):
+            kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100 for n, g in m)
+            pp = sum(g * (db[n]["per100g"]["p"] or 0) / 100 for n, g in m)
+            L.append(f"  {MEAL_NAMES[j]} (target {sh * 100:.0f}% of home-made"
+                     f" energy): {sum(g for _, g in m):.0f} g, {kc:.0f} kcal,"
+                     f" {pp:.0f} mg P")
+            for n, g in m:
+                L.append(f"     {n:<44} {g:>6.1f} g")
+        if p["serving"]:
+            L.append("  Add at serving (split between meals): " + ", ".join(
+                f"{n} {g:g} g" for n, g in p["serving"]))
+        day = meal_plan_day(p)
+        names, grams = [n for n, _ in day], [g for _, g in day]
+        kcal, per, _ = per1000_from(grams, [vecs_all.get(n) or _vec(db[n])
+                                           for n in names])
+        R = get_ranges(ctx)
+        L.append(f"  Day: {sum(grams):.0f} g, {kcal:.0f} kcal. Per 1000 kcal: "
+                 + ", ".join(f"{LABEL[k]} {per[k]:,.0f} {UNIT[k]}"
+                             for k in ("protein", "p", "na", "k", "ca",
+                                       "epa_dha")))
+        gaps = [(k, v) for k, v in sorted(p["terms"].items(),
+                                          key=lambda kv: -kv[1]) if v > 1e-3]
+        L.append("  Remaining gaps: " + (", ".join(f"{k} ({v:.3f})"
+                                                   for k, v in gaps[:5])
+                                         or "none – all targets met"))
+    L.append("\nCook each meal as its own batch: multiply the amounts by the "
+             "number of days, portion and freeze. Feed one portion of each "
+             "meal a day, and add the 'at serving' supplements to the meals "
+             "(not before freezing). Rotating plans is fine: each plan is "
+             "balanced over its own day.")
+    return "\n".join(L)
+
+
+def meal_plan_print_html(plan, db, ctx, days=7, title="Renal meal plan",
+                         dog_name=""):
+    """A4 page for one meal plan: each meal as its own recipe card (one
+    day's portion and a batch for `days` days, to cook and freeze), the
+    'add at serving' supplements and the day check."""
+    import datetime
+    cards = []
+    for j, m in enumerate(plan["meals"]):
+        kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100 for n, g in m)
+        rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g</td>"
+                       f"<td class=n>{g * days:.0f} g</td><td>☐</td></tr>"
+                       for n, g in m)
+        cards.append(f"<h2>{MEAL_NAMES[j]} – one portion {sum(g for _, g in m):.0f} g, "
+                     f"{kc:.0f} kcal</h2><table><tr><th>Ingredient</th>"
+                     f"<th class=n>Per day</th><th class=n>Batch for {days} "
+                     f"days</th><th>✓</th></tr>{rows}</table>")
+    serv = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g</td></tr>"
+                   for n, g in plan["serving"])
+    fixed = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g</td></tr>"
+                    for n, g in plan["fixed"])
+    day = meal_plan_day(plan)
+    names, grams = [n for n, _ in day], [g for _, g in day]
+    kcal, per, _ = per1000_from(grams, [_vec(db[n]) for n in names])
+    R = get_ranges(ctx)
+    nut = []
+    for k in ("protein", "p", "na", "k", "ca", "epa_dha", "oxalate"):
+        stt, _ = status_for(k, per[k], ctx.get("renal", True), R)
+        nut.append(f"<tr><td>{LABEL[k]}</td><td>{UNIT[k]}</td><td class=n>"
+                   f"{per[k]:,.0f}</td><td>{_esc(stt)}</td></tr>")
+    today = datetime.date.today().strftime("%d %b %Y")
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>{_esc(title)}</title><style>
+@page {{ size: A4; margin: 14mm; }}
+body {{ font-family: Arial, sans-serif; font-size: 10.5pt; color: #111; }}
+h1 {{ font-size: 16pt; margin: 0 0 4pt; }} h2 {{ font-size: 12pt;
+margin: 12pt 0 4pt; border-bottom: 1px solid #999; }}
+table {{ border-collapse: collapse; width: 100%; }} td, th {{ border: 1px
+solid #bbb; padding: 3pt 5pt; text-align: left; }} th {{ background: #eee; }}
+.n {{ text-align: right; }} .small {{ font-size: 9pt; color: #444; }}
+</style></head><body>
+<h1>{_esc(title)}{(' – ' + _esc(dog_name)) if dog_name else ''}</h1>
+<div class="small">{_esc(ctx.get('stage_name', ''))} · {kcal:.0f} kcal/day ·
+day score {plan['score']:.3f} (0 = every target met) · printed {today}</div>
+<p class="small">Each meal is its own recipe: cook the batch, split into
+{days} portions and freeze. Feed one portion of each meal a day. Single
+meals are not complete on their own – only the day together is balanced.</p>
+{''.join(cards)}
+{('<h2>Fixed every day</h2><table>' + fixed + '</table>') if fixed else ''}
+<h2>Add at serving (not before freezing)</h2>
+<table>{serv or '<tr><td>–</td></tr>'}</table>
+<h2>Whole day (per 1000 kcal)</h2><table><tr><th>Nutrient</th><th>Unit</th>
+<th class=n>Value</th><th>Status</th></tr>{''.join(nut)}</table>
+<p class="small">Approximate tool – not veterinary advice. Check the plan
+with your vet; switch foods gradually.</p></body></html>"""
 
 
 def _rank(results, db, ctx):
@@ -4642,6 +5014,9 @@ class GeneratorDialog(tk.Toplevel):
         self.mode = tk.StringVar(value="meals")
         ttk.Radiobutton(rm, text="Daily recipes", value="meals",
                         variable=self.mode).pack(side="left", padx=4)
+        ttk.Radiobutton(rm, text="Meal plan (different recipe per meal)",
+                        value="plan", variable=self.mode).pack(side="left",
+                                                               padx=4)
         ttk.Radiobutton(rm, text="Renal-friendly biscuits (treats)",
                         value="biscuits", variable=self.mode).pack(
             side="left", padx=4)
@@ -4649,11 +5024,22 @@ class GeneratorDialog(tk.Toplevel):
         self.batch = tk.StringVar(value="300")
         ttk.Entry(rm, textvariable=self.batch, width=6).pack(side="left",
                                                              padx=4)
-        ttk.Label(rm, foreground="#555",
-                  text="biscuits use the ticked foods (and Always-include "
-                       "foods that suit a dough); other settings are for "
-                       "daily recipes").pack(
-            side="left", padx=6)
+        rp = ttk.Frame(frm)
+        rp.pack(fill="x", pady=(0, 6))
+        ttk.Label(rp, text="Meal plan: home-made meals").pack(side="left")
+        self.plan_meals = tk.StringVar(value="2")
+        ttk.Spinbox(rp, from_=2, to=3, width=3,
+                    textvariable=self.plan_meals).pack(side="left", padx=4)
+        ttk.Label(rp, text="  energy split %").pack(side="left")
+        self.plan_split = tk.StringVar(value="50/50")
+        ttk.Entry(rp, textvariable=self.plan_split, width=10).pack(
+            side="left", padx=4)
+        ttk.Label(rp, foreground="#555",
+                  text="each meal its own recipe (to cook and freeze); only "
+                       "the day is balanced. Fixed base (e.g. kibble) "
+                       "counts as an extra meal. Biscuits use the ticked "
+                       "foods (and Always-include foods that suit a "
+                       "dough).").pack(side="left", padx=6)
 
         r0 = ttk.Frame(frm)
         r0.pack(fill="x")
@@ -4967,6 +5353,9 @@ class GeneratorDialog(tk.Toplevel):
         if self.mode.get() == "biscuits":
             self.run_biscuits(ctx, pool, n)
             return
+        if self.mode.get() == "plan":
+            self.run_plan(ctx, pool, n, fixed)
+            return
 
         def progress(text, i, total):
             if not self.winfo_exists():
@@ -5038,6 +5427,119 @@ class GeneratorDialog(tk.Toplevel):
         self.status.config(text=f"Done – {len(res)} biscuit recipes.")
         ctx = dict(ctx, stage_name=app.stage.get())
         BiscuitResultsWindow(app, ctx, res, ctx["kcal_target"])
+
+
+    def run_plan(self, ctx, pool, n, fixed):
+        app = self.app
+        try:
+            nm = int(self.plan_meals.get())
+            parts = [float(x) for x in
+                     self.plan_split.get().replace(",", "/").split("/")
+                     if x.strip()]
+            if len(parts) != nm:
+                parts = [1.0] * nm
+            if nm not in (2, 3) or min(parts) <= 0:
+                raise ValueError
+        except ValueError:
+            self.run_btn.state(["!disabled"])
+            messagebox.showerror("Meal plan", "Meals must be 2 or 3; split "
+                                 "like 50/50 or 40/30/30.", parent=self)
+            return
+
+        def progress(text, i, total):
+            if not self.winfo_exists():
+                return
+            self.pb["maximum"] = max(1, total)
+            self.pb["value"] = i
+            self.status.config(text=(text if "/" in text
+                                     else f"{text} ({i}/{total})"))
+            self.update()
+        try:
+            res = generate_meal_plan(app.db, pool, ctx, n, parts, fixed,
+                                     dict(self.forced), dict(self.max_each),
+                                     progress, lambda: self._cancel)
+        except tk.TclError:
+            return
+        if not self.winfo_exists():
+            return
+        self.run_btn.state(["!disabled"])
+        self.pb["value"] = 0
+        if self._cancel:
+            self.status.config(text="Stopped.")
+            return
+        if not res:
+            self.status.config(text="No meal plans – tick more foods "
+                                    "(proteins, starches, vegetables).")
+            return
+        self.status.config(text=f"Done – {len(res)} meal plans.")
+        PlanResultsWindow(app, dict(ctx, stage_name=app.stage.get()), res)
+
+
+class PlanResultsWindow(tk.Toplevel):
+    def __init__(self, app, ctx, plans):
+        super().__init__(app)
+        self.app, self.ctx, self.plans = app, ctx, plans
+        self.title("Meal plans – different recipe per meal")
+        self.geometry("900x760")
+        frm = ttk.Frame(self, padding=8)
+        frm.pack(fill="both", expand=True)
+        txt = tk.Text(frm, wrap="word", font=("TkFixedFont", 10))
+        sb = ttk.Scrollbar(frm, command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        txt.pack(fill="both", expand=True)
+        txt.insert("end", meal_plan_report(plans, app.db, ctx))
+        make_readonly(txt)
+        text_copy_menu(txt)
+        self.txt = txt
+        b = ttk.Frame(self, padding=(8, 0, 8, 8))
+        b.pack(fill="x")
+        ttk.Label(b, text="Plan #").pack(side="left")
+        self.pick = tk.StringVar(value="1")
+        ttk.Spinbox(b, from_=1, to=len(plans), width=4,
+                    textvariable=self.pick).pack(side="left", padx=4)
+        ttk.Button(b, text="Use as day recipe", command=self.apply).pack(
+            side="left")
+        ttk.Label(b, text="   batch days").pack(side="left")
+        self.days = tk.StringVar(value="7")
+        ttk.Spinbox(b, from_=1, to=30, width=4,
+                    textvariable=self.days).pack(side="left", padx=4)
+        ttk.Button(b, text="Print…", command=self.print_one).pack(
+            side="left")
+        ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
+        ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
+            self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
+
+    def picked(self):
+        try:
+            return self.plans[int(self.pick.get()) - 1]
+        except (ValueError, IndexError):
+            return None
+
+    def apply(self):
+        p = self.picked()
+        if not p:
+            return
+        day = meal_plan_day(p)
+        self.app.apply_recipe([n for n, _ in day], [g for _, g in day],
+                              p["score"], f"Meal plan #{self.pick.get()} "
+                              "(whole day)", self.ctx, self)
+
+    def print_one(self):
+        import tempfile
+        import webbrowser
+        p = self.picked()
+        if not p:
+            return
+        try:
+            days = max(1, int(self.days.get()))
+        except ValueError:
+            days = 7
+        f = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                        encoding="utf-8")
+        f.write(meal_plan_print_html(p, self.app.db, self.ctx, days))
+        f.close()
+        webbrowser.open("file://" + f.name)
 
 
 class BiscuitResultsWindow(tk.Toplevel):

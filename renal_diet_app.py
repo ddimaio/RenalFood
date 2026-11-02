@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02b"
+ENGINE_VERSION = "2026.11.02c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1484,6 +1484,108 @@ with tab_gen:
             bar.empty()
             ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),
                              "n_fixed": len(ss.recipe) if fixed_base else 0}
+
+    # ---- meal plan: a different recipe per meal, balanced over the day
+    with st.expander("🍱 Meal plan – a different recipe for each meal "
+                     "(cook and freeze separately; balanced over the day)",
+                     expanded=bool(ss.get("plan_result"))):
+        st.caption("Builds 2–3 home-made recipes with different starches, "
+                   "vegetables and (where possible) proteins. Single meals "
+                   "are not complete – only the day together is balanced. "
+                   "Supplements (oils, balancers) are added at serving, not "
+                   "frozen. Uses the ticked foods, Always include and Max g "
+                   "above; with **Keep the current recipe items as a fixed "
+                   "base** ticked, those (e.g. breakfast kibble) are part of "
+                   "every day.")
+        pc = st.columns(3)
+        p_meals = pc[0].radio("Home-made meals", [2, 3], horizontal=True,
+                              key="p_meals")
+        p_split = pc[1].text_input("Energy split %", "50/50" if p_meals == 2
+                                   else "34/33/33", key=f"p_split_{p_meals}")
+        p_n = pc[2].slider("Plans", 1, 5, 3, key="p_n")
+        st.caption("Takes 1–4 minutes – leave the page alone until the "
+                   "plans appear.")
+        if st.button("Generate meal plans", type="primary", key="p_run"):
+            try:
+                parts = [float(x) for x in p_split.replace(",", "/")
+                         .split("/") if x.strip()]
+            except ValueError:
+                parts = []
+            if len(parts) != p_meals or min(parts or [0]) <= 0:
+                parts = [1.0] * p_meals
+            ctx_p = dict(score_context(gk), stage_name=ss.stage)
+            forced_p = {rw["Ingredient"]: (None if pd.isna(rw["Min g"])
+                                           else float(rw["Min g"]))
+                        for _, rw in gdf[gdf["Always include"]].iterrows()}
+            pool_p = list(gdf.loc[gdf["Use"] | gdf["Always include"],
+                                  "Ingredient"])
+            max_p = {rw["Ingredient"]: float(rw["Max g"])
+                     for _, rw in gdf.iterrows() if pd.notna(rw["Max g"])}
+            bar = st.progress(0.0, text="Starting…")
+
+            def prog_p(text, i, total):
+                bar.progress(min(1.0, i / max(1, total)),
+                             text=(text if "/" in text
+                                   else f"{text} ({i}/{total})"))
+            res_p = rc.generate_meal_plan(
+                db, pool_p, ctx_p, p_n, parts,
+                [tuple(x) for x in ss.recipe] if fixed_base else (),
+                forced_p, max_p, prog_p)
+            bar.empty()
+            ss.plan_result = {"ctx": ctx_p, "res": res_p}
+        pr = ss.get("plan_result")
+        if pr:
+            if not pr["res"]:
+                st.warning("No meal plans – tick more foods (proteins, "
+                           "starches, vegetables).")
+            p_days = st.number_input("Batch for … days (printout)", 1, 30, 7,
+                                     key="p_days")
+            for i, p in enumerate(pr["res"]):
+                rt_p = rc.recipe_rating(p["names"], p["grams"], db,
+                                        pr["ctx"])[0]
+                with st.container(border=True):
+                    st.markdown(f"**Plan {i + 1}** · day score "
+                                f"{p['score']:.3f} · rating {rt_p:.0f}/100")
+                    if p["fixed"]:
+                        st.caption("Fixed every day: " + ", ".join(
+                            f"{n} {g:g} g" for n, g in p["fixed"]))
+                    cols = st.columns(len(p["meals"]))
+                    for j, (m, sh) in enumerate(zip(p["meals"],
+                                                    p["shares"])):
+                        kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100
+                                 for n, g in m)
+                        cols[j].markdown(f"**{rc.MEAL_NAMES[j]}** · "
+                                         f"{kc:.0f} kcal "
+                                         f"(target {sh * 100:.0f}%)")
+                        show_df(cols[j], pd.DataFrame(
+                            {"Ingredient": [n for n, _ in m],
+                             "g / portion": [round(g, 1) for _, g in m]}),
+                            hide_index=True, **FULL)
+                    if p["serving"]:
+                        st.caption("Add at serving (split between meals): "
+                                   + ", ".join(f"{n} {g:g} g"
+                                               for n, g in p["serving"]))
+                    day = rc.meal_plan_day(p)
+                    kcal_d, per_d, _ = rc.per1000_from(
+                        [g for _, g in day], [rc._vec(db[n]) for n, _ in day])
+                    st.caption(f"Whole day: {sum(g for _, g in day):.0f} g, "
+                               f"{kcal_d:.0f} kcal · per 1000 kcal: " +
+                               ", ".join(f"{rc.LABEL[k]} {per_d[k]:,.0f} "
+                                         f"{rc.UNIT[k]}" for k in
+                                         ("protein", "p", "na", "k", "ca",
+                                          "epa_dha")))
+                    bc_ = st.columns(2)
+                    bc_[0].button("Use as day recipe", key=f"p_apply_{i}",
+                                  on_click=apply_recipe,
+                                  args=([n for n, _ in day],
+                                        [g for _, g in day], p["score"],
+                                        f"Meal plan {i + 1} (whole day)",
+                                        pr["ctx"]))
+                    bc_[1].download_button(
+                        "🖨️ Printable meal plan",
+                        rc.meal_plan_print_html(p, db, pr["ctx"], p_days),
+                        file_name=f"meal_plan_{i + 1}.html",
+                        mime="text/html", key=f"p_print_{i}")
 
     # ---- renal-friendly biscuits (treats)
     with st.expander("🍪 Renal-friendly biscuits (treats) – uses the ticked "

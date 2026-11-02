@@ -148,6 +148,22 @@ and extras (and allow extra proteins and starches). Foods are added while
 the score improves, or stays the same and the rating rises by at least 1
 point (safety cap 20 items). About twice as slow.
 
+## Meal plans (a different recipe per meal)
+
+Generator → *Meal plan* (desktop: **Make: Meal plan**; Streamlit: the 🍱
+section). Builds 2–3 home-made recipes – one per meal, to cook and freeze
+separately – with different starches and vegetables (and proteins where
+possible). Only the DAY total is scored, so single meals need not be
+complete; each meal keeps its share of the home-made energy (e.g. 50/50 or
+60/40). Supplements (fish/algal oil, balancers, B-complex) are 'add at
+serving' items, chosen for the day (one product per brand). Each meal keeps
+a real amount of its protein food. A fixed base (e.g. breakfast kibble)
+counts as an extra meal. Results show each meal's portion, energy and
+phosphorus, the day check, *Use as day recipe* (puts the whole day on the
+Recipe tab for the full analysis) and a printable page with each meal's
+batch for N days. Raw flours are left out of daily recipes and meal plans
+(they are for biscuits) unless forced.
+
 ## Renal-friendly biscuits (treats)
 
 Generator → *Renal-friendly biscuits* (desktop: **Make: biscuits**;
