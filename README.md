@@ -141,6 +141,13 @@ energy target. Set so far: ThorneVet B ComplexVET (1 chew per 11 kg =
 0.176 g/kg), Dafy V-Integra Renal and Renal Met (label table) and V-Integra Adult
 (7 g up to 10 kg - only that band is known).
 
+## Generator: no limit on ingredients
+
+Tick *No limit* in the generator to drop the limits on foods, vegetables
+and extras (and allow extra proteins and starches). Foods are added while
+the score improves, or stays the same and the rating rises by at least 1
+point (safety cap 20 items). About twice as slow.
+
 ## Only ingredients with complete data
 
 Generator: "Only ingredients with complete data" (and "…but allow missing

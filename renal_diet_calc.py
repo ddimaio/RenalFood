@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.01"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -2561,10 +2561,14 @@ def _family(name):
     return name.split(",")[0].split("(")[0].split()[0].lower()
 
 
+UNLIMITED_CAP = 20     # safety cap on items in an "unlimited" recipe
+
+
 def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                      progress=None, cancelled=lambda: False, n_veg=2,
                      veg_max_uses=2, veg_min_g=None, forced=None,
-                     max_extra=3, veg_max=None, max_each=None):
+                     max_extra=3, veg_max=None, max_each=None,
+                     unlimited=False):
     """Build balanced recipes from scratch.
     Vegetables: at least n_veg (min) and at most veg_max (default = n_veg).
     Stage 1: every protein x starch x vegetable base (amounts optimised);
@@ -2582,8 +2586,15 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             A forced protein/starch/vegetable fills that role in the base.
     max_each: {name: max_grams} upper limit for that ingredient whenever it
               is used (wins over a forced minimum or the vegetable minimum).
+    unlimited: no limit on the number of foods, extras or vegetables, and
+              extra proteins may be added too; foods are added while the
+              score improves (>= 3 %) or stays the same and the rating
+              rises by >= 1 point (safety cap UNLIMITED_CAP items).
     Returns up to n_recipes distinct (names, grams, score, terms), best first.
     """
+    if unlimited:
+        max_ing = max_extra = UNLIMITED_CAP
+        veg_max = UNLIMITED_CAP
     forced = {n: m for n, m in (forced or {}).items()
               if n in db and n not in [f for f, _ in fixed]}
     max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
@@ -2715,7 +2726,8 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     used = {}                            # vegetable family -> recipes so far
     # keep each base's protein identity: no second main-protein food
     extra_pool = [n for n in pool if n not in base_names
-                  and roles[n] not in ("binder", "protein")]
+                  and roles[n] not in (("binder",) if unlimited
+                                       else ("binder", "protein"))]
 
     def try_add(cur_n, cur_b, cur_g, cands):
         best = None
@@ -2723,7 +2735,14 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
             gg, ss, tt = optimise(cur_n + [c], db, cur_b + [bnd(c)],
                                   cur_g + [0.0], ctx, use_scipy=False,
                                   max_evals=1500)
-            if gg[-1] >= 0.1 and (best is None or ss < best[1]):
+            if gg[-1] < 0.1:
+                continue
+            if unlimited:                   # score, then rating
+                k = rank_key(ss, recipe_rating(cur_n + [c], gg, db,
+                                               ctx)[0])
+                if best is None or k < best[3]:
+                    best = (c, ss, gg, k)
+            elif best is None or ss < best[1]:
                 best = (c, ss, gg)
         return best
 
@@ -2770,18 +2789,27 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
 
         # (b) greedy improvements with anything else; foods and extras
         #     (salt, supplements, oils) have separate limits
-        while cur_s >= 1e-4:
+        while cur_s >= 1e-4 or unlimited:
             if cancelled():
                 return []
             room_f, room_x = n_foods() < max_ing, n_extras() < max_extra
-            if not (room_f or room_x):
+            if not (room_f or room_x) or \
+                    (unlimited and len(cur_n) - nfx >= UNLIMITED_CAP):
                 break
             veg_full = len(vegs(cur_n)) >= veg_max   # vegetable maximum
             best = try_add(cur_n, cur_b, cur_g,
                            [c for c in extra_pool if allowed(c) and
                             (room_x if is_extra(c) else room_f) and
                             not (veg_full and roles.get(c) == "veg")])
-            if best is None or best[1] > cur_s * 0.97:
+            if best is None:
+                break
+            if unlimited:
+                r_now = recipe_rating(cur_n, cur_g, db, ctx)[0]
+                r_new = recipe_rating(cur_n + [best[0]], best[2], db,
+                                      ctx)[0]
+                if not improves(best[1], cur_s, r_new, r_now):
+                    break
+            elif best[1] > cur_s * 0.97:
                 break
             cur_n.append(best[0])
             cur_b.append(bnd(best[0]))
@@ -4239,8 +4267,16 @@ class GeneratorDialog(tk.Toplevel):
         ttk.Label(r0, text="   max. foods each (+ up to 3 salt/"
                            "supplements/oils)").pack(side="left")
         self.max_ing = tk.StringVar(value="6")
-        ttk.Spinbox(r0, from_=3, to=9, textvariable=self.max_ing,
-                    width=4).pack(side="left", padx=4)
+        self._max_sb = ttk.Spinbox(r0, from_=3, to=9,
+                                   textvariable=self.max_ing, width=4)
+        self._max_sb.pack(side="left", padx=4)
+        self.unlimited = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            r0, variable=self.unlimited,
+            text="No limit (best recipe, any number of foods; slower)",
+            command=lambda: self._max_sb.state(
+                ["disabled"] if self.unlimited.get() else ["!disabled"])
+        ).pack(side="left", padx=(8, 0))
 
         r1 = ttk.Frame(frm)
         r1.pack(fill="x", pady=(6, 0))
@@ -4542,7 +4578,8 @@ class GeneratorDialog(tk.Toplevel):
                                    veg_max_uses=veg_uses,
                                    veg_min_g=veg_min,
                                    forced=dict(self.forced),
-                                   max_each=dict(self.max_each))
+                                   max_each=dict(self.max_each),
+                                   unlimited=self.unlimited.get())
         except tk.TclError:              # window closed mid-run
             return
         if not self.winfo_exists():

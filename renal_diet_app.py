@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.01"
+ENGINE_VERSION = "2026.11.02a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1331,7 +1331,16 @@ with tab_gen:
     gk = g1.number_input("Target kcal/day", 1.0, 10000.0,
                          float(round(ctx0["kcal_target"])), key="g_kcal")
     gn = g2.slider("Recipes", 1, 10, 5, key="g_n")
+    g_unl = g3.checkbox(
+        "No limit on number of ingredients (best recipe; slower)", False,
+        key="g_unl",
+        help="Any number of foods, vegetables, supplements and oils – extra "
+             "proteins and starches too. Foods are added while the score "
+             "improves, or stays the same and the rating rises by at least 1 "
+             f"(safety cap {rc.UNLIMITED_CAP} items). Takes about twice as "
+             "long.")
     gmax = g3.slider("Max. foods each", 3, 9, 6, key="g_max",
+                     disabled=g_unl,
                      help="Salt, supplements and oils are extra (up to 3).")
     v1, v2, v3 = st.columns(3)
     gveg_lo, gveg_hi = v1.slider(
@@ -1471,7 +1480,7 @@ with tab_gen:
                 [tuple(x) for x in ss.recipe] if fixed_base else (),
                 prog, n_veg=gveg_lo, veg_max=gveg_hi, veg_max_uses=guse,
                 veg_min_g=gmin,
-                forced=forced, max_each=max_each)
+                forced=forced, max_each=max_each, unlimited=g_unl)
             bar.empty()
             ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),
                              "n_fixed": len(ss.recipe) if fixed_base else 0}
