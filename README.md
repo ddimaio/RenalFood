@@ -300,6 +300,10 @@ otherwise the role comes from its energy split.
 
 ## Sources
 
+- Bauer JE. Therapeutic use of fish oils in companion animals. JAVMA 2011;239:1441–51 (EPA+DHA 140 mg × BW^0.75 a day in CKD; NRC safe upper limit 370 mg × BW^0.75)
+- Brown SA et al. 1998, J Lab Clin Med (fish oil vs safflower oil vs beef tallow in dogs with reduced renal mass)
+- FEDIAF Nutritional Guidelines 2024 (adult minimums; the app checks against AAFCO, which is the same or stricter for the nutrients scored)
+
 - UC Davis – Nutritional Management of Chronic Renal Disease
 - ACVN Nutrition Notes – Nutritional Management of CKD in Cats & Dogs
   (Today's Veterinary Practice, 2016)

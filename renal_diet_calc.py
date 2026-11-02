@@ -145,9 +145,11 @@ RENAL = {
     # dogs, 280 mg/100 kcal
     "epa_dha": (32, 2800),   # mg
 }
-# Therapeutic EPA+DHA dose for dogs with CKD, mg per kg^0.75 per day (ACVN
-# Nutrition Notes, 2016; ~ the older 40 mg/kg EPA + 25 mg/kg DHA). Turned
-# into a per-1000 kcal floor from body weight and the daily energy target.
+# Therapeutic EPA+DHA dose for dogs with CKD, mg per kg^0.75 per day
+# (Bauer JE, JAVMA 2011;239:1441-51, Table 1; quoted in ACVN Nutrition
+# Notes, 2016). The upper bound above is the NRC 2006 safe upper limit,
+# 370 mg/kg^0.75 (Bauer 2011) = ~2800 mg/1000 kcal. Turned into a
+# per-1000 kcal floor from body weight and the daily energy target.
 OMEGA3_DOSE_MG_PER_KG075 = 140
 # AAFCO adult maintenance minimums, per 1000 kcal ME
 AAFCO = {
