@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.02f"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02g"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -567,6 +567,11 @@ def normalise(item):
     md = item.get("max_dose")
     if md is not None and md == md and str(md).strip():
         out["max_dose"] = str(md).strip()
+    try:
+        if item.get("piece_g") and float(item["piece_g"]) > 0:
+            out["piece_g"] = round(float(item["piece_g"]), 2)
+    except (TypeError, ValueError):
+        pass
     return out
 
 
@@ -1009,8 +1014,7 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
     plan_html = ""
     if plan:                       # meal by meal: portion + batch
         parts = []
-        tags = (["fixed"] if plan.get("fixed") else []) + \
-            list(range(len(plan["meals"]))) + ["serving"]
+        tags = plan_tags(plan)
         for tg in tags:
             its = [(n, g) for tt, n, g in plan_items(plan) if tt == tg
                    and n in db and g > 0]
@@ -1024,6 +1028,9 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                         "(not before freezing)")
             elif tg == "fixed":
                 head = "Fixed every day"
+            elif tg == "treats":
+                head = "Biscuits (treats) – " + ", ".join(
+                    biscuit_count_text(db[n], g) for n, g in its)
             else:
                 head = (f"{MEAL_NAMES[tg]} – one portion "
                         f"{sum(g for _, g in its):.0f} g")
@@ -2701,7 +2708,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         max_ing = max_extra = UNLIMITED_CAP
         veg_max = UNLIMITED_CAP
     pool = [n for n in pool if n in (forced or {}) or n in dict(fixed)
-            or not baking_only(db[n])]          # raw flours: biscuits only
+            or not (baking_only(db[n]) or db[n]["category"] == "treat")]
     forced = {n: m for n, m in (forced or {}).items()
               if n in db and n not in [f for f, _ in fixed]}
     max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
@@ -2999,7 +3006,7 @@ def _meal_core(names, grams, db):
 
 def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
                        fixed=(), forced=None, max_each=None, progress=None,
-                       cancelled=lambda: False, max_ing=5):
+                       cancelled=lambda: False, max_ing=5, treats=()):
     """Meal plans of 2-3 different home-made recipes (to cook and freeze
     separately) that are only balanced together: the DAY total is scored,
     each meal keeps its share of the home-made energy (shares), meals use
@@ -3026,7 +3033,8 @@ def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
 
     # (1) varied single-meal bases from the normal generator (no extras)
     base_pool = [n for n in pool if not baking_only(db[n])
-                 and ingredient_role(db[n]) != "complete"]
+                 and ingredient_role(db[n]) != "complete"
+                 and db[n]["category"] != "treat"]
     n_cand = max(6, 2 * n_plans * nm)
     sub = lambda t, i, k: prog("Finding meal bases – " + t, i, k)  # noqa
     cands = generate_recipes(db, base_pool, dict(ctx), n_cand, max_ing,
@@ -3071,8 +3079,10 @@ def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
          if compatible([bases[i] for i in c], strict=False)]
     combos.sort(key=lambda c: same_protein([bases[i] for i in c]))
     combos = combos[:max(8, 4 * n_plans)]
-    fx_n = [n for n, _ in fixed]
-    fx_g = [g for _, g in fixed]
+    treats = [(n, g) for n, g in treats if n in db and g > 0]
+    fx_n = [n for n, _ in fixed] + [n for n, _ in treats]
+    fx_g = [g for _, g in fixed] + [g for _, g in treats]
+    n_tr = len(treats)
     supp_pool = [n for n in pool if db[n]["category"] == "supplement"
                  and n not in f_supp]
 
@@ -3174,12 +3184,16 @@ def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
         names, g, sc, t, groups = run(meals_f, serv_f)
         for i in c:
             used[i] = used.get(i, 0) + 1
-        out.append({"meals": [[(n, a) for n, a in m if a >= 0.5] for m in
+        out.append({"treats": list(zip(fx_n[len(fx_n) - n_tr:],
+                                       fx_g[len(fx_g) - n_tr:])),
+                    "meals": [[(n, a) for n, a in m if a >= 0.5] for m in
                               _split(names, g, groups, len(fx_n))],
                     "serving": [(n, a) for n, a in
                                 serving_of(names, g, groups, len(fx_n))
                                 if a >= 0.05],
-                    "fixed": list(zip(fx_n, fx_g)), "names": names,
+                    "fixed": list(zip(fx_n[:len(fx_n) - n_tr],
+                                      fx_g[:len(fx_g) - n_tr])),
+                    "names": names,
                     "grams": g, "score": sc, "terms": t,
                     "shares": shares})
         if len(out) >= n_plans:
@@ -3205,8 +3219,8 @@ def serving_of(names, g, groups, nfx):
 def meal_plan_day(plan):
     """Day recipe [(name, g)] of a plan with duplicates merged."""
     d = {}
-    for n, g in plan["fixed"] + [x for m in plan["meals"] for x in m] + \
-            plan["serving"]:
+    for n, g in plan["fixed"] + plan.get("treats", []) + \
+            [x for m in plan["meals"] for x in m] + plan["serving"]:
         d[n] = d.get(n, 0.0) + g
     return [(n, round(g, 1)) for n, g in d.items() if g > 0]
 
@@ -3226,6 +3240,10 @@ def meal_plan_report(plans, db, ctx):
         if p["fixed"]:
             L.append("  Fixed: " + ", ".join(f"{n} {g:g} g"
                                              for n, g in p["fixed"]))
+        if p.get("treats"):
+            L.append("  Biscuits (treats): " + ", ".join(
+                f"{n} – {biscuit_count_text(db[n], g)}"
+                for n, g in p["treats"]))
         for j, (m, sh) in enumerate(zip(p["meals"], p["shares"])):
             kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100 for n, g in m)
             pp = sum(g * (db[n]["per100g"]["p"] or 0) / 100 for n, g in m)
@@ -3261,12 +3279,25 @@ def meal_plan_report(plans, db, ctx):
 
 def plan_tag_label(tag):
     return ("Fixed" if tag == "fixed" else "At serving" if tag == "serving"
+            else "Biscuits (treats)" if tag == "treats"
             else MEAL_NAMES[tag])
 
 
+LOCKED_TAGS = ("fixed", "treats")      # amounts kept as set by the user
+
+
+def plan_tags(plan):
+    """Sections of a plan in display order."""
+    return (["fixed"] if plan.get("fixed") else []) + \
+        (["treats"] if plan.get("treats") else []) + \
+        list(range(len(plan["meals"]))) + ["serving"]
+
+
 def plan_items(plan):
-    """[(tag, name, grams)]: tag 'fixed', 0/1/2 (meal) or 'serving'."""
+    """[(tag, name, grams)]: tag 'fixed', 'treats', 0/1/2 (meal) or
+    'serving'."""
     out = [("fixed", n, g) for n, g in plan.get("fixed", [])]
+    out += [("treats", n, g) for n, g in plan.get("treats", [])]
     for j, m in enumerate(plan["meals"]):
         out += [(j, n, g) for n, g in m]
     out += [("serving", n, g) for n, g in plan.get("serving", [])]
@@ -3276,13 +3307,16 @@ def plan_items(plan):
 def plan_from_items(items, shares, score=None, terms=None):
     """Plan dict from [(tag, name, grams)] (amounts < 0.05 g dropped)."""
     nm = len(shares)
-    p = {"fixed": [], "meals": [[] for _ in range(nm)], "serving": [],
-         "shares": list(shares), "score": score, "terms": terms or {}}
+    p = {"fixed": [], "treats": [], "meals": [[] for _ in range(nm)],
+         "serving": [], "shares": list(shares), "score": score,
+         "terms": terms or {}}
     for tag, n, g in items:
         if g < 0.05:
             continue
         if tag == "fixed":
             p["fixed"].append((n, g))
+        elif tag == "treats":
+            p["treats"].append((n, g))
         elif tag == "serving":
             p["serving"].append((n, g))
         else:
@@ -3301,7 +3335,8 @@ def plan_from_json(d, db):
     """Plan from plan_to_json() data (unknown foods skipped); None if
     invalid."""
     try:
-        items = [(t if t in ("fixed", "serving") else int(t), n, float(g))
+        items = [(t if t in ("fixed", "serving", "treats") else int(t), n,
+                  float(g))
                  for t, n, g in d["items"] if n in db]
         return plan_from_items(items, [float(x) for x in d["shares"]])
     except (KeyError, TypeError, ValueError, IndexError):
@@ -3326,7 +3361,8 @@ def plan_score(plan, db, ctx):
 def plan_describe(old, new):
     """Change text per meal: 'Meal B: + Carrot 40 g · …'."""
     parts = []
-    tags = ["fixed"] + list(range(len(old["shares"]))) + ["serving"]
+    tags = ["fixed", "treats"] + list(range(len(old["shares"]))) + \
+        ["serving"]
     oi, ni = plan_items(old), plan_items(new)
     for t in tags:
         o = [(n, g) for tt, n, g in oi if tt == t]
@@ -3438,7 +3474,7 @@ def plan_options(plan, db, ctx, bounds, candidates=(), do_add=True,
         cands = [c for c in candidates if c in db and c not in in_plan]
         jobs = []
         for i, (tg, n, g) in enumerate(base_items):
-            if tg == "fixed" or bnd[i][2] or \
+            if tg in LOCKED_TAGS or bnd[i][2] or \
                     db[n]["category"] == "binder":
                 continue
             r = ingredient_role(db[n])
@@ -3463,7 +3499,7 @@ def plan_options(plan, db, ctx, bounds, candidates=(), do_add=True,
     # removals
     if do_rem:
         idx = [i for i, (tg, n, g) in enumerate(base_items)
-               if tg != "fixed" and not bnd[i][2]
+               if tg not in LOCKED_TAGS and not bnd[i][2]
                and db[n]["category"] != "binder"]
         for k, i in enumerate(idx):
             prog(f"removals – {base_items[i][1]}", k, len(idx))
@@ -3886,6 +3922,37 @@ def biscuit_details(b, db, ctx, need_kcal=None, n_biscuits=None):
             "n_biscuits": n_biscuits,
             "per_biscuit_kcal": pb, "per_day": per_day, "notes": notes,
             "score": sc, "kcal": kcal, "mass": mass}
+
+
+def biscuit_count_text(item, grams):
+    """'4 biscuits (12 g dough)' for a saved biscuit treat."""
+    pg = item.get("piece_g")
+    if not pg:
+        return f"{grams:.0f} g"
+    n = grams / pg
+    return (f"{n:.1f}".rstrip("0").rstrip(".") + f" biscuit"
+            f"{'' if abs(n - 1) < 1e-9 else 's'} ({grams:.0f} g dough)")
+
+
+def biscuit_to_ingredient(b, db, name, n_biscuits):
+    """Library item (category 'treat') for a generated biscuit recipe:
+    composition per 100 g of raw dough (nutrients unknown in any ingredient
+    stay unknown), piece_g = grams of dough per biscuit."""
+    names, grams = b[0], b[1]
+    mass = sum(grams)
+    vecs = [_vec(db[n]) for n in names]
+    t = _totals(grams, vecs)
+    unk = _unknown(grams, vecs)
+    per = {k: (None if k in unk else round(t[KI[k]] * 100 / mass, 4))
+           for k in KEYS}
+    recipe_txt = ", ".join(f"{n} {g:.0f} g" for n, g in zip(names, grams))
+    return normalise({
+        "name": name, "category": "treat", "per100g": per,
+        "piece_g": mass / max(1, n_biscuits), "role": "other",
+        "note": (f"Home-made renal biscuits (raw dough values). Batch: "
+                 f"{recipe_txt} → {n_biscuits} biscuits of "
+                 f"{mass / max(1, n_biscuits):.1f} g dough each (lighter "
+                 "after baking).")})
 
 
 def biscuit_report(results, db, ctx, need_kcal=None):
@@ -5067,7 +5134,8 @@ class IngredientDialog(tk.Toplevel):
         self.name.grid(row=0, column=1, columnspan=3, sticky="we", pady=2)
         ttk.Label(frm, text="Category").grid(row=1, column=0, sticky="w")
         self.cat = ttk.Combobox(frm, values=["food", "supplement", "binder",
-                                             "commercial food", "imported"])
+                                             "commercial food", "imported",
+                                             "treat"])
         self.cat.set(item["category"])
         self.cat.grid(row=1, column=1, sticky="we", pady=2)
         self.assume = tk.BooleanVar(value=bool(item.get("assume_aafco")))
@@ -5361,6 +5429,17 @@ class GeneratorDialog(tk.Toplevel):
         self.plan_split = tk.StringVar(value="50/50")
         ttk.Entry(rp, textvariable=self.plan_split, width=10).pack(
             side="left", padx=4)
+        ttk.Label(rp, text="  biscuits/day").pack(side="left")
+        self.plan_treat = tk.StringVar(value="None")
+        ttk.Combobox(rp, textvariable=self.plan_treat, state="readonly",
+                     width=22, values=["None"] + sorted(
+                         n for n in app.db
+                         if app.db[n]["category"] == "treat")).pack(
+            side="left", padx=2)
+        self.plan_treat_n = tk.StringVar(value="2")
+        ttk.Spinbox(rp, from_=0.5, to=20, increment=0.5, width=4,
+                    textvariable=self.plan_treat_n).pack(side="left",
+                                                          padx=2)
         ttk.Label(rp, foreground="#555",
                   text="each meal its own recipe (to cook and freeze); only "
                        "the day is balanced. Fixed base (e.g. kibble) "
@@ -5449,7 +5528,8 @@ class GeneratorDialog(tk.Toplevel):
         self.names = sorted(
             (n for n in app.db
              if app.db[n]["per100g"]["kcal"] is not None
-             and ingredient_role(app.db[n]) != "binder"),
+             and ingredient_role(app.db[n]) != "binder"
+             and app.db[n]["category"] != "treat"),
             key=lambda n: (ROLES.index(ingredient_role(app.db[n])),
                            n.lower()))
         self.lb = tk.Listbox(lf, selectmode="multiple", height=16,
@@ -5782,9 +5862,18 @@ class GeneratorDialog(tk.Toplevel):
                                      else f"{text} ({i}/{total})"))
             self.update()
         try:
+            tr = self.plan_treat.get()
+            treats = []
+            if tr in app.db:
+                try:
+                    k = float(self.plan_treat_n.get())
+                except ValueError:
+                    k = 2.0
+                treats = [(tr, k * (app.db[tr].get("piece_g") or 10))]
             res = generate_meal_plan(app.db, pool, ctx, n, parts, fixed,
                                      dict(self.forced), dict(self.max_each),
-                                     progress, lambda: self._cancel)
+                                     progress, lambda: self._cancel,
+                                     treats=treats)
         except tk.TclError:
             return
         if not self.winfo_exists():
@@ -5829,8 +5918,7 @@ class PlanOptionsWindow(tk.Toplevel):
             L.append(f"OPTION #{i} – {o['kind']}: score {o['score']:.3f}, "
                      f"rating {o['rating']:.0f}/100")
             p = o["plan"]
-            tags = (["fixed"] if p["fixed"] else []) + \
-                list(range(len(p["meals"]))) + ["serving"]
+            tags = plan_tags(p)
             for t in tags:
                 its = [(n, g) for tt, n, g in plan_items(p) if tt == t]
                 if not its:
@@ -5976,9 +6064,64 @@ class BiscuitResultsWindow(tk.Toplevel):
                     textvariable=self.pick).pack(side="left", padx=4)
         ttk.Button(b, text="Print…", command=self.print_one).pack(
             side="left")
+        ttk.Button(b, text="Save as ingredient",
+                   command=self.save_one).pack(side="left", padx=4)
+        ttk.Button(b, text="Add to meal plan",
+                   command=self.add_to_plan).pack(side="left")
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
         ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
             self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
+
+    def save_one(self):
+        """Save the picked biscuit recipe as a library treat; returns its
+        name (None if cancelled)."""
+        try:
+            i = int(self.pick.get()) - 1
+            b = self.results[i]
+        except (ValueError, IndexError):
+            return None
+        d = biscuit_details(b, self.app.db, self.ctx, self.need)
+        name = simpledialog.askstring("Save biscuits", "Name:",
+                                      initialvalue=f"Renal biscuits {i + 1}",
+                                      parent=self)
+        if not name or not name.strip():
+            return None
+        nb = simpledialog.askinteger("Save biscuits", "Biscuits per batch:",
+                                     initialvalue=d["n_biscuits"],
+                                     minvalue=1, maxvalue=500, parent=self)
+        if not nb:
+            return None
+        name = name.strip()
+        self.app.db[name] = biscuit_to_ingredient(b, self.app.db, name, nb)
+        save_db(self.app.db)
+        self.app.refresh_list()
+        return name
+
+    def add_to_plan(self):
+        app = self.app
+        if not app.plan:
+            messagebox.showinfo("Meal plan", "Use a meal plan first "
+                                "(generator → Make: Meal plan → Use this "
+                                "meal plan).", parent=self)
+            return
+        name = self.save_one()
+        if not name:
+            return
+        d = biscuit_details(self.results[int(self.pick.get()) - 1], app.db,
+                            self.ctx, self.need)
+        k = simpledialog.askfloat("Meal plan", "Biscuits a day:",
+                                  initialvalue=float(d["per_day"] or 2),
+                                  minvalue=0.5, maxvalue=20, parent=self)
+        if not k:
+            return
+        items = [x for x in plan_items(app.plan)
+                 if not (x[0] == "treats" and x[1] == name)]
+        items.append(("treats", name, k * app.db[name]["piece_g"]))
+        app._set_plan(plan_from_items(items, app.plan["shares"]))
+        app.refresh_recipe()
+        messagebox.showinfo("Meal plan", f"Added {k:g} × {name} a day. "
+                            "Optimise the plan to rebalance the meals.",
+                            parent=self)
 
     def print_one(self):
         import tempfile
@@ -6242,7 +6385,7 @@ class OptimiseDialog(tk.Toplevel):
             vmin = tk.StringVar(value=f"{lo:g}")
             vmax = tk.StringVar(value=f"{hi if rec else max(hi, g):g}")
             is_binder = app.db[n]["category"] == "binder"
-            lk = tk.BooleanVar(value=is_binder or t_ == "fixed")
+            lk = tk.BooleanVar(value=is_binder or t_ in LOCKED_TAGS)
             ttk.Label(ing, text=(f"[{plan_tag_label(t_)}] " if app.plan
                                  else "") + n +
                       ("  (binder – vet dose, locked)"
@@ -6362,7 +6505,7 @@ class OptimiseDialog(tk.Toplevel):
         self._cand_text()
         self.cand_names = sorted(
             (n for n in app.db if n not in dict(app.recipe)
-             and app.db[n]["category"] != "binder"
+             and app.db[n]["category"] not in ("binder", "treat")
              and app.db[n]["per100g"]["kcal"] is not None), key=str.lower)
         self.cand = tk.Listbox(sf, selectmode="multiple", height=9,
                                exportselection=False)
@@ -7539,8 +7682,7 @@ class App(tk.Tk):
         self.rec_tree.delete(*self.rec_tree.get_children())
         if self.plan:
             items = plan_items(self.plan)
-            tags = (["fixed"] if self.plan.get("fixed") else []) + \
-                list(range(len(self.plan["meals"]))) + ["serving"]
+            tags = plan_tags(self.plan)
             for t in tags:
                 its = [(k, n, g) for k, (tt, n, g) in enumerate(items)
                        if tt == t]

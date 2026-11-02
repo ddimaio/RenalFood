@@ -179,6 +179,18 @@ loading or applying an ordinary recipe ends the plan (or *End meal plan* /
 printable recipe lists each meal as its own recipe (one portion and a batch
 for N days, default 7) followed by the day's nutrients and assessment.
 
+### Biscuits in a meal plan
+
+Each generated biscuit recipe can be saved as a library ingredient
+(*Save as ingredient*: category **treat**, values per 100 g raw dough,
+plus grams of dough per biscuit). Treats are never suggested as foods.
+*Add to meal plan* puts N biscuits a day into the active plan (section
+"Biscuits (treats)", amount locked); optimise the plan to rebalance the
+meals around them. The meal-plan generator also has *Biscuits every day*
+(a saved treat and how many a day), so new plans are balanced with the
+biscuits included. Recipe view, optimiser, printout and save/load show
+them as "N biscuits (g dough)".
+
 ## Renal-friendly biscuits (treats)
 
 Generator → *Renal-friendly biscuits* (desktop: **Make: biscuits**;

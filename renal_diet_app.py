@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02f"
+ENGINE_VERSION = "2026.11.02g"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -543,6 +543,32 @@ tab_rec, tab_blood, tab_gen, tab_opt, tab_lib, tab_about = st.tabs(
 
 names_all = sorted(db, key=str.lower)
 
+def _save_biscuit(b, name, n_b):
+    """Save a generated biscuit recipe as a library treat; returns name."""
+    name = (name or "").strip() or "Renal biscuits"
+    item = rc.biscuit_to_ingredient(b, db, name, n_b)
+    db[name] = item
+    rc.save_db(db)
+    ss.lib_ver += 1
+    return name
+
+
+def _save_biscuit_cb(b, key_name, key_n):
+    n = _save_biscuit(b, ss.get(key_name), int(ss.get(key_n) or 30))
+    st.toast(f"Saved '{n}' to the ingredient library (category treat)")
+
+
+def _add_biscuit_cb(b, key_name, key_n, key_day):
+    n = _save_biscuit(b, ss.get(key_name), int(ss.get(key_n) or 30))
+    per_day = float(ss.get(key_day) or 1)
+    g = per_day * db[n]["piece_g"]
+    items = [x for x in rc.plan_items(ss.plan)
+             if not (x[0] == "treats" and x[1] == n)] + [("treats", n, g)]
+    set_plan(rc.plan_from_items(items, ss.plan["shares"]))
+    st.toast(f"Added {per_day:g} × '{n}' a day to the meal plan – "
+             "optimise the plan to rebalance the meals")
+
+
 def _stop_plan():
     set_recipe(ss.recipe)
     st.toast("Meal plan ended – the recipe is now one list")
@@ -560,8 +586,7 @@ def plan_editor(cfg):
                "and freeze separately); amounts are one day's portion. Only "
                "the whole day is balanced – the analysis on the right is "
                "the day total.")
-    tags = (["fixed"] if base.get("fixed") else []) + \
-        list(range(len(base["meals"]))) + ["serving"]
+    tags = rc.plan_tags(base)
     items = []
     cur = rc.plan_items(pl)
     for t in tags:
@@ -573,7 +598,10 @@ def plan_editor(cfg):
         extra = (f" · target {base['shares'][t] * 100:.0f}% of home-made "
                  "energy" if isinstance(t, int) else
                  " · add to the meals, not before freezing"
-                 if t == "serving" else "")
+                 if t == "serving" else
+                 " · " + ", ".join(rc.biscuit_count_text(db[n], g)
+                                   for n, g in now) + " a day (dough g)"
+                 if t == "treats" else "")
         st.markdown(f"**{lab}** · {sum(g for _, g in now):.0f} g · "
                     f"{kc:.0f} kcal · {pp:.0f} mg P{extra}")
         df = pd.DataFrame(rows or [], columns=["Ingredient", "g"])
@@ -1022,7 +1050,7 @@ with tab_opt:
             row_.update({"Ingredient": n, "Current g": g, "Min g": lo,
                          "Max g": hi if rec else max(hi, g),
                          "Lock": db[n]["category"] == "binder"
-                         or t_ == "fixed"})
+                         or t_ in rc.LOCKED_TAGS})
             rows.append(row_)
         bdf = st.data_editor(
             pd.DataFrame(rows), hide_index=True, **FULL,
@@ -1114,7 +1142,7 @@ with tab_opt:
                  "nutrients on).")
         cand_names = [n for n in names_all
                       if n not in dict(ss.recipe)
-                      and db[n]["category"] != "binder"
+                      and db[n]["category"] not in ("binder", "treat")
                       and db[n]["per100g"]["kcal"] is not None]
         with st.expander(f"Foods it may suggest ({len(cand_names)} – untick "
                          "to exclude; remembered)"):
@@ -1333,9 +1361,7 @@ with tab_opt:
                         was_ = {}
                         for t_, n_, g_ in rc.plan_items(r["plan"]):
                             was_[(str(t_), n_)] = g_
-                        for t_ in (["fixed"] if o["plan"]["fixed"] else []) \
-                                + list(range(len(o["plan"]["meals"]))) \
-                                + ["serving"]:
+                        for t_ in rc.plan_tags(o["plan"]):
                             its = [(n_, g_) for tt, n_, g_ in
                                    rc.plan_items(o["plan"]) if tt == t_]
                             gone_ = [(n_, g_) for tt, n_, g_ in
@@ -1536,6 +1562,7 @@ with tab_gen:
                            "towards egg yolk. Fat, Ca and Mg minimums still "
                            "apply.")
     gnames = sorted((n for n in db if db[n]["per100g"]["kcal"] is not None
+                     and db[n]["category"] != "treat"
                      and rc.ingredient_role(db[n]) != "binder"),
                     key=lambda n: (rc.ROLES.index(rc.ingredient_role(db[n])),
                                    n.lower()))
@@ -1669,6 +1696,16 @@ with tab_gen:
         p_split = pc[1].text_input("Energy split %", "50/50" if p_meals == 2
                                    else "34/33/33", key=f"p_split_{p_meals}")
         p_n = pc[2].slider("Plans", 1, 5, 3, key="p_n")
+        treat_names = [n for n in names_all if db[n]["category"] == "treat"]
+        tc = st.columns(2)
+        p_treat = tc[0].selectbox(
+            "Biscuits every day", ["None"] + treat_names, key="p_treat",
+            help="Saved biscuit recipes (🍪 section → Save as ingredient). "
+                 "Their energy and nutrients count towards the day; the "
+                 "meals are balanced around them.")
+        p_treat_n = tc[1].number_input("Biscuits a day", 0.5, 20.0, 2.0,
+                                       step=0.5, key="p_treat_n",
+                                       disabled=p_treat == "None")
         st.caption("Takes 1–4 minutes – leave the page alone until the "
                    "plans appear.")
         if st.button("Generate meal plans", type="primary", key="p_run"):
@@ -1696,7 +1733,9 @@ with tab_gen:
             res_p = rc.generate_meal_plan(
                 db, pool_p, ctx_p, p_n, parts,
                 [tuple(x) for x in ss.recipe] if fixed_base else (),
-                forced_p, max_p, prog_p)
+                forced_p, max_p, prog_p,
+                treats=[] if p_treat == "None" else
+                [(p_treat, p_treat_n * (db[p_treat].get("piece_g") or 10))])
             bar.empty()
             ss.plan_result = {"ctx": ctx_p, "res": res_p}
         pr = ss.get("plan_result")
@@ -1715,6 +1754,10 @@ with tab_gen:
                     if p["fixed"]:
                         st.caption("Fixed every day: " + ", ".join(
                             f"{n} {g:g} g" for n, g in p["fixed"]))
+                    if p.get("treats"):
+                        st.caption("Biscuits every day: " + ", ".join(
+                            f"{n} – {rc.biscuit_count_text(db[n], g)}"
+                            for n, g in p["treats"]))
                     cols = st.columns(len(p["meals"]))
                     for j, (m, sh) in enumerate(zip(p["meals"],
                                                     p["shares"])):
@@ -1819,6 +1862,34 @@ with tab_gen:
                                                  "Status"]),
                             hide_index=True, **FULL)
                     st.markdown("\n".join("- " + nt for nt in d["notes"]))
+                    sc_ = st.columns([3, 2, 2])
+                    sc_[0].text_input("Name", f"Renal biscuits {i + 1}",
+                                      key=f"b_name_{i}")
+                    sc_[1].number_input("Biscuits per batch", 1, 300,
+                                        int(d["n_biscuits"]),
+                                        key=f"b_nb_{i}")
+                    sc_[2].number_input("Biscuits a day (plan)", 0.5, 20.0,
+                                        float(d["per_day"] or 2), step=0.5,
+                                        key=f"b_day_{i}")
+                    bb_ = st.columns(2)
+                    bb_[0].button("💾 Save as ingredient", key=f"b_save_{i}",
+                                  on_click=_save_biscuit_cb,
+                                  args=(b, f"b_name_{i}", f"b_nb_{i}"),
+                                  help="Adds it to the library (category "
+                                       "'treat', per 100 g raw dough) so it "
+                                       "can be used in meal plans.")
+                    bb_[1].button("➕ Add to active meal plan",
+                                  key=f"b_add_{i}", disabled=not ss.plan,
+                                  on_click=_add_biscuit_cb,
+                                  args=(b, f"b_name_{i}", f"b_nb_{i}",
+                                        f"b_day_{i}"),
+                                  help="Saves it and adds that many "
+                                       "biscuits a day to the meal plan on "
+                                       "the Recipe tab (use a meal plan "
+                                       "first)." if not ss.plan else
+                                  "Saves it and adds that many biscuits a "
+                                  "day to the meal plan; then optimise the "
+                                  "plan to rebalance the meals.")
                     st.download_button(
                         "🖨️ Printable biscuit recipe",
                         rc.biscuit_print_html(b, db, br["ctx"], br["need"]),
@@ -1896,7 +1967,7 @@ with tab_lib:
                   + lib_keys]
     cfg = {"category": st.column_config.SelectboxColumn(
         "category", options=["food", "supplement", "binder",
-                             "commercial food", "imported"])}
+                             "commercial food", "imported", "treat"])}
     cfg.update({k: st.column_config.NumberColumn(
         f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in lib_keys})
     cfg["max_dose"] = st.column_config.TextColumn(
