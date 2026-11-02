@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02a"
+ENGINE_VERSION = "2026.11.02b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1484,6 +1484,72 @@ with tab_gen:
             bar.empty()
             ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),
                              "n_fixed": len(ss.recipe) if fixed_base else 0}
+
+    # ---- renal-friendly biscuits (treats)
+    with st.expander("🍪 Renal-friendly biscuits (treats) – uses the ticked "
+                     "foods above", expanded=bool(ss.get("bis_result"))):
+        st.caption("Dough of 1–2 flours, 1–2 moist binders (egg, pumpkin, "
+                   "apple…) and optionally an oil, checked against the "
+                   "renal limits per 1000 kcal (phosphorus at or below the "
+                   "stage aim, sodium, potassium, protein, oxalate). Treats "
+                   "are not complete food: no minimum checks; keep them to "
+                   "≤ 10% of daily energy. Always-include foods that suit "
+                   "a dough are used; other generator settings are for "
+                   "daily recipes.")
+        bc = st.columns(2)
+        b_batch = bc[0].number_input("Batch (g dough)", 50.0, 3000.0, 300.0,
+                                     step=50.0, key="b_batch")
+        b_n = bc[1].slider("Biscuit recipes", 1, 8, 4, key="b_n")
+        if st.button("Generate biscuits", type="primary", key="b_run"):
+            ctx_b = dict(score_context(gk), stage_name=ss.stage)
+            forced_b = {rw["Ingredient"]: (None if pd.isna(rw["Min g"])
+                                           else float(rw["Min g"]))
+                        for _, rw in gdf[gdf["Always include"]].iterrows()}
+            pool_b = list(gdf.loc[gdf["Use"] | gdf["Always include"],
+                                  "Ingredient"])
+            bar = st.progress(0.0, text="Starting…")
+
+            def prog_b(text, i, total):
+                bar.progress(min(1.0, i / max(1, total)),
+                             text=f"{text} ({i}/{total})")
+            res_b = rc.generate_biscuits(db, pool_b, ctx_b, b_n, b_batch,
+                                         forced_b, None, prog_b)
+            bar.empty()
+            ss.bis_result = {"ctx": ctx_b, "res": res_b, "need": gk}
+        br = ss.get("bis_result")
+        if br:
+            if not br["res"]:
+                st.warning("No biscuit recipes – tick at least one flour "
+                           "and one moist binder (egg, pumpkin, apple…).")
+            for i, b in enumerate(br["res"]):
+                d = rc.biscuit_details(b, db, br["ctx"], br["need"])
+                with st.container(border=True):
+                    st.markdown(
+                        f"**Biscuits {i + 1}** · score {d['score']:.3f} · "
+                        f"{d['mass']:.0f} g dough · {d['kcal']:.0f} kcal · "
+                        f"~{d['n_biscuits']} biscuits of "
+                        f"~{d['per_biscuit_kcal']:.0f} kcal"
+                        + (f" · up to {d['per_day']} a day"
+                           if d["per_day"] is not None else ""))
+                    rows_b = [{"Ingredient": n, "g": g, "kcal": k}
+                              for n, g, k in d["ingredients"]]
+                    if d["water_ml"]:
+                        rows_b.append({"Ingredient": "Water (as needed, ml)",
+                                       "g": d["water_ml"], "kcal": 0})
+                    c1, c2 = st.columns(2)
+                    show_df(c1, pd.DataFrame(rows_b), hide_index=True,
+                            **FULL)
+                    show_df(c2, pd.DataFrame(
+                        d["nutrients"], columns=["Per 1000 kcal", "Unit",
+                                                 "Value", "Limit",
+                                                 "Status"]),
+                            hide_index=True, **FULL)
+                    st.markdown("\n".join("- " + nt for nt in d["notes"]))
+                    st.download_button(
+                        "🖨️ Printable biscuit recipe",
+                        rc.biscuit_print_html(b, db, br["ctx"], br["need"]),
+                        file_name=f"renal_biscuits_{i + 1}.html",
+                        mime="text/html", key=f"b_print_{i}")
 
     gr = ss.gen_result
     if gr:

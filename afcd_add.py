@@ -47,6 +47,19 @@ FOODS = [
     ("F006194", "Okra, boiled", "", True),
     # starches
     ("F003235", "Couscous, boiled", "", True),
+    # flours (baking, e.g. dog biscuits)
+    ("F003998", "Rice flour, white", "Baking flour; low phosphorus.", True,
+     "starch"),
+    ("F004007", "Wheat flour, white, plain", "Baking flour.", True,
+     "starch"),
+    ("F003988", "Cornflour (maize starch)", "Pure starch; very low "
+     "protein, P and K.", True, "starch"),
+    ("F003983", "Arrowroot flour", "Pure starch; very low protein, P and "
+     "K.", True, "starch"),
+    ("F003990", "Gluten-free plain flour", "Blend - check the pack.", True,
+     "starch"),
+    ("F003986", "Chickpea flour (besan)", "Higher in protein and "
+     "phosphorus.", True, "protein"),
     ("F007596", "Quinoa, boiled", "Rinse before cooking (saponins).", True),
     ("F003227", "Polenta (cornmeal), boiled", "", True),
     ("F000378", "Pearl barley, boiled", "", True),

@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.02a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -2869,6 +2869,389 @@ def _rank(results, db, ctx):
         x[2], recipe_rating(x[0], x[1], db, ctx)[0]))
 
 
+# --------------------------------------------------------------------------
+# Renal-friendly dog biscuits (treats)
+# --------------------------------------------------------------------------
+# Treats are not complete food: no AAFCO minimums. They should stay within
+# the renal limits per 1000 kcal (phosphorus at or below the stage aim,
+# sodium, potassium, protein, oxalate) so they do not undo the diet, and
+# give at most ~10 % of daily energy (common veterinary guidance). Dough
+# rules are this app's practical judgement for a rollable, bakeable dough.
+BISCUIT_WET_WORDS = ("egg", "pumpkin", "squash", "kabocha", "carrot",
+                     "sweet potato", "apple", "banana", "courgette",
+                     "parsnip", "swede", "yoghurt", "cottage", "ricotta",
+                     "tofu, silken", "soy milk", "potato, boiled")
+TREAT_SHARE = 0.10        # treats <= 10 % of daily energy
+BINDING_FLOURS = ("wheat flour", "gluten-free plain flour", "oats",
+                  "chickpea flour")
+
+
+def _pure_starch(name):
+    n = name.lower()
+    return "starch" in n or "arrowroot" in n or "cornflour" in n
+
+
+def biscuit_dough_ok(names, grams):
+    """Practical dough rules: pure starches at most half of the flour, and
+    something that binds - egg or a binding flour (wheat, gluten-free
+    plain, oats, chickpea)."""
+    fl = [(n, g) for n, g in zip(names, grams) if biscuit_role_name(n) ==
+          "flour"]
+    tot = sum(g for _, g in fl)
+    if tot <= 0:
+        return False
+    if sum(g for n, g in fl if _pure_starch(n)) > 0.5 * tot + 1e-6:
+        return False
+    low = [n.lower() for n in names]
+    return any(n.startswith("egg") for n in low) or any(
+        b in n for n in low for b in BINDING_FLOURS)
+
+
+_ROLE_CACHE = {}
+
+
+def biscuit_role_name(name):
+    return _ROLE_CACHE.get(name)
+
+
+def biscuit_role(item):
+    """'flour', 'wet' (binder / moisture), 'fat' (oil or nut/seed paste)
+    or None for an ingredient in a biscuit dough."""
+    if item.get("category") not in ("food", "imported"):
+        return None
+    v = item["per100g"]
+    n = item["name"].lower()
+    kcal, w = v.get("kcal") or 0, v.get("water")
+    fat, carb = v.get("fat") or 0, v.get("carb") or 0
+    if kcal >= 800 and fat >= 95:
+        if any(x in n for x in ("linseed", "flax", "perilla", "hemp",
+                                "walnut")):
+            return None                    # omega-3 oils spoil when baked
+        return "fat"
+    if w is not None and w <= 10 and fat >= 40:
+        return "fat"                       # peanut butter, tahini
+    if w is not None and w <= 20 and kcal >= 300 and (
+            "flour" in n or ("starch" in n and carb >= 55) or
+            n.startswith("oats")):
+        return "flour"
+    if n.startswith("egg") and ("cooked" in n or "boiled" in n):
+        return None                        # raw egg binds a dough
+    if w is not None and w >= 55 and kcal <= 250 and \
+            any(x in n for x in BISCUIT_WET_WORDS):
+        return "wet"
+    return None
+
+
+def treat_score(names, grams, vecs, ctx):
+    """Score (0 = fine) of a biscuit dough against the renal limits per
+    1000 kcal; lower phosphorus is always a little better. Returns (score,
+    per1000, kcal)."""
+    kcal, per, t = per1000_from(grams, vecs)
+    if kcal <= 0:
+        return 99.0, per, kcal
+    R = get_ranges(ctx)
+    aims = ctx.get("aims") or {}
+    renal = ctx.get("renal", True)
+    p_lim = aims.get("p", R["p"][1]) if renal else R["p"][1]
+    s = 0.0
+    s += 5 * max(0.0, per["p"] / p_lim - 1) ** 2 + 0.3 * per["p"] / p_lim
+    s += 3 * max(0.0, per["na"] / R["na"][1] - 1) ** 2
+    s += 2 * max(0.0, per["k"] / R["k"][1] - 1) ** 2
+    s += 3 * max(0.0, per["protein"] / R["protein"][1] - 1) ** 2
+    s += 2 * _ox_pen(per["oxalate"], R.get("ox_max", OXALATE_MAX))
+    fat_share = per["fat"] * 8.5 / 1000
+    s += 3 * max(0.0, fat_share - 0.5) ** 2
+    mass = sum(grams)
+    water = t[KI["water"]]
+    if mass and water / mass > 0.45:                  # too wet to roll
+        s += 5 * (water / mass - 0.45) ** 2 / 0.2
+    unk = _unknown(grams, vecs) & {"p", "na", "k", "protein"}
+    s += 0.5 * len(unk)
+    return s, per, kcal
+
+
+def _biscuit_grid(roles_n, batch, fixed_g):
+    """Candidate gram lists for one ingredient combination: flour share
+    45-70 % of the dough, oil/paste 0-8 %, the rest moist binders; pairs
+    split 30/70, 50/50 or 70/30. fixed_g: grams of forced items (on top of
+    the shares, taken out of the batch)."""
+    free = max(0.0, batch - sum(fixed_g))
+    nf = sum(1 for r in roles_n if r == "flour")
+    nw = sum(1 for r in roles_n if r == "wet")
+    has_fat = "fat" in roles_n
+    splits = {1: [(1.0,)], 2: [(0.5, 0.5), (0.7, 0.3), (0.3, 0.7)]}
+    for fs in (0.45, 0.5, 0.55, 0.6, 0.65, 0.7):
+        for os_ in ((0.03, 0.06, 0.09) if has_fat else (0.0,)):
+            ws = 1.0 - fs - os_
+            if ws < 0.2:
+                continue
+            for sf in splits[nf]:
+                for sw in splits[nw]:
+                    g, i_f, i_w = [], 0, 0
+                    for r in roles_n:
+                        if r == "flour":
+                            g.append(free * fs * sf[i_f])
+                            i_f += 1
+                        elif r == "wet":
+                            g.append(free * ws * sw[i_w])
+                            i_w += 1
+                        else:
+                            g.append(free * os_)
+                    yield g
+
+
+def generate_biscuits(db, pool, ctx, n_recipes=5, batch=300.0, forced=None,
+                      max_each=None, progress=None, cancelled=lambda: False):
+    """Renal-friendly biscuit doughs from the library: 1-2 flours, 1-2
+    moist binders and optionally an oil or nut/seed paste, amounts per
+    batch (grams of dough before baking). forced: {name: grams or None}
+    always included (None = 5 % of the batch); max_each: {name: max g}.
+    Returns [(names, grams, score, per1000, kcal)], best first, varied
+    (different flour/binder sets)."""
+    forced = {n: (m if m else round(0.05 * batch, 1))
+              for n, m in (forced or {}).items()
+              if n in db and biscuit_role(db[n])}   # dough foods only
+    max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
+    roles = {n: biscuit_role(db[n]) for n in pool if n in db}
+    for n in forced:
+        roles.setdefault(n, biscuit_role(db[n]) or "extra")
+    _ROLE_CACHE.clear()
+    _ROLE_CACHE.update(roles)
+    by = {r: [n for n, rr in roles.items() if rr == r and n not in forced]
+          for r in ("flour", "wet", "fat")}
+    if not by["flour"] or not by["wet"]:
+        return []
+    fx_n = list(forced)
+    fx_g = [forced[n] for n in fx_n]
+    vec = {n: _vec(db[n]) for n in set(roles) | set(fx_n)}
+
+    def best_for(combo):
+        rn = [roles[n] for n in combo]
+        best = None
+        for g in _biscuit_grid(rn, batch, fx_g):
+            if any(g[i] > max_each[n] for i, n in enumerate(combo)
+                   if n in max_each):
+                continue
+            names = fx_n + list(combo)
+            gg = fx_g + g
+            if not biscuit_dough_ok(names, gg):
+                continue
+            sc, per, kcal = treat_score(names, gg,
+                                        [vec[n] for n in names], ctx)
+            if best is None or sc < best[2]:
+                best = (names, gg, sc, per, kcal)
+        return best
+
+    fats = [None] + by["fat"]
+    stage1 = []
+    total = len(by["flour"]) * len(by["wet"])
+    k = 0
+    for f in by["flour"]:
+        for w in by["wet"]:
+            if cancelled():
+                return []
+            if progress:
+                progress("Testing flour/binder pairs", k, total)
+            k += 1
+            for o in fats:
+                combo = [f, w] + ([o] if o else [])
+                b = best_for(combo)
+                if b:
+                    stage1.append((b, combo))
+    stage1.sort(key=lambda x: x[0][2])
+    # stage 2: add a second flour or binder to the best pairs if it helps
+    seeds, seen, per_f = [], set(), {}
+    for b, combo in stage1:
+        key = (combo[0], combo[1])
+        if key in seen or per_f.get(combo[0], 0) >= 3:
+            continue
+        seen.add(key)
+        per_f[combo[0]] = per_f.get(combo[0], 0) + 1
+        seeds.append((b, combo))
+        if len(seeds) >= max(12, 4 * n_recipes):
+            break
+    results = []
+    for i, (b, combo) in enumerate(seeds):
+        if cancelled():
+            return []
+        if progress:
+            progress("Refining doughs", i, len(seeds))
+        cur_b, cur_c = b, combo
+        for extra in by["flour"] + by["wet"]:
+            if extra in cur_c:
+                continue
+            r = roles[extra]
+            if sum(1 for n in cur_c if roles.get(n) == r) >= 2:
+                continue
+            fl = [n for n in cur_c if roles[n] == "flour"]
+            we = [n for n in cur_c if roles[n] == "wet"]
+            ot = [n for n in cur_c if roles[n] == "fat"]
+            new_c = (fl + [extra] if r == "flour" else fl) + \
+                (we + [extra] if r == "wet" else we) + ot
+            nb = best_for(new_c)
+            if nb and nb[2] < cur_b[2] * 0.97:
+                cur_b, cur_c = nb, new_c
+        results.append(cur_b)
+    results.sort(key=lambda r: r[2])
+    out, used_sets, per_flour = [], [], {}
+    for strict in (True, False):
+        for r in results:
+            if r in out:
+                continue
+            core = frozenset(n for n in r[0] if roles.get(n) in
+                             ("flour", "wet"))
+            if any(core == u for u in used_sets):
+                continue
+            main_f = max((g, n) for n, g in zip(r[0], r[1])
+                         if roles.get(n) == "flour")[1]
+            if strict and per_flour.get(main_f, 0) >= 2:
+                continue
+            used_sets.append(core)
+            per_flour[main_f] = per_flour.get(main_f, 0) + 1
+            out.append(r)
+            if len(out) >= n_recipes:
+                return out
+    return out
+
+
+def biscuit_count(kcal_batch, need_kcal, per_day=4):
+    """Biscuits per batch so that per_day biscuits fill the daily treat
+    allowance (rounded to 5, 10-120)."""
+    if not need_kcal or kcal_batch <= 0:
+        return 30
+    n = kcal_batch / (TREAT_SHARE * need_kcal / per_day)
+    return int(min(120, max(10, round(n / 5) * 5)))
+
+
+def biscuit_details(b, db, ctx, need_kcal=None, n_biscuits=None):
+    """Tables and notes for one generated biscuit recipe b (from
+    generate_biscuits). Returns dict: ingredients [(name, g, kcal)],
+    water_ml, nutrients [(label, unit, per 1000 kcal, limit, status)],
+    per_biscuit_kcal, per_day (max biscuits a day), notes [str]."""
+    names, grams, sc, per, kcal = b
+    R = get_ranges(ctx)
+    aims = ctx.get("aims") or {}
+    p_lim = aims.get("p", R["p"][1]) if ctx.get("renal", True) \
+        else R["p"][1]
+    ing = [(n, round(g, 1), round((db[n]["per100g"]["kcal"] or 0) * g / 100))
+           for n, g in zip(names, grams)]
+    mass = sum(grams)
+    vecs = [_vec(db[n]) for n in names]
+    t = _totals(grams, vecs)
+    water = t[KI["water"]]
+    water_ml = max(0.0, 0.28 * mass - water) / 0.72   # to ~28 % moisture
+    water_ml = round(water_ml / 5) * 5
+    rows = []
+
+    def row(k, lim_txt, ok):
+        rows.append((LABEL[k], UNIT[k], round(per[k], 1), lim_txt,
+                     "✓" if ok else "! above"))
+    row("p", f"≤ {p_lim:g} (stage aim)", per["p"] <= p_lim)
+    row("na", f"≤ {R['na'][1]:g}", per["na"] <= R["na"][1])
+    row("k", f"≤ {R['k'][1]:g}", per["k"] <= R["k"][1])
+    row("protein", f"≤ {R['protein'][1]:g}", per["protein"] <= R["protein"][1])
+    row("oxalate", f"≤ {R.get('ox_max', OXALATE_MAX):g}",
+        per["oxalate"] <= R.get("ox_max", OXALATE_MAX))
+    rows.append(("Fat share of energy", "%",
+                 round(per["fat"] * 8.5 / 10, 0), "≤ 50",
+                 "✓" if per["fat"] * 8.5 / 10 <= 50 else "! above"))
+    if not n_biscuits:
+        n_biscuits = biscuit_count(kcal, need_kcal)
+    pb = kcal / max(1, n_biscuits)
+    per_day = int((TREAT_SHARE * need_kcal) // pb) if need_kcal and pb \
+        else None
+    unk = sorted({LABEL[k] for k in _unknown(grams, vecs)
+                  if k in ("p", "na", "k", "protein", "oxalate")})
+    notes = [
+        f"Batch: {mass:.0f} g dough ({kcal:.0f} kcal) → about {n_biscuits} "
+        f"biscuits of ~{pb:.0f} kcal and ~{pb / kcal * t[KI['p']] if kcal else 0:.0f} "
+        "mg phosphorus each.",
+        (f"Up to {per_day} biscuit{'s' if per_day != 1 else ''} a day "
+         f"(treats ≤ {TREAT_SHARE * 100:.0f}% of the {need_kcal:.0f} kcal "
+         "daily need). Treats are not balanced food: if you give more, "
+         "reduce the meals by the same energy.") if per_day is not None
+        else "Keep treats to ≤ 10% of daily energy.",
+        f"Water: add about {water_ml:.0f} ml, a little at a time, until the "
+        "dough holds together (none if it is already soft)." if water_ml
+        else "Water: usually none needed – add a spoonful only if crumbly.",
+        "Method: mix, roll ~5 mm thick, cut, bake at 160 °C (140 °C fan) "
+        "for 25–35 min, then leave in the switched-off oven to dry and "
+        "crisp. Cool fully; keep airtight up to 1 week, or freeze.",
+        "No salt, sugar, xylitol, onion, garlic, grapes/raisins, chocolate "
+        "or macadamia – and no bones, cheese or meat stock (phosphorus, "
+        "sodium)."]
+    if unk:
+        notes.append("Unknown values for: " + ", ".join(unk) + " in at "
+                     "least one ingredient (treated as 0).")
+    return {"ingredients": ing, "water_ml": water_ml, "nutrients": rows,
+            "n_biscuits": n_biscuits,
+            "per_biscuit_kcal": pb, "per_day": per_day, "notes": notes,
+            "score": sc, "kcal": kcal, "mass": mass}
+
+
+def biscuit_report(results, db, ctx, need_kcal=None):
+    """Plain-text report of generated biscuit recipes."""
+    L = [f"{len(results)} renal-friendly biscuit recipes, best first. "
+         "Treats, not complete food: checked only against the renal limits "
+         "per 1000 kcal (phosphorus at or below the stage aim, sodium, "
+         "potassium, protein, oxalate). Amounts are raw dough per batch."]
+    for i, b in enumerate(results, start=1):
+        d = biscuit_details(b, db, ctx, need_kcal)
+        L.append("")
+        L.append(f"BISCUITS {i}   score {d['score']:.3f}   ({d['mass']:.0f} g "
+                 f"dough, {d['kcal']:.0f} kcal, ~{d['n_biscuits']} biscuits)")
+        w = max(len(n) for n, *_ in d["ingredients"]) + 2
+        for n, g, k in d["ingredients"]:
+            L.append(f"  {n:<{w}} {g:>6.0f} g  {k:>5} kcal")
+        if d["water_ml"]:
+            L.append(f"  {'Water (as needed)':<{w}} {d['water_ml']:>6.0f} ml")
+        L.append("  Per 1000 kcal:")
+        for lab, u, v, lim, stt in d["nutrients"]:
+            L.append(f"    {lab:<22} {v:>8,.0f} {u:<4} {lim:<20} {stt}")
+        for nt in d["notes"]:
+            L.append("  • " + nt)
+    return "\n".join(L)
+
+
+def biscuit_print_html(b, db, ctx, need_kcal=None, title="Renal-friendly "
+                       "dog biscuits", dog_name=""):
+    """A4 printable page for one biscuit recipe."""
+    import datetime
+    d = biscuit_details(b, db, ctx, need_kcal)
+    rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g</td>"
+                   f"<td class=n>{k}</td><td>☐</td></tr>"
+                   for n, g, k in d["ingredients"])
+    if d["water_ml"]:
+        rows += (f"<tr><td>Water (as needed)</td><td class=n>"
+                 f"{d['water_ml']:.0f} ml</td><td></td><td>☐</td></tr>")
+    nut = "".join(f"<tr><td>{_esc(a)}</td><td>{_esc(u)}</td><td class=n>"
+                  f"{v:,.0f}</td><td>{_esc(lim)}</td><td>{_esc(stt)}</td>"
+                  "</tr>" for a, u, v, lim, stt in d["nutrients"])
+    notes = "".join(f"<li>{_esc(n)}</li>" for n in d["notes"])
+    today = datetime.date.today().strftime("%d %b %Y")
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>{_esc(title)}</title><style>
+@page {{ size: A4; margin: 15mm; }}
+body {{ font-family: Arial, sans-serif; font-size: 10.5pt; color: #111; }}
+h1 {{ font-size: 16pt; margin: 0 0 4pt; }} h2 {{ font-size: 12pt;
+margin: 12pt 0 4pt; border-bottom: 1px solid #999; }}
+table {{ border-collapse: collapse; width: 100%; }} td, th {{ border: 1px
+solid #bbb; padding: 3pt 5pt; text-align: left; }} th {{ background: #eee; }}
+.n {{ text-align: right; }} .small {{ font-size: 9pt; color: #444; }}
+</style></head><body>
+<h1>{_esc(title)}{(' – ' + _esc(dog_name)) if dog_name else ''}</h1>
+<div class="small">{_esc(ctx.get('stage_name', ''))} · batch {d['mass']:.0f} g dough ·
+{d['kcal']:.0f} kcal · about {d['n_biscuits']} biscuits of ~{d['per_biscuit_kcal']:.0f} kcal ·
+printed {today}</div>
+<h2>Ingredients</h2><table><tr><th>Ingredient</th><th class=n>Amount</th>
+<th class=n>kcal</th><th>✓</th></tr>{rows}</table>
+<h2>Renal check (per 1000 kcal)</h2><table><tr><th>Nutrient</th><th>Unit</th>
+<th class=n>Value</th><th>Limit</th><th>Status</th></tr>{nut}</table>
+<h2>Notes</h2><ul>{notes}</ul>
+<p class="small">Approximate tool – not veterinary advice. Treats are not
+balanced food; check with your vet.</p></body></html>"""
+
+
 def improvement_reasons(before, after, n=3):
     diffs = sorted(((before.get(k, 0) - after.get(k, 0), k)
                     for k in set(before) | set(after)), reverse=True)
@@ -4253,6 +4636,25 @@ class GeneratorDialog(tk.Toplevel):
         frm.pack(fill="both", expand=True)
         ctx = app.score_context()
 
+        rm = ttk.Frame(frm)
+        rm.pack(fill="x", pady=(0, 6))
+        ttk.Label(rm, text="Make:").pack(side="left")
+        self.mode = tk.StringVar(value="meals")
+        ttk.Radiobutton(rm, text="Daily recipes", value="meals",
+                        variable=self.mode).pack(side="left", padx=4)
+        ttk.Radiobutton(rm, text="Renal-friendly biscuits (treats)",
+                        value="biscuits", variable=self.mode).pack(
+            side="left", padx=4)
+        ttk.Label(rm, text="   batch (g dough)").pack(side="left")
+        self.batch = tk.StringVar(value="300")
+        ttk.Entry(rm, textvariable=self.batch, width=6).pack(side="left",
+                                                             padx=4)
+        ttk.Label(rm, foreground="#555",
+                  text="biscuits use the ticked foods (and Always-include "
+                       "foods that suit a dough); other settings are for "
+                       "daily recipes").pack(
+            side="left", padx=6)
+
         r0 = ttk.Frame(frm)
         r0.pack(fill="x")
         ttk.Label(r0, text=f"{app.stage.get()}  –  target kcal/day").pack(
@@ -4562,6 +4964,9 @@ class GeneratorDialog(tk.Toplevel):
             else []
         self._cancel = False
         self.run_btn.state(["disabled"])
+        if self.mode.get() == "biscuits":
+            self.run_biscuits(ctx, pool, n)
+            return
 
         def progress(text, i, total):
             if not self.winfo_exists():
@@ -4592,6 +4997,91 @@ class GeneratorDialog(tk.Toplevel):
         self.status.config(text=f"Done – {len(res)} recipes.")
         if res:
             GenResultsWindow(app, ctx, res, len(fixed), set(self.forced))
+
+
+    def run_biscuits(self, ctx, pool, n):
+        app = self.app
+        try:
+            batch = float(self.batch.get())
+            if batch <= 0:
+                raise ValueError
+        except ValueError:
+            self.run_btn.state(["!disabled"])
+            messagebox.showerror("Biscuits", "Batch must be a positive "
+                                 "number of grams.", parent=self)
+            return
+
+        def progress(text, i, total):
+            if not self.winfo_exists():
+                return
+            self.pb["maximum"] = max(1, total)
+            self.pb["value"] = i
+            self.status.config(text=f"{text} ({i}/{total})")
+            self.update()
+        try:
+            res = generate_biscuits(app.db, pool, ctx, n, batch,
+                                    dict(self.forced), None,
+                                    progress, lambda: self._cancel)
+        except tk.TclError:
+            return
+        if not self.winfo_exists():
+            return
+        self.run_btn.state(["!disabled"])
+        self.pb["value"] = 0
+        if self._cancel:
+            self.status.config(text="Stopped.")
+            return
+        if not res:
+            self.status.config(text="No biscuit recipes – tick at least one "
+                                    "flour and one moist binder.")
+            return
+        self.status.config(text=f"Done – {len(res)} biscuit recipes.")
+        ctx = dict(ctx, stage_name=app.stage.get())
+        BiscuitResultsWindow(app, ctx, res, ctx["kcal_target"])
+
+
+class BiscuitResultsWindow(tk.Toplevel):
+    def __init__(self, app, ctx, results, need):
+        super().__init__(app)
+        self.app, self.ctx, self.results, self.need = app, ctx, results, need
+        self.title("Renal-friendly biscuits")
+        self.geometry("860x720")
+        frm = ttk.Frame(self, padding=8)
+        frm.pack(fill="both", expand=True)
+        txt = tk.Text(frm, wrap="word", font=("TkFixedFont", 10))
+        sb = ttk.Scrollbar(frm, command=txt.yview)
+        txt.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        txt.pack(fill="both", expand=True)
+        txt.insert("end", biscuit_report(results, app.db, ctx, need))
+        make_readonly(txt)
+        text_copy_menu(txt)
+        self.txt = txt
+        b = ttk.Frame(self, padding=(8, 0, 8, 8))
+        b.pack(fill="x")
+        ttk.Label(b, text="Recipe #").pack(side="left")
+        self.pick = tk.StringVar(value="1")
+        ttk.Spinbox(b, from_=1, to=len(results), width=4,
+                    textvariable=self.pick).pack(side="left", padx=4)
+        ttk.Button(b, text="Print…", command=self.print_one).pack(
+            side="left")
+        ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
+        ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
+            self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
+
+    def print_one(self):
+        import tempfile
+        import webbrowser
+        try:
+            b = self.results[int(self.pick.get()) - 1]
+        except (ValueError, IndexError):
+            return
+        html_ = biscuit_print_html(b, self.app.db, self.ctx, self.need)
+        f = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                        encoding="utf-8")
+        f.write(html_)
+        f.close()
+        webbrowser.open("file://" + f.name)
 
 
 class GenResultsWindow(tk.Toplevel):

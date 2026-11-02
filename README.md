@@ -148,6 +148,24 @@ and extras (and allow extra proteins and starches). Foods are added while
 the score improves, or stays the same and the rating rises by at least 1
 point (safety cap 20 items). About twice as slow.
 
+## Renal-friendly biscuits (treats)
+
+Generator → *Renal-friendly biscuits* (desktop: **Make: biscuits**;
+Streamlit: the 🍪 section). Builds doughs of 1–2 flours, 1–2 moist binders
+(raw egg, pumpkin, apple, banana, yoghurt…) and optionally an oil or nut /
+seed paste, from the ticked foods (Always-include foods that suit a dough
+are added). Practical dough rules: flour 45–70 % of the dough, pure
+starches (arrowroot, cornflour, potato starch) at most half of the flour,
+and something that binds (egg, or wheat, gluten-free, oat or chickpea
+flour); delicate omega-3 oils are not baked. Recipes are scored only on the
+renal limits per 1000 kcal (phosphorus at or below the stage aim, sodium,
+potassium, protein, oxalate, fat share) – treats are not complete food.
+Each recipe gives the batch amounts, water to add, biscuits per batch
+(sized so ~4 a day fit the 10 % treat allowance), the daily maximum,
+method and a printable page. Flours (rice, plain wheat, cornflour,
+arrowroot, gluten-free plain, chickpea) were added from AFCD Release 3
+with `afcd_add.py`.
+
 ## Only ingredients with complete data
 
 Generator: "Only ingredients with complete data" (and "…but allow missing
