@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.02e"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -1446,6 +1446,41 @@ def net_p(t):
 
 def mer(bw, factor):
     return factor * 70.0 * bw ** 0.75 if bw > 0 else 0.0
+
+
+ACTIVITY = ("normal", "low")
+
+
+def senior_age(bw):
+    """Age (years) from which a dog is usually considered senior: later in
+    small dogs (they live longer)."""
+    if not bw or bw < 10:
+        return 10
+    return 8 if bw <= 25 else 6
+
+
+def suggest_mer_factor(age, bw, activity="normal"):
+    """Suggested starting MER factor (x 70 BW^0.75) from age and activity:
+    adult 1.6 (neutered pet), senior 1.5 if still active, 1.4 if inactive
+    (NRC 2006 older dogs ~105 / ~95 kcal x BW^0.75 = 1.5 / 1.36 x RER).
+    Only a starting point - adjust by body weight. Returns (factor, text)
+    or None when the age is unknown."""
+    if not age or age <= 0:
+        return None
+    if age < 1:
+        return None                          # growing: not covered here
+    senior = age >= senior_age(bw)
+    low = activity == "low"
+    if senior:
+        f = 1.4 if low else 1.5
+        lab = f"senior (≥ {senior_age(bw)} y at this size)" + (
+            ", inactive" if low else ", still active")
+    else:
+        f = 1.4 if low else 1.6
+        lab = "adult" + (", inactive / weight-gain prone" if low else "")
+    return f, (f"{lab}: suggested MER factor {f:g}. A starting point only – "
+               "weigh every 1–2 weeks and adjust to keep weight and muscle "
+               "stable (in CKD, avoid weight loss).")
 
 
 def fmt(v):
@@ -6980,6 +7015,17 @@ class App(tk.Tk):
         self.bw = tk.StringVar(value="6")
         ttk.Entry(top, textvariable=self.bw, width=6).pack(side="left",
                                                            padx=(2, 12))
+        ttk.Label(top, text="Age (y)").pack(side="left")
+        self.age = tk.StringVar(value="")
+        ttk.Entry(top, textvariable=self.age, width=4).pack(side="left",
+                                                            padx=(2, 6))
+        self.activity = tk.StringVar(value="normal")
+        ttk.Combobox(top, textvariable=self.activity, values=ACTIVITY,
+                     state="readonly", width=7).pack(side="left",
+                                                     padx=(0, 6))
+        ttk.Button(top, text="Suggest factor",
+                   command=self.suggest_factor).pack(side="left",
+                                                     padx=(0, 12))
         ttk.Label(top, text="MER factor (× 70·BW^0.75)").pack(side="left")
         self.factor = tk.StringVar(value="1.6")
         ttk.Entry(top, textvariable=self.factor, width=5).pack(side="left",
@@ -7579,6 +7625,7 @@ class App(tk.Tk):
                                             initialfile="recipe.json")
         if path:
             d = {"items": self.recipe, "bw": self.bw.get(),
+                 "age": self.age.get(), "activity": self.activity.get(),
                  "max_g": self.max_g.get(), "meals": self.meals_n(),
                  "factor": self.factor.get(), "stage": self.stage.get(),
                  "note": self.recipe_note}
@@ -7608,6 +7655,9 @@ class App(tk.Tk):
         if pl:
             self._set_plan(pl)
         self.bw.set(d.get("bw", self.bw.get()))
+        self.age.set(str(d.get("age", self.age.get()) or ""))
+        if d.get("activity") in ACTIVITY:
+            self.activity.set(d["activity"])
         self.max_g.set(d.get("max_g", self.max_g.get()) or "")
         self.meals.set(str(d.get("meals", self.meals.get())))
         self.factor.set(d.get("factor", self.factor.get()))
@@ -7657,6 +7707,22 @@ class App(tk.Tk):
         except ValueError:
             return None
         return v if v and v > 0 else None
+
+    def suggest_factor(self):
+        try:
+            age = float(self.age.get().replace(",", "."))
+        except ValueError:
+            age = None
+        sug = suggest_mer_factor(age, self.current_bw(), self.activity.get())
+        if not sug:
+            messagebox.showinfo("MER factor", "Enter the age in years (1 or "
+                                "more) to get a suggestion.", parent=self)
+            return
+        f, txt = sug
+        if messagebox.askyesno("MER factor", txt + f"\n\nCurrent factor: "
+                               f"{self.factor.get()}. Use {f:g}?",
+                               parent=self):
+            self.factor.set(f"{f:g}")
 
     def current_bw(self):
         try:

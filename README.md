@@ -225,6 +225,15 @@ dog and settings, ingredients (g/day, g/meal, kcal, tick boxes), key
 nutrients vs targets with status, the assessment, feeding notes and space
 for the vet's notes. Open it and press Print (or Ctrl+P).
 
+## Age and activity
+
+Optional *Age* and *Activity* (sidebar / toolbar) suggest a starting MER
+factor: adult 1.6 (neutered pet), senior still active 1.5, senior or adult
+inactive 1.4 (NRC 2006 older dogs ≈105 / 95 kcal × BW^0.75). Senior from
+10 years under 10 kg, 8 years up to 25 kg, 6 years above. Nothing changes
+until you press *Use factor* (Streamlit) or confirm *Suggest factor*
+(desktop); in CKD, adjust by body weight and muscle rather than age alone.
+
 ## Meals per day
 
 Recipes are daily totals. Set **Meals per day** (sidebar / toolbar, default

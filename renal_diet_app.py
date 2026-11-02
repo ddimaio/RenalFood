@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02e"
+ENGINE_VERSION = "2026.11.02f"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -174,6 +174,7 @@ if "db" not in ss:
 for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
                  "applied": None, "score_ctx": None, "opt_result": None,
                  "gen_result": None, "bw": 6.0, "factor": 1.6,
+                 "age": 0.0, "activity": "normal",
                  "stage": "Stage 2", "lib_ver": 0, "tgt_ver": 0,
                  "blood_eval": None, "ext": False, "max_g": 0.0,
                  "meals": 2}.items():
@@ -471,6 +472,9 @@ def load_recipe_cb():
         ss.max_g = float(d.get("max_g") or 0.0)
         ss.meals = int(d.get("meals") or ss.meals)
         ss.factor = float(d.get("factor", ss.factor))
+        ss.age = float(d.get("age") or 0.0)
+        if d.get("activity") in rc.ACTIVITY:
+            ss.activity = d["activity"]
     except ValueError:
         pass
     if d.get("stage") in rc.STAGES:
@@ -493,6 +497,17 @@ with st.sidebar:
     st.header("🐕 Dog")
     st.number_input("Body weight (kg)", 0.5, 100.0, step=0.1, key="bw",
                     help="Use ideal weight if she is over- or underweight.")
+    ac = st.columns(2)
+    ac[0].number_input("Age (years, 0 = not set)", 0.0, 25.0, step=0.5,
+                       key="age",
+                       help="Only used to suggest a starting MER factor.")
+    ac[1].selectbox("Activity", rc.ACTIVITY, key="activity")
+    _sug = rc.suggest_mer_factor(ss.age, ss.bw, ss.activity)
+    if _sug:
+        st.caption(_sug[1])
+        if abs(_sug[0] - ss.factor) > 1e-9:
+            st.button(f"Use factor {_sug[0]:g}", key="use_sug",
+                      on_click=lambda f=_sug[0]: ss.update(factor=f))
     st.number_input("MER factor (× 70·BW^0.75)", 0.8, 3.0, step=0.1,
                     key="factor",
                     help="≈1.6 neutered adult, 1.8 intact, 1.2–1.4 less "
@@ -688,6 +703,7 @@ with tab_rec:
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,
                        "factor": str(ss.factor), "stage": ss.stage,
+                       "age": ss.age, "activity": ss.activity,
                        "note": ss.recipe_note}
             if ss.score_ctx:
                 payload["optimiser"] = ss.score_ctx
