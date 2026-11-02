@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02d"
+ENGINE_VERSION = "2026.11.02e"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -672,7 +672,8 @@ with tab_rec:
             st.download_button(
                 "🖨️ Printable recipe", rc.recipe_print_html(
                     ss.recipe, db, need_now(), ss.stage, score_context(),
-                    ss.meals, ss.recipe_note, ss.bw, ss.factor),
+                    ss.meals, ss.recipe_note, ss.bw, ss.factor,
+                    plan=ss.plan, days=int(ss.get("p_days", 7) or 7)),
                 file_name="recipe_print.html", mime="text/html",
                 key="print_recipe", **FULL,
                 help="Downloads an A4 page with ingredients (per day and per "
@@ -680,16 +681,9 @@ with tab_rec:
                      "feeding notes. Open it and press Print (or Ctrl+P / "
                      "Share → Print on a phone).")
             if ss.plan:
-                st.download_button(
-                    "🖨️ Printable meal plan (batch per meal)",
-                    rc.meal_plan_print_html(
-                        ss.plan, db, dict(score_context(),
-                                          stage_name=ss.stage), 7),
-                    file_name="meal_plan_print.html", mime="text/html",
-                    key="print_plan", **FULL,
-                    help="Each meal as its own recipe card with a 7-day "
-                         "batch, the at-serving supplements and the day "
-                         "check.")
+                st.caption("Meal plan active: the printout lists each meal "
+                           "as its own recipe (one portion and a batch for "
+                           f"{int(ss.get('p_days', 7) or 7)} days).")
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,
@@ -1742,7 +1736,10 @@ with tab_gen:
                                        "optimiser work per meal.")
                     bc_[1].download_button(
                         "🖨️ Printable meal plan",
-                        rc.meal_plan_print_html(p, db, pr["ctx"], p_days),
+                        rc.recipe_print_html(
+                            rc.meal_plan_day(p), db, need_now(), ss.stage,
+                            pr["ctx"], 1, f"Meal plan {i + 1}", ss.bw,
+                            ss.factor, plan=p, days=int(p_days)),
                         file_name=f"meal_plan_{i + 1}.html",
                         mime="text/html", key=f"p_print_{i}")
 

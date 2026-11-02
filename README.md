@@ -175,8 +175,9 @@ limits table lists each meal's items, foods are tried in each meal,
 supplements at serving, swaps stay within their meal, each meal keeps its
 energy share, and Apply keeps the plan. Scaling rescales every meal;
 loading or applying an ordinary recipe ends the plan (or *End meal plan* /
-*Stop using the meal plan*). Undo, save/load (`"plan"` in the recipe JSON)
-and the printable meal plan include it.
+*Stop using the meal plan*). Undo and save/load (`"plan"` in the recipe JSON) include it, and the
+printable recipe lists each meal as its own recipe (one portion and a batch
+for N days, default 7) followed by the day's nutrients and assessment.
 
 ## Renal-friendly biscuits (treats)
 

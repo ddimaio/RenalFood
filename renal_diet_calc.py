@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.02d"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.02e"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
 
@@ -970,11 +970,16 @@ def _esc(x):
 
 def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                       note="", bw=None, factor=None, title="Renal diet recipe",
-                      dog_name=""):
+                      dog_name="", plan=None, days=7):
     """A self-contained, A4-formatted HTML page for printing a recipe:
     dog & settings, ingredients (g/day, g/meal, kcal), key nutrients vs
-    targets, assessment, feeding notes and space for the vet."""
+    targets, assessment, feeding notes and space for the vet. With an
+    active meal plan, the ingredients are printed meal by meal (one
+    portion and a batch for `days` days); the rest is the day total."""
     import datetime
+    if plan:
+        recipe = meal_plan_day(plan)
+        meals = len(plan["meals"]) + (1 if plan.get("fixed") else 0)
     meals = max(1, int(meals or 1))
     a = analyse_recipe(recipe, db, need, stage_name, sctx, meals)
     t, mass = a["totals"], a["mass"]
@@ -999,6 +1004,44 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
     tot_row = (f"<tr class=tot><td>Total</td><td class=n>{mass:.0f}</td>" +
                (f"<td class=n>{mass / meals:.0f}</td>" if meals > 1 else "")
                + f"<td class=n>{kcal:.0f}</td><td></td></tr>")
+    plan_html = ""
+    if plan:                       # meal by meal: portion + batch
+        parts = []
+        tags = (["fixed"] if plan.get("fixed") else []) + \
+            list(range(len(plan["meals"]))) + ["serving"]
+        for tg in tags:
+            its = [(n, g) for tt, n, g in plan_items(plan) if tt == tg
+                   and n in db and g > 0]
+            if not its:
+                continue
+            kc_m = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100
+                       for n, g in its)
+            p_m = sum(g * (db[n]["per100g"]["p"] or 0) / 100 for n, g in its)
+            if tg == "serving":
+                head = ("Add at serving – every day, split between the meals "
+                        "(not before freezing)")
+            elif tg == "fixed":
+                head = "Fixed every day"
+            else:
+                head = (f"{MEAL_NAMES[tg]} – one portion "
+                        f"{sum(g for _, g in its):.0f} g")
+            batch = isinstance(tg, int)
+            rows = "".join(
+                "<tr><td>" + _esc(n) + f"</td><td class=n>{g:.1f}</td>" +
+                (f"<td class=n>{g * days:.0f}</td>" if batch else
+                 "<td class=n></td>") +
+                f"<td class=n>{(db[n]['per100g']['kcal'] or 0) * g / 100:.0f}"
+                "</td><td class=c>☐</td></tr>" for n, g in its)
+            parts.append(
+                f"<h3>{_esc(head)} · {kc_m:.0f} kcal · {p_m:.0f} mg P</h3>"
+                "<table class=\"ingredients big\"><tr><th>Ingredient</th>"
+                "<th class=n>g / day</th><th class=n>"
+                + (f"batch for {days} days" if batch else "") +
+                "</th><th class=n>kcal</th><th>✓</th></tr>" + rows +
+                "</table>")
+        plan_html = "".join(parts) + (
+            f"<table><tr class=tot><td>Whole day</td><td class=n>{mass:.0f} g"
+            f"</td><td class=n>{kcal:.0f} kcal</td></tr></table>")
     # ---- nutrients
     rows_n = []
     for k in PRINT_KEYS:
@@ -1058,6 +1101,7 @@ body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   background: #fff; }
 .page { max-width: 186mm; margin: 0 auto; padding: 8mm 0; }
 h1 { font-size: 18pt; margin: 0 0 2pt; color: #12324a; }
+h3 { font-size: 10.5pt; margin: 9pt 0 2pt; color: #12324a; }
 h2 { font-size: 11.5pt; margin: 14pt 0 5pt; color: #12324a;
   border-bottom: 1.5pt solid #12324a; padding-bottom: 2pt;
   text-transform: uppercase; letter-spacing: .04em; }
@@ -1101,12 +1145,12 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 <div class="sub">{dog} · printed {today}</div>
 {f'<div class="box"><b>{_esc(note)}</b></div>' if note else ''}
 
-<h2>Ingredients</h2>
-<table class="ingredients big"><tr><th>Ingredient</th><th class=n>g / day</th>
+<h2>{'Meal plan – a recipe for each meal' if plan else 'Ingredients'}</h2>
+{plan_html if plan else f"""<table class="ingredients big"><tr><th>Ingredient</th><th class=n>g / day</th>
 {meal_hdr}<th class=n>kcal / day</th><th>✓</th></tr>
-{''.join(rows_i)}{tot_row}</table>
-<div class="small">Weigh with kitchen scales. Amounts are for cooked foods
-where the name says so (e.g. "boiled"). {f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 else ''}
+{''.join(rows_i)}{tot_row}</table>"""}
+<div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}Weigh with kitchen scales. Amounts are for cooked foods
+where the name says so (e.g. "boiled"). {f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
 Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
 
 <h2>Key nutrients</h2>
@@ -1122,7 +1166,7 @@ adjustments in use when printed.</div>
 
 <div class="grid">
 <div><h2>Feeding</h2><ul>
-<li>Split the daily amount into {meals} meal{'s' if meals > 1 else ''}.</li>
+<li>{('Feed one portion of each meal a day; add the at-serving supplements to the meals.' if plan else f"Split the daily amount into {meals} meal{'s' if meals > 1 else ''}.")}</li>
 <li>Change diets gradually over 7–10 days; never force-feed.</li>
 <li>Fresh water always available; adding a little warm water to each meal
 helps intake (no stock cubes or broth – salt, onion).</li>
@@ -5857,7 +5901,15 @@ class PlanResultsWindow(tk.Toplevel):
             days = 7
         f = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
                                         encoding="utf-8")
-        f.write(meal_plan_print_html(p, self.app.db, self.ctx, days))
+        app = self.app
+        try:
+            bw, factor = float(app.bw.get()), float(app.factor.get())
+        except ValueError:
+            bw = factor = None
+        f.write(recipe_print_html(
+            meal_plan_day(p), app.db, app.current_mer(), app.stage.get(),
+            self.ctx, 1, f"Meal plan #{self.pick.get()}", bw, factor,
+            plan=p, days=days))
         f.close()
         webbrowser.open("file://" + f.name)
 
@@ -7342,23 +7394,11 @@ class App(tk.Tk):
             factor = float(self.factor.get())
         except ValueError:
             factor = None
-        html_ = None
-        if self.plan:
-            a = messagebox.askyesnocancel(
-                "Print", "Print the meal plan (each meal as a recipe card "
-                "with a 7-day batch)?\n\nNo = the day recipe with the full "
-                "analysis.", parent=self)
-            if a is None:
-                return
-            if a:
-                html_ = meal_plan_print_html(
-                    self.plan, self.db, dict(self.score_context(),
-                                             stage_name=self.stage.get()), 7)
-        if html_ is None:
-            html_ = recipe_print_html(self.recipe, self.db,
-                                      self.current_mer(), self.stage.get(),
-                                      self.score_context(), self.meals_n(),
-                                      self.recipe_note, bw, factor)
+        html_ = recipe_print_html(self.recipe, self.db,
+                                  self.current_mer(), self.stage.get(),
+                                  self.score_context(), self.meals_n(),
+                                  self.recipe_note, bw, factor,
+                                  plan=self.plan)
         fd, path = tempfile.mkstemp(suffix=".html", prefix="recipe_print_")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(html_)
