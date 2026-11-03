@@ -2,7 +2,7 @@
  {
   "name": "Bonza vegan kibble",
   "category": "commercial food",
-  "note": "Bonza vegan kibble, from bonza.dog product page (as fed): protein 25%, fat 12.5%, fibre 4.5%, ash 7.5%, moisture 9%, Ca 0.9%, P 0.7%, DHA 0.22% + EPA 0.005%, 3581 kcal/kg. Vitamins/choline = ADDED amounts per kg (ingredients add more). Na, K, Mg not declared. Also adds taurine 1500 mg/kg, L-carnitine, DL-methionine 5000 mg/kg (urine-acidifying), Zn, Fe, Cu, Mn, I, Se. Bonza's help-centre lists slightly different older figures (protein 25.2%, P 0.87%, 345 kcal/100 g) - check your bag. Omega-6 1.89% (entered as linoleic acid), omega-3 1.009% (mostly ALA; EPA+DHA as above). Trace elements = ADDED amounts per kg: Fe 100 mg, Cu 10 mg, Mn 30 mg, Zn 120 mg, I 1.5 mg, Se 0.2 mg (selenium left unknown - the added 0.2 mg/kg alone is below the AAFCO minimum per 1000 kcal and the ingredients add more, so it is taken at the AAFCO minimum). Also vitamin K3 2.2 mg, biotin 1,200 mcg, glucosamine 300 mg per kg, MSM 0.03%. Composition: sweet potato 12.97%, oat flakes 12.40%, peeled peas 12.20%, potato protein 8%, pea protein, rapeseed oil, PhytoPlus herbal blend (incl. dried seaweed, DHA Gold algal oil, coconut oil, small amounts of dried spinach, kale, cranberry, papaya...), quinoa 4.5%, fresh carrots, nutritional yeast 3.6%, fava beans 3.5%, vegetable broth, chickpeas 3%, vitamins/minerals, dried vinegar, mushroom mycelium, TruPet yeast fermentate, methionine, Calsporin probiotic, natural preservatives. Oxalate not known (sweet potato, quinoa, chickpeas and a little spinach are oxalate sources).",
+  "note": "Bonza vegan kibble, from bonza.dog product page (as fed): protein 25%, fat 12.5%, fibre 4.5%, ash 7.5%, moisture 9%, Ca 0.9%, P 0.7%, DHA 0.22% + EPA 0.005%, 3581 kcal/kg. Vitamins/choline = ADDED amounts per kg (ingredients add more). Na, K, Mg not declared. Also adds taurine 1500 mg/kg, L-carnitine, DL-methionine 5000 mg/kg (urine-acidifying), Zn, Fe, Cu, Mn, I, Se. Bonza's help-centre lists slightly different older figures (protein 25.2%, P 0.87%, 345 kcal/100 g) - check your bag. Omega-6 1.89% (entered as linoleic acid), omega-3 1.009% (mostly ALA; EPA+DHA as above). Trace elements = ADDED amounts per kg: Fe 100 mg, Cu 10 mg, Mn 30 mg, Zn 120 mg, I 1.5 mg, Se 0.2 mg (selenium left unknown - the added 0.2 mg/kg alone is below the AAFCO minimum per 1000 kcal and the ingredients add more, so it is taken at the AAFCO minimum). Also vitamin K3 2.2 mg, biotin 1,200 mcg, glucosamine 300 mg per kg, MSM 0.03%. Composition: sweet potato 12.97%, oat flakes 12.40%, peeled peas 12.20%, potato protein 8%, pea protein, rapeseed oil, PhytoPlus herbal blend (incl. dried seaweed, DHA Gold algal oil, coconut oil, small amounts of dried spinach, kale, cranberry, papaya...), quinoa 4.5%, fresh carrots, nutritional yeast 3.6%, fava beans 3.5%, vegetable broth, chickpeas 3%, vitamins/minerals, dried vinegar, mushroom mycelium, TruPet yeast fermentate, methionine, Calsporin probiotic, natural preservatives. Oxalate not known (sweet potato, quinoa, chickpeas and a little spinach are oxalate sources). Daily max 30 g set by the user (phosphorus: ~210 mg at 30 g).",
   "per100g": {
    "kcal": 358.1,
    "water": 9.0,
@@ -38,6 +38,7 @@
    "zn": 12.0,
    "i": 150.0
   },
-  "assume_aafco": true
+  "assume_aafco": true,
+  "max_dose": "30"
  }
 ]
