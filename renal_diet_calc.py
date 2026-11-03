@@ -5452,7 +5452,7 @@ class GeneratorDialog(tk.Toplevel):
         r0.pack(fill="x")
         ttk.Label(r0, text=f"{app.stage.get()}  –  target kcal/day").pack(
             side="left")
-        self.kcal = tk.StringVar(value=f"{ctx['kcal_target']:.0f}")
+        self.kcal = tk.StringVar(value=f"{ctx['kcal_target']:.1f}")
         ttk.Entry(r0, textvariable=self.kcal, width=7).pack(side="left",
                                                             padx=4)
         ttk.Label(r0, text="   recipes").pack(side="left")

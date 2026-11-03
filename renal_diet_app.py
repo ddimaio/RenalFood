@@ -1584,7 +1584,8 @@ with tab_gen:
     ctx0 = score_context()
     g1, g2, g3 = st.columns(3)
     gk = g1.number_input("Target kcal/day", 1.0, 10000.0,
-                         float(round(ctx0["kcal_target"])), key=f"g_kcal_{ss.tgt_ver}")
+                         float(ctx0["kcal_target"]), format="%.0f",
+                         key=f"g_kcal_{ss.tgt_ver}")
     gn = g2.slider("Recipes", 1, 10, 5, key="g_n")
     g_unl = g3.checkbox(
         "No limit on number of ingredients (best recipe; slower)", False,
@@ -1976,16 +1977,30 @@ with tab_gen:
             st.warning("Vitamin minimums were ignored – add a vitamin "
                        "supplement (B-complex incl. B12; vitamin A only if "
                        "your vet agrees).")
+        # the context the Recipe page will use once a result is applied
+        _pctx = rc.build_score_context(
+            rc.store_score_context(ss.score_ctx, ctx, ss.stage, need_now()),
+            ss.stage, need_now(), ss.bw, ss.ext, ss.max_g or None)
         for i, (names, g, s, terms) in enumerate(gr["res"]):
             vecs = [rc._vec(db[n]) for n in names]
             kcal, per, _ = rc.per1000_from(g, vecs)
             rt_, rparts = rc.recipe_rating(names, g, db, ctx)
-            title = (f"Recipe {i + 1} · score {s:.3f} · rating {rt_:.0f}/100 · "
+            s_now = rc.score_amounts([a for a in g], vecs, _pctx)[0]
+            title = (f"Recipe {i + 1} · score {s:.3f}"
+                     + (f" (now {s_now:.3f})" if abs(s_now - s) >= 5e-4
+                        else "") + f" · rating {rt_:.0f}/100 · "
                      f"{sum(g):.0f} g/day · "
                      + ", ".join(n.split(",")[0] for n, a in zip(names, g)
                                  if rc.ingredient_role(db[n]) in
                                  ("protein", "starch", "veg")))
             with st.expander(title, expanded=(i == 0)):
+                if abs(s_now - s) >= 5e-4:
+                    st.caption(f"Scored {s:.3f} when generated; with the "
+                               f"current settings (weight, stage, blood "
+                               f"results, extended nutrients, max food) it "
+                               f"scores {s_now:.3f} – that is what the "
+                               "Recipe page will show. Generate again to "
+                               "optimise for the current settings.")
                 st.caption("Rating " + f"{rt_:.0f}/100 – " + " · ".join(
                     f"{rc.RATING_LABELS[k]} {rparts[k] * 100:.0f}%"
                     for k in rc.RATING_W))
