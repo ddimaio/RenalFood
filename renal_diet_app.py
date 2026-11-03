@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.02g"
+ENGINE_VERSION = "2026.11.03a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -446,6 +446,7 @@ def apply_bloods_cb():
     ss.score_ctx = rc.blood_score_context(a, b)
     if ss.get("bl_mer", True) and a["mer_delta"]:
         ss.factor = round(min(3.0, max(0.8, ss.factor + a["mer_delta"])), 1)
+    dog_changed()
     ss.tgt_ver += 1                      # refresh optimiser inputs
     ss.blood_msg = f"Applied: {a['stage']}. " + a["note"]
 
@@ -479,6 +480,7 @@ def load_recipe_cb():
         pass
     if d.get("stage") in rc.STAGES:
         ss.stage = d["stage"]
+    dog_changed()
     ss.score_ctx = d.get("optimiser")
     ss.recipe_note = f"Loaded {up.name}" + (
         f" – {d['note']}" if d.get("note") else "")
@@ -493,37 +495,99 @@ def fmt_kcal(n, g):
 
 
 # ---------------------------------------------------------------- sidebar
+DOG_KEYS = ("bw", "age", "activity", "factor", "max_g", "meals", "stage")
+ss.setdefault("dog_ver", 0)
+
+
+def dog_changed():
+    """Call after changing dog settings outside the sidebar form (load,
+    blood results…): the form shows the new values and every tab's energy
+    target follows."""
+    ss.dog_ver += 1
+    _refresh_targets()
+
+
+def _refresh_targets():
+    # energy-target inputs that keep their own value
+    for k in ("g_kcal", "sc_t"):
+        ss.pop(k, None)
+    ss.tgt_ver += 1                      # optimiser inputs (o_kcal_…)
+    if ss.score_ctx and "kcal_override" in ss.score_ctx:
+        ss.score_ctx = {k: v for k, v in ss.score_ctx.items()
+                        if k != "kcal_override"}
+
+
+def apply_dog(use_factor=None):
+    v = ss.dog_ver
+    old = {k: ss.get(k) for k in DOG_KEYS}
+    for k in DOG_KEYS:
+        ss[k] = ss[f"f_{k}_{v}"]
+    if use_factor:
+        ss.factor = use_factor
+    ss.dog_ver += 1
+    _refresh_targets()
+    ch = [k for k in DOG_KEYS if old[k] != ss[k]]
+    ss.dog_msg = ("Applied: " + ", ".join(
+        {"bw": "weight", "age": "age", "activity": "activity",
+         "factor": "MER factor", "max_g": "max food", "meals": "meals/day",
+         "stage": "stage"}[k] for k in ch) + f" – energy need now "
+        f"{need_now():.0f} kcal/day on every tab.") if ch else \
+        "No changes."
+
+
 with st.sidebar:
     st.header("🐕 Dog")
-    st.number_input("Body weight (kg)", 0.5, 100.0, step=0.1, key="bw",
-                    help="Use ideal weight if she is over- or underweight.")
-    ac = st.columns(2)
-    ac[0].number_input("Age (years, 0 = not set)", 0.0, 25.0, step=0.5,
-                       key="age",
-                       help="Only used to suggest a starting MER factor.")
-    ac[1].selectbox("Activity", rc.ACTIVITY, key="activity")
-    _sug = rc.suggest_mer_factor(ss.age, ss.bw, ss.activity)
-    if _sug:
-        st.caption(_sug[1])
-        if abs(_sug[0] - ss.factor) > 1e-9:
-            st.button(f"Use factor {_sug[0]:g}", key="use_sug",
-                      on_click=lambda f=_sug[0]: ss.update(factor=f))
-    st.number_input("MER factor (× 70·BW^0.75)", 0.8, 3.0, step=0.1,
-                    key="factor",
-                    help="≈1.6 neutered adult, 1.8 intact, 1.2–1.4 less "
-                         "active / weight-gain prone. Adjust to keep weight "
-                         "stable.")
-    st.number_input("Max food per day (g, 0 = no limit)", 0.0, 5000.0,
-                    step=10.0, key="max_g",
-                    help="For a small appetite: the optimiser and generator "
-                         "then prefer energy-dense recipes that fit in this "
-                         "amount.")
-    st.number_input("Meals per day", 1, 6, step=1, key="meals",
-                    help="Recipes stay daily totals; per-meal amounts are "
-                         "the daily amounts divided by this number "
-                         "(nutrient balance per 1000 kcal is the same).")
-    st.selectbox("IRIS stage", list(rc.STAGES), key="stage")
-    st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal")
+    _v = ss.dog_ver
+    with st.form("dog_form", border=False):
+        st.number_input("Body weight (kg)", 0.5, 100.0, step=0.1,
+                        value=float(ss.bw), key=f"f_bw_{_v}",
+                        help="Use ideal weight if she is over- or "
+                             "underweight.")
+        ac = st.columns(2)
+        ac[0].number_input("Age (years, 0 = not set)", 0.0, 25.0, step=0.5,
+                           value=float(ss.age), key=f"f_age_{_v}",
+                           help="Only used to suggest a starting MER "
+                                "factor.")
+        ac[1].selectbox("Activity", rc.ACTIVITY,
+                        index=rc.ACTIVITY.index(ss.activity)
+                        if ss.activity in rc.ACTIVITY else 0,
+                        key=f"f_activity_{_v}")
+        st.number_input("MER factor (× 70·BW^0.75)", 0.8, 3.0, step=0.1,
+                        value=float(ss.factor), key=f"f_factor_{_v}",
+                        help="≈1.6 neutered adult, 1.8 intact, 1.2–1.4 less "
+                             "active / weight-gain prone. Adjust to keep "
+                             "weight stable.")
+        st.number_input("Max food per day (g, 0 = no limit)", 0.0, 5000.0,
+                        step=10.0, value=float(ss.max_g),
+                        key=f"f_max_g_{_v}",
+                        help="For a small appetite: the optimiser and "
+                             "generator then prefer energy-dense recipes "
+                             "that fit in this amount.")
+        st.number_input("Meals per day", 1, 6, step=1, value=int(ss.meals),
+                        key=f"f_meals_{_v}",
+                        help="Recipes stay daily totals; per-meal amounts "
+                             "are the daily amounts divided by this number "
+                             "(nutrient balance per 1000 kcal is the "
+                             "same).")
+        st.selectbox("IRIS stage", list(rc.STAGES),
+                     index=list(rc.STAGES).index(ss.stage),
+                     key=f"f_stage_{_v}")
+        st.form_submit_button("Apply", type="primary", on_click=apply_dog,
+                              use_container_width=True,
+                              help="Updates the energy need and targets on "
+                                   "every tab (recipe analysis, generator, "
+                                   "optimiser, scaling, printouts).")
+        _sug = rc.suggest_mer_factor(ss.age, ss.bw, ss.activity)
+        if _sug:
+            st.caption(_sug[1])
+            if abs(_sug[0] - ss.factor) > 1e-9:
+                st.form_submit_button(f"Apply with factor {_sug[0]:g}",
+                                      on_click=apply_dog, args=(_sug[0],),
+                                      use_container_width=True)
+    if ss.get("dog_msg"):
+        st.success(ss.pop("dog_msg"))
+    st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal",
+              help=f"{ss.bw:g} kg × factor {ss.factor:g} (applied values)")
     st.caption(rc.STAGES[ss.stage][1])
     st.toggle("Extended nutrients", key="ext",
               help="Also show and check essential amino acids, linoleic "
