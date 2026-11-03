@@ -7193,8 +7193,9 @@ class App(tk.Tk):
         ttk.Checkbutton(top, variable=self.ext, command=self.recalc,
                         text="Extended nutrients (amino acids, trace "
                              "minerals)").pack(side="left", padx=(0, 12))
-        for var in (self.bw, self.factor, self.max_g):
-            var.trace_add("write", lambda *a: self.recalc())
+        for var in (self.bw, self.factor):
+            var.trace_add("write", lambda *a: self._dog_changed())
+        self.max_g.trace_add("write", lambda *a: self.recalc())
         self.meals.trace_add("write", lambda *a: self.refresh_recipe())
         ttk.Button(top, text="Export results CSV",
                    command=self.export_results).pack(side="right")
@@ -7851,6 +7852,15 @@ class App(tk.Tk):
         except ValueError:
             return None
         return v if v and v > 0 else None
+
+    def _dog_changed(self):
+        """Weight or MER factor changed: the energy target follows the new
+        need (drop a target kept from an applied optimised recipe)."""
+        sc = getattr(self, "score_ctx", None)
+        if sc and "kcal_override" in sc:
+            self.score_ctx = {k: v for k, v in sc.items()
+                              if k != "kcal_override"}
+        self.recalc()
 
     def suggest_factor(self):
         try:
