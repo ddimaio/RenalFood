@@ -508,10 +508,9 @@ def dog_changed():
 
 
 def _refresh_targets():
-    # energy-target inputs that keep their own value
-    for k in ("g_kcal", "sc_t"):
-        ss.pop(k, None)
-    ss.tgt_ver += 1                      # optimiser inputs (o_kcal_…)
+    # energy-target inputs are keyed by tgt_ver (o_kcal_…, g_kcal_…,
+    # sc_t_…): a new key makes the browser show the new default
+    ss.tgt_ver += 1
     if ss.score_ctx and "kcal_override" in ss.score_ctx:
         ss.score_ctx = {k: v for k, v in ss.score_ctx.items()
                         if k != "kcal_override"}
@@ -756,7 +755,7 @@ with tab_rec:
             st.write(f"Daily need {need_now():.0f} kcal "
                      f"({ss.bw:g} kg × {ss.factor:g}).")
             tgt = st.number_input("Target kcal/day", 1.0, 10000.0,
-                                  value=float(round(need_now())), key="sc_t")
+                                  value=float(round(need_now())), key=f"sc_t_{ss.tgt_ver}")
             binders = [n for n, _ in ss.recipe
                        if db[n]["category"] == "binder"]
             fixed = st.multiselect(
@@ -1585,7 +1584,7 @@ with tab_gen:
     ctx0 = score_context()
     g1, g2, g3 = st.columns(3)
     gk = g1.number_input("Target kcal/day", 1.0, 10000.0,
-                         float(round(ctx0["kcal_target"])), key="g_kcal")
+                         float(round(ctx0["kcal_target"])), key=f"g_kcal_{ss.tgt_ver}")
     gn = g2.slider("Recipes", 1, 10, 5, key="g_n")
     g_unl = g3.checkbox(
         "No limit on number of ingredients (best recipe; slower)", False,
@@ -1803,6 +1802,10 @@ with tab_gen:
             bar.empty()
             ss.plan_result = {"ctx": ctx_p, "res": res_p}
         pr = ss.get("plan_result")
+        if pr and abs(pr["ctx"]["kcal_target"] - gk) > 1:
+            st.warning(f"These plans were made for "
+                       f"{pr['ctx']['kcal_target']:.0f} kcal/day; the target "
+                       f"is now {gk:.0f} – generate them again.")
         if pr:
             if not pr["res"]:
                 st.warning("No meal plans – tick more foods (proteins, "
@@ -1961,6 +1964,10 @@ with tab_gen:
                         mime="text/html", key=f"b_print_{i}")
 
     gr = ss.gen_result
+    if gr and abs(gr["ctx"]["kcal_target"] - gk) > 1:
+        st.warning(f"These recipes were generated for "
+                   f"{gr['ctx']['kcal_target']:.0f} kcal/day; the target is "
+                   f"now {gk:.0f} – press Generate again.")
     if gr:
         ctx = gr["ctx"]
         if not gr["res"]:
