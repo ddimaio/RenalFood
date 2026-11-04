@@ -84,6 +84,49 @@ def key_summary(rows):
     return " · ".join(f"{n} {w}" for n, w in parts if n) or "no targets"
 
 
+def key_in_range(rows):
+    """(in range, with a target, [out-of-range names with ↑/↓])."""
+    rated = [(r[0], short_status(r[4])) for r in rows if short_status(r[4])]
+    ok = sum(sym.startswith("✓") for _, sym in rated)
+    off = [f"{n} {sym.rstrip('?')}" for n, sym in rated
+           if not sym.startswith("✓")]
+    return ok, len(rated), off
+
+
+def assessment_markdown(a):
+    """Score, rating and key nutrients in range, then the engine's notes."""
+    lines = []
+    extra = {lbl.split(" (")[0]: note for lbl, _, _, note in
+             a.get("summary", []) if lbl.startswith(("Score", "Rating"))}
+    if a.get("score") is not None:
+        lines.append(f"- **Score {a['score']:.3f}** (0 = every target met)"
+                     + (f" – {extra['Score']}" if extra.get("Score") else ""))
+    if a.get("rating") is not None:
+        lines.append(f"- **Rating {a['rating']:.0f}/100** (higher = better)"
+                     + (f" – {extra['Rating']}" if extra.get("Rating")
+                        else ""))
+    ok, n, off = key_in_range(key_rows(a))
+    if n:
+        lines.append(f"- **Key nutrients within range: {ok} of {n}**"
+                     + (" – outside: " + ", ".join(off) if off else ""))
+    head = "\n".join(lines)
+    notes = notes_markdown(a.get("notes"))
+    return head + ("\n\n" + notes if head and notes else notes)
+
+
+def assessment_subtitle(a):
+    """'score 0.012 · rating 81/100 · 7/8 key nutrients in range'."""
+    parts = []
+    if a.get("score") is not None:
+        parts.append(f"score {a['score']:.3f}")
+    if a.get("rating") is not None:
+        parts.append(f"rating {a['rating']:.0f}/100")
+    ok, n, _ = key_in_range(key_rows(a))
+    if n:
+        parts.append(f"{ok}/{n} key nutrients in range")
+    return " · ".join(parts) or "notes for this recipe and stage"
+
+
 def grouped_rows(a):
     """[(group title, rows)] for every nutrient the analysis returned except
     the key nutrients (shown in their own table), in the groups above
@@ -307,9 +350,8 @@ def main(page: ft.Page):
             ft.ExpansionTile(
                 title=ft.Text("Assessment"),
                 expanded=opened["notes"], on_change=tile_toggled("notes"),
-                subtitle=ft.Text("notes for this recipe and stage",
-                                 size=11),
-                controls=[ft.Markdown(notes_markdown(a["notes"]),
+                subtitle=ft.Text(assessment_subtitle(a), size=11),
+                controls=[ft.Markdown(assessment_markdown(a),
                                       selectable=True)]),
         ]
 
@@ -481,12 +523,18 @@ def main(page: ft.Page):
         ft.Text("Approximate tool – not veterinary advice.", size=11,
                 italic=True),
     ])
-    body = ft.Container(content=recipe_view)
+    # All four screens stay on the page and only the selected one is
+    # visible: changing a screen while it was detached (e.g. the recipe
+    # replaced from the Generator) could show its rows twice.
+    views = [recipe_view, library.root, generator.root, settings_view.root]
+    for v in views[1:]:
+        v.visible = False
+    body = ft.Column(views)
 
     def switch(e):
         i = page.navigation_bar.selected_index
-        body.content = [recipe_view, library.root, generator.root,
-                        settings_view.root][i]
+        for k, v in enumerate(views):
+            v.visible = k == i
         if i == 1:
             library.show_list()
         elif i == 2:
