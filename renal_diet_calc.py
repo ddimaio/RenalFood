@@ -1146,6 +1146,13 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
   table, .box, ul { break-inside: avoid; } }
 """
     meal_hdr = "<th class=n>g / meal</th>" if meals > 1 else ""
+    # built separately: a triple-quoted f-string nested in another needs
+    # Python 3.12+ (PEP 701)
+    ingredients_html = plan_html if plan else (
+        '<table class="ingredients big"><tr><th>Ingredient</th>'
+        '<th class=n>g / day</th>\n'
+        f"{meal_hdr}<th class=n>kcal / day</th><th>✓</th></tr>\n"
+        f"{''.join(rows_i)}{tot_row}</table>")
     html_ = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{_esc(title)}</title><style>{css}</style></head><body>
@@ -1156,9 +1163,7 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 {f'<div class="box"><b>{_esc(note)}</b></div>' if note else ''}
 
 <h2>{'Meal plan – a recipe for each meal' if plan else 'Ingredients'}</h2>
-{plan_html if plan else f"""<table class="ingredients big"><tr><th>Ingredient</th><th class=n>g / day</th>
-{meal_hdr}<th class=n>kcal / day</th><th>✓</th></tr>
-{''.join(rows_i)}{tot_row}</table>"""}
+{ingredients_html}
 <div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}Weigh with kitchen scales. Amounts are for cooked foods
 where the name says so (e.g. "boiled"). {f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
 Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
