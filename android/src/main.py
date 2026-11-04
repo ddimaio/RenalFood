@@ -330,10 +330,24 @@ def main(page: ft.Page):
             msg.value = "Pick a food and enter grams."
             return
         msg.value = ""
-        recipe.append([name, g])
+        note = put_food(name, g)
         food.value, food.text = None, ""    # ready for the next food
         grams.value = ""
         refresh()
+        page.update()                       # before the message pops up
+        if note:
+            toast(note)
+
+    def put_food(name, g):
+        """Add a food, or change its amount if it is already in the recipe
+        (a food is never listed twice). Returns what happened."""
+        for r in recipe:
+            if r[0] == name:
+                old, r[1] = r[1], g
+                return (f"{name} is already in the recipe – amount changed "
+                        f"from {old:g} g to {g:g} g.")
+        recipe.append([name, g])
+        return ""
 
     def remove(e):
         recipe.pop(e.control.data)
@@ -378,8 +392,8 @@ def main(page: ft.Page):
             n = e.control.data
             d = saved_recipes().get(n, {})
             missing = [x for x, _ in d.get("items", []) if x not in db]
-            recipe[:] = [[x, float(g)] for x, g in d.get("items", [])
-                         if x in db]
+            recipe[:] = [[x, float(g)] for x, g in rc.merge_duplicates(
+                [(x, g) for x, g in d.get("items", []) if x in db])]
             dog.update({k: v for k, v in d.items()
                         if k not in ("items", "saved", "name")})
             settings_view.load()                 # Settings tab shows them
@@ -413,8 +427,10 @@ def main(page: ft.Page):
         refresh()
 
     def add_from_library(name, g):
-        recipe.append([name, g])
+        note = put_food(name, g)
         refresh()
+        page.update()
+        return note or f"Added {g:g} g of {name} to the recipe."
 
     library = LibraryView(page, db, recipe, lambda: bool(dog.extended),
                           library_changed, add_from_library)
@@ -427,7 +443,7 @@ def main(page: ft.Page):
 
     def apply_result(rows, label):
         undo_stack.append(([list(r) for r in recipe], state["name"]))
-        recipe[:] = [list(r) for r in rows]
+        recipe[:] = [list(r) for r in rc.merge_duplicates(rows)]
         state["name"] = ""
         refresh()
         generator.show()

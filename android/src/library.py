@@ -123,7 +123,8 @@ class LibraryView:
     """List / detail / edit screens for the library inside one Column.
     `get_extended()` gives the Extended-nutrients switch; `on_changed()` is
     called after the library or recipe changed; `add_to_recipe(name, g)`
-    adds a food to the recipe."""
+    adds a food to the recipe (or changes its amount) and returns the
+    message to show."""
 
     def __init__(self, page, db, recipe, get_extended, on_changed,
                  add_to_recipe):
@@ -206,8 +207,7 @@ class LibraryView:
                 grams.error = "Enter grams"
                 self.page.update()
                 return
-            self.add_to_recipe(name, g)
-            self.toast(f"Added {g:g} g of {name} to the recipe.")
+            self.toast(self.add_to_recipe(name, g))
 
         rows = []
         for title, keys in visible_keys(self.get_extended()):

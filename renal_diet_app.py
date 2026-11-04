@@ -719,15 +719,31 @@ with tab_rec:
         if ss.plan:
             plan_editor(_cfg_rec)
         else:
+            if ss.get("dup_note"):
+                st.warning(ss.pop("dup_note"))
             df = pd.DataFrame(ss.rec_base or [], columns=["Ingredient", "g"])
             df["Ingredient"] = df["Ingredient"].astype("object")
             df["g"] = df["g"].astype("float")
             ed = st.data_editor(
                 df, key=f"rec_{ss.rec_ver}", num_rows="dynamic",
                 **FULL, hide_index=True, column_config=_cfg_rec)
-            ss.recipe = [[r.Ingredient, float(r.g)] for r in ed.itertuples()
-                         if isinstance(r.Ingredient, str)
-                         and r.Ingredient in db and pd.notna(r.g)]
+            rows = [[r.Ingredient, float(r.g)] for r in ed.itertuples()
+                    if isinstance(r.Ingredient, str)
+                    and r.Ingredient in db and pd.notna(r.g)]
+            names_in = [n for n, _ in rows]
+            dups = sorted({n for n in names_in if names_in.count(n) > 1})
+            if dups:
+                # a food is listed once: the new row's amount replaces the
+                # old one (first position kept)
+                latest = {}
+                for n, g in rows:
+                    latest[n] = g
+                ss.dup_note = (", ".join(dups) + (" is" if len(dups) == 1
+                               else " are") + " already in the recipe – "
+                               "listed once with the new amount.")
+                set_recipe(list(latest.items()))
+                st.rerun()
+            ss.recipe = rows
         record_history()
         uc = st.columns(2)
         uc[0].button("↶ Undo", key="undo", on_click=undo,

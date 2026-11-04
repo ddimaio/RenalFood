@@ -2706,6 +2706,15 @@ def _family(name):
 UNLIMITED_CAP = 20     # safety cap on items in an "unlimited" recipe
 
 
+def merge_duplicates(rows):
+    """[(name, grams)] with each food once (repeated foods' grams added
+    together), in first-seen order."""
+    out = {}
+    for n, g in rows:
+        out[n] = out.get(n, 0) + g
+    return [(n, g) for n, g in out.items()]
+
+
 def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
                      progress=None, cancelled=lambda: False, n_veg=2,
                      veg_max_uses=2, veg_min_g=None, forced=None,
@@ -2737,6 +2746,7 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
     if unlimited:
         max_ing = max_extra = UNLIMITED_CAP
         veg_max = UNLIMITED_CAP
+    fixed = merge_duplicates(fixed)     # a food is never listed twice
     pool = [n for n in pool if n in (forced or {}) or n in dict(fixed)
             or not (baking_only(db[n]) or db[n]["category"] == "treat")]
     forced = {n: m for n, m in (forced or {}).items()
