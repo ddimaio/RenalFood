@@ -49,9 +49,31 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.03a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.04"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(APP_DIR, "renal_ingredients.json")
+# Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
+# because an Android app's own folder is read-only). Unset = files live next
+# to this script and settings in the per-user folder, as before.
+DATA_DIR = os.environ.get("RENALFOOD_DATA_DIR") or APP_DIR
+
+
+def _data_file(name):
+    """Path of a data file in DATA_DIR; on first use there, start from the
+    copy shipped next to this script."""
+    path = os.path.join(DATA_DIR, name)
+    if DATA_DIR != APP_DIR and not os.path.exists(path):
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            src = os.path.join(APP_DIR, name)
+            if os.path.exists(src):
+                with open(src, "rb") as f_in, open(path, "wb") as f_out:
+                    f_out.write(f_in.read())
+        except OSError:
+            pass
+    return path
+
+
+DB_PATH = _data_file("renal_ingredients.json")
 
 # --------------------------------------------------------------------------
 # Nutrients (all values stored per 100 g of ingredient)
@@ -620,7 +642,7 @@ def assumed_in(recipe, db):
     return out
 
 
-REF_PATH = os.path.join(APP_DIR, "renal_references.json")
+REF_PATH = _data_file("renal_references.json")
 
 
 # Built-in reference diets, written to renal_references.json when that
@@ -1263,7 +1285,9 @@ def reference_rows(totals, ref, missing=None, extended=True):
 def _prefs_dir():
     """A fixed per-user folder for remembered settings, so they survive
     new download folders (Windows: %APPDATA%\\RenalFood, else
-    ~/.renalfood)."""
+    ~/.renalfood; RENALFOOD_DATA_DIR when set)."""
+    if DATA_DIR != APP_DIR:
+        return DATA_DIR
     base = os.environ.get("APPDATA") if os.name == "nt" else None
     d = os.path.join(base, "RenalFood") if base else \
         os.path.join(os.path.expanduser("~"), ".renalfood")

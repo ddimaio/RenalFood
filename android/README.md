@@ -50,7 +50,11 @@ build reports a missing Android SDK or Java.
 ## Status
 
 - [x] Dog settings, recipe, key nutrients vs stage targets
-- [ ] Full nutrient table and assessment notes
+- [x] Full nutrient table (grouped; extended nutrients switch) and assessment notes
+- [x] Save / open / delete recipes (kept on the phone)
 - [ ] Ingredient library
 - [ ] Optimiser, recipe generator
-- [ ] Writable data folder on the phone (library edits, settings)
+- [x] Writable data folder on the phone: the built app keeps the library,
+      settings and saved recipes in its private storage
+      (`RENALFOOD_DATA_DIR` = Flet's `FLET_APP_STORAGE_DATA`), starting from
+      the bundled copies
