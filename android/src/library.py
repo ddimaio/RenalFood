@@ -8,6 +8,7 @@ they share the file.
 import flet as ft
 
 import renal_diet_calc as rc
+import choices
 
 CATEGORIES = ["food", "supplement", "binder", "commercial food", "imported"]
 HIDDEN_KEYS = ("base_meq", "p_bind")       # technical; edited in other apps
@@ -101,6 +102,7 @@ def store_item(db, recipe, old_name, item):
         for row in recipe:
             if row[0] == old_name:
                 row[0] = new
+        choices.rename_food(old_name, new)
     elif not old_name and new in db:
         raise ValueError(f"'{new}' already exists.")
     db[new] = item
@@ -108,24 +110,11 @@ def store_item(db, recipe, old_name, item):
     return new
 
 
-def is_excluded(name):
-    """Left out of the generator (and of the optimiser while it shares the
-    generator's list - the default)."""
-    return name in rc.load_excluded()
-
-
-def set_excluded(name, excluded):
-    """Leave a food out of / back into the generator's list (shared with
-    the optimiser unless that has its own list)."""
-    ex = rc.load_excluded()
-    ex = (ex | {name}) if excluded else (ex - {name})
-    rc.save_excluded(ex)
-
-
 def delete_item(db, recipe, name):
     """Remove a food from the library and the recipe, and save."""
     db.pop(name, None)
     recipe[:] = [r for r in recipe if r[0] != name]
+    choices.set_food_setting(name)                  # drop its choices
     rc.save_db(db)
 
 
@@ -176,14 +165,17 @@ class LibraryView:
     # ---- list
     def show_list(self, e=None):
         names = filter_foods(self.db, self.query.value, self.cat.value)
-        ex = rc.load_excluded()
+        chosen = set(choices.set_foods(self.db))
+
+        def ctext(n):
+            return (" · " + choices.setting_text(choices.food_setting(n))
+                    if n in chosen else "")
         tiles = [ft.ListTile(
             title=ft.Text(n),
             subtitle=ft.Text(f"{self.db[n]['category']} · "
                              f"{rc.ingredient_role(self.db[n])} · "
                              f"{rc.fmt(self.db[n]['per100g']['kcal'])} kcal"
-                             "/100 g" + (" · left out of Improve"
-                                         if n in ex else ""), size=11),
+                             "/100 g" + ctext(n), size=11),
             dense=True, data=n, on_click=lambda e: self.show_detail(
                 e.control.data))
             for n in names[:300]]
@@ -223,12 +215,13 @@ class LibraryView:
             rows += [ft.Row([ft.Text(rc.LABEL[k], expand=True),
                              ft.Text(value_text(it, k))])
                      for k in keys]
-        use = ft.Switch(label="Use in Improve (optimiser and generator)",
-                        value=not is_excluded(name),
-                        on_change=lambda e: (set_excluded(
-                            name, not e.control.value), self.toast(
-                            f"{name} " + ("can be used." if e.control.value
-                                          else "left out of Improve."))))
+        use = ft.Row([
+            ft.Text("Generator choices: " + choices.setting_text(
+                choices.food_setting(name)), size=12, expand=True),
+            ft.OutlinedButton("Change…", icon=ft.Icons.TUNE,
+                              on_click=lambda e: choices.open_dialog(
+                                  self.page, name,
+                                  lambda: self.show_detail(name)))])
         extra = [f"Category: {it['category']}",
                  f"Role: {rc.ingredient_role(it)}"
                  + (" (set by hand)" if it.get("role") else "")]

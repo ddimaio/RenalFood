@@ -10,6 +10,8 @@ import time
 import flet as ft
 
 import renal_diet_calc as rc
+from choices import (food_setting, open_dialog, set_food_setting,  # noqa
+                     set_foods, setting_text)
 
 
 class Cancelled(Exception):
@@ -96,54 +98,6 @@ def gen_pool(db, extended=False, complete=False, keep=()):
             if usable(db, n) and (n not in ex or n in keep)]
     return rc.complete_only(pool, db, extended, True, keep=set(keep)) \
         if complete else pool
-
-
-def food_setting(name):
-    """Generator settings of one food: use (not left out), forced (always
-    include), min g, max g - stored like the other apps' generator."""
-    gs = rc.load_gen_settings()
-    return {"use": name not in rc.load_excluded(),
-            "forced": name in gs["forced"],
-            "min": gs["min"].get(name), "max": gs["max"].get(name)}
-
-
-def set_food_setting(name, use=True, forced=False, min_g=None, max_g=None):
-    """Store one food's generator settings. Raises ValueError when min is
-    larger than max."""
-    if min_g is not None and max_g is not None and min_g > max_g:
-        raise ValueError("Min g is larger than max g.")
-    ex = rc.load_excluded()
-    rc.save_excluded((ex - {name}) if use else (ex | {name}))
-    gs = rc.load_gen_settings()
-    gs["forced"] = [n for n in gs["forced"] if n != name] + \
-        ([name] if forced else [])
-    for key, v in (("min", min_g), ("max", max_g)):
-        gs[key].pop(name, None)
-        if v is not None:
-            gs[key][name] = float(v)
-    rc.save_gen_settings(gs)
-
-
-def set_foods(db):
-    """Foods with any non-default generator setting, sorted."""
-    gs = rc.load_gen_settings()
-    names = set(rc.load_excluded()) | set(gs["forced"]) | set(gs["min"]) \
-        | set(gs["max"])
-    return sorted((n for n in names if n in db), key=str.lower)
-
-
-def setting_text(st):
-    """'left out', 'always · min 40 g', 'max 5 g'..."""
-    parts = []
-    if not st["use"]:
-        parts.append("left out")
-    if st["forced"]:
-        parts.append("always included")
-    if st["min"] is not None:
-        parts.append(f"min {st['min']:g} g")
-    if st["max"] is not None:
-        parts.append(f"max {st['max']:g} g")
-    return " · ".join(parts) or "default"
 
 
 def gen_inputs(db, extended=False, complete=False, fixed=()):
@@ -273,7 +227,8 @@ class ImproveView:
         return [ft.Text("Finds better versions of the current recipe. "
                         "Lock a food to keep its amount (e.g. kibble). "
                         f"{n_ex} food{'s' if n_ex != 1 else ''} left out "
-                        "(Library → a food → Use in Improve).", size=12),
+                        "(Generate → Food choices, or a food's page in the "
+                        "Library).", size=12),
                 ft.Column(rows, spacing=0),
                 ft.Row([self.o_add, self.o_swap, self.o_rem], wrap=True),
                 ft.Row([self.o_max, self.o_full], wrap=True)]
@@ -333,47 +288,10 @@ class ImproveView:
         self.show()
 
     def edit_food(self, name):
-        st = food_setting(name)
-        use = ft.Switch(label="Use this food", value=st["use"])
-        forced = ft.Checkbox(label="Always include", value=st["forced"])
-        f_min = ft.TextField(label="Min g/day", width=120, dense=True,
-                             keyboard_type=ft.KeyboardType.NUMBER,
-                             value="" if st["min"] is None else
-                             f"{st['min']:g}")
-        f_max = ft.TextField(label="Max g/day", width=120, dense=True,
-                             keyboard_type=ft.KeyboardType.NUMBER,
-                             value="" if st["max"] is None else
-                             f"{st['max']:g}")
-        err = ft.Text(color=ft.Colors.RED_700, size=12)
-
-        def save(e):
-            try:
-                mn, mx = rc.to_float(f_min.value or ""), \
-                    rc.to_float(f_max.value or "")
-                if (mn is not None and mn < 0) or (mx is not None and mx < 0):
-                    raise ValueError("Grams cannot be negative.")
-                set_food_setting(name, bool(use.value), bool(forced.value),
-                                 mn, mx)
-            except ValueError as ex:
-                err.value = str(ex) if "float" not in str(ex) \
-                    else "Enter numbers for min and max."
-                self.page.update()
-                return
-            self.page.pop_dialog()
+        def saved():
             self.choices_open = True              # keep the list open
             self.show()
-        self.page.show_dialog(ft.AlertDialog(
-            title=ft.Text(name, size=16),
-            content=ft.Column([
-                use, forced,
-                ft.Row([f_min, f_max], wrap=True),
-                ft.Text("Min applies when the food is always included "
-                        "(blank = 5 g, 0.5 g for oils/supplements). Max "
-                        "caps the food whenever it is used.", size=11),
-                err], tight=True),
-            actions=[ft.TextButton("Cancel",
-                                   on_click=lambda e: self.page.pop_dialog()),
-                     ft.FilledButton("Save", on_click=save)]))
+        open_dialog(self.page, name, saved)
 
     # ---- running
     def cancel(self, e=None):
