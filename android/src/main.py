@@ -76,6 +76,31 @@ def key_rows(a):
     return [_row(r, tag) for r, tag in a["rows"] if r[0] in KEY_NUTRIENTS]
 
 
+def key_summary(rows):
+    """'6 on target · 1 above · 1 below' for the collapsed Key nutrients."""
+    syms = [short_status(r[4]) for r in rows]
+    parts = [(sum(x.startswith(c) for x in syms), w) for c, w in
+             (("✓", "on target"), ("↑", "above"), ("↓", "below"))]
+    return " · ".join(f"{n} {w}" for n, w in parts if n) or "no targets"
+
+
+OPEN_KEY = "phone_open"                       # remembered open sections
+
+
+def open_sections():
+    d = rc.load_prefs().get(OPEN_KEY)
+    out = {"key": True, "all": False, "notes": False}
+    if isinstance(d, dict):
+        out.update({k: bool(v) for k, v in d.items() if k in out})
+    return out
+
+
+def save_open_sections(d):
+    p = rc.load_prefs()
+    p[OPEN_KEY] = d
+    rc.save_prefs(p)
+
+
 def grouped_rows(a):
     """[(group title, rows)] for every nutrient the analysis returned, in
     the groups above (empty groups left out)."""
@@ -209,6 +234,14 @@ def main(page: ft.Page):
     db = rc.load_db()
     recipe = []
     state = {"name": ""}                       # name of the open recipe
+    opened = open_sections()                   # Key / All / Assessment
+
+    def tile_toggled(key):
+        def f(e):
+            opened[key] = bool(e.data) if isinstance(e.data, bool) \
+                else str(e.data).lower() == "true"
+            save_open_sections(opened)
+        return f
 
     dog = Dog()                                # Settings tab values
     need_txt = ft.Text(size=12, expand=True)
@@ -264,11 +297,15 @@ def main(page: ft.Page):
             ft.Text(f"More than the {dog.max_g:g} g/day food limit.",
                     color=ft.Colors.ORANGE_800, size=12) if over
             else ft.Container(),
-            ft.Text("Key nutrients", size=16, weight=ft.FontWeight.BOLD),
-            nutrient_table(key_rows(a)),
-            legend(),
+            ft.ExpansionTile(
+                title=ft.Text("Key nutrients", weight=ft.FontWeight.BOLD),
+                subtitle=ft.Text(key_summary(key_rows(a)), size=11),
+                expanded=opened["key"], on_change=tile_toggled("key"),
+                controls=[ft.Column([nutrient_table(key_rows(a)),
+                                     legend()])]),
             ft.ExpansionTile(
                 title=ft.Text("All nutrients"),
+                expanded=opened["all"], on_change=tile_toggled("all"),
                 subtitle=ft.Text("per recipe and per 1000 kcal vs targets",
                                  size=11),
                 controls=[ft.Column([
@@ -279,6 +316,7 @@ def main(page: ft.Page):
                         nutrient_table(rows))])]),
             ft.ExpansionTile(
                 title=ft.Text("Assessment"),
+                expanded=opened["notes"], on_change=tile_toggled("notes"),
                 subtitle=ft.Text("notes for this recipe and stage",
                                  size=11),
                 controls=[ft.Markdown(notes_markdown(a["notes"]),
