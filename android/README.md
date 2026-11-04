@@ -16,6 +16,7 @@ android/
   src/
     main.py          the phone app: Recipe screen + bottom navigation
     library.py       the Library screen
+    improve.py       the Improve screen (optimiser + generator)
     assets/icon.png  app icon
 ```
 
@@ -57,7 +58,10 @@ build reports a missing Android SDK or Java.
 - [x] Save / open / delete recipes (kept on the phone)
 - [x] Ingredient library (Library tab): search, category filter, a food's
       values per 100 g, add to recipe, edit, new food, delete
-- [ ] Optimiser, recipe generator
+- [x] Improve tab: optimiser (lock foods; add / swap / remove; ranked
+      options with Apply) and recipe generator (fixed base, vegetables,
+      foods per recipe), progress bar and Cancel, Undo; foods left out
+      with 'Use in Improve' on a food's page in the Library
 - [x] Writable data folder on the phone: the built app keeps the library,
       settings and saved recipes in its private storage
       (`RENALFOOD_DATA_DIR` = Flet's `FLET_APP_STORAGE_DATA`), starting from

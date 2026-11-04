@@ -30,6 +30,7 @@ elif os.environ.get("FLET_APP_STORAGE_DATA"):
 import flet as ft                      # noqa: E402
 import renal_diet_calc as rc           # noqa: E402
 from library import LibraryView        # noqa: E402
+from improve import ImproveView        # noqa: E402
 
 KEY_NUTRIENTS = ["Energy", "Protein", "Fat", "Phosphorus", "Calcium",
                  "Sodium", "Potassium", "EPA + DHA"]
@@ -382,6 +383,32 @@ def main(page: ft.Page):
     library = LibraryView(page, db, recipe, lambda: bool(ext.value),
                           library_changed, add_from_library)
 
+    # ---- improve screen (optimiser + generator)
+    undo_stack = []
+
+    def settings():
+        b, f = num(bw, 6.0), num(factor, 1.6)
+        return b, f, stage.value, bool(ext.value), need_kcal(b, f)
+
+    def apply_result(rows, label):
+        undo_stack.append(([list(r) for r in recipe], state["name"]))
+        recipe[:] = [list(r) for r in rows]
+        state["name"] = ""
+        refresh()
+        improve.show()
+
+    def undo():
+        if not undo_stack:
+            return False
+        rows, name = undo_stack.pop()
+        recipe[:] = rows
+        state["name"] = name
+        refresh()
+        improve.show()
+        return True
+
+    improve = ImproveView(page, db, recipe, settings, apply_result, undo)
+
     def ext_changed(e):
         refresh()
         library.show_list()
@@ -407,18 +434,23 @@ def main(page: ft.Page):
     body = ft.Container(content=recipe_view)
 
     def switch(e):
-        body.content = (recipe_view if page.navigation_bar.selected_index == 0
-                        else library.root)
-        if body.content is library.root:
+        i = page.navigation_bar.selected_index
+        body.content = [recipe_view, library.root, improve.root][i]
+        if i == 1:
             library.show_list()
+        elif i == 2:
+            improve.show()
         page.update()
+        page.run_task(page.scroll_to, offset=0)      # each tab from the top
     page.navigation_bar = ft.NavigationBar(
         selected_index=0, on_change=switch,
         destinations=[
             ft.NavigationBarDestination(icon=ft.Icons.RESTAURANT,
                                         label="Recipe"),
             ft.NavigationBarDestination(icon=ft.Icons.MENU_BOOK,
-                                        label="Library")])
+                                        label="Library"),
+            ft.NavigationBarDestination(icon=ft.Icons.AUTO_AWESOME,
+                                        label="Improve")])
     page.add(ft.SafeArea(content=body))
     refresh()
 

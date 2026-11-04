@@ -108,6 +108,20 @@ def store_item(db, recipe, old_name, item):
     return new
 
 
+def is_excluded(name):
+    """Left out of the generator (and of the optimiser while it shares the
+    generator's list - the default)."""
+    return name in rc.load_excluded()
+
+
+def set_excluded(name, excluded):
+    """Leave a food out of / back into the generator's list (shared with
+    the optimiser unless that has its own list)."""
+    ex = rc.load_excluded()
+    ex = (ex | {name}) if excluded else (ex - {name})
+    rc.save_excluded(ex)
+
+
 def delete_item(db, recipe, name):
     """Remove a food from the library and the recipe, and save."""
     db.pop(name, None)
@@ -162,12 +176,14 @@ class LibraryView:
     # ---- list
     def show_list(self, e=None):
         names = filter_foods(self.db, self.query.value, self.cat.value)
+        ex = rc.load_excluded()
         tiles = [ft.ListTile(
             title=ft.Text(n),
             subtitle=ft.Text(f"{self.db[n]['category']} · "
                              f"{rc.ingredient_role(self.db[n])} · "
                              f"{rc.fmt(self.db[n]['per100g']['kcal'])} kcal"
-                             "/100 g", size=11),
+                             "/100 g" + (" · left out of Improve"
+                                         if n in ex else ""), size=11),
             dense=True, data=n, on_click=lambda e: self.show_detail(
                 e.control.data))
             for n in names[:300]]
@@ -207,6 +223,12 @@ class LibraryView:
             rows += [ft.Row([ft.Text(rc.LABEL[k], expand=True),
                              ft.Text(value_text(it, k))])
                      for k in keys]
+        use = ft.Switch(label="Use in Improve (optimiser and generator)",
+                        value=not is_excluded(name),
+                        on_change=lambda e: (set_excluded(
+                            name, not e.control.value), self.toast(
+                            f"{name} " + ("can be used." if e.control.value
+                                          else "left out of Improve."))))
         extra = [f"Category: {it['category']}",
                  f"Role: {rc.ingredient_role(it)}"
                  + (" (set by hand)" if it.get("role") else "")]
@@ -227,6 +249,7 @@ class LibraryView:
                     ft.OutlinedButton("Delete", icon=ft.Icons.DELETE_OUTLINE,
                                       on_click=lambda e: self.confirm_delete(
                                           name))]),
+            use,
             ft.Text(" · ".join(extra), size=12),
             ft.Text(it.get("note", ""), size=12, italic=True,
                     selectable=True) if it.get("note") else ft.Container(),
