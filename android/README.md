@@ -14,7 +14,8 @@ android/
   pyproject.toml     app name, version, dependencies (flet)
   sync_engine.py     copies the engine + data files into src/ for building
   src/
-    main.py          the phone screens
+    main.py          the phone app: Recipe screen + bottom navigation
+    library.py       the Library screen
     assets/icon.png  app icon
 ```
 
@@ -30,7 +31,9 @@ cd android
 flet run              # opens a window on the PC
 ```
 
-`flet run` uses the repo-root engine directly. To try it on your phone
+`flet run` uses the repo-root engine directly – library edits made
+while developing change the repo's `renal_ingredients.json`, as the
+desktop app does. The built app edits its own copy on the phone. To try it on your phone
 without building: install the **Flet** app from the Play Store, run
 `flet run --android` (or plain `flet run` and scan the QR code) and the app
 opens live on the phone, reloading as you edit.
@@ -52,7 +55,8 @@ build reports a missing Android SDK or Java.
 - [x] Dog settings, recipe, key nutrients vs stage targets
 - [x] Full nutrient table (grouped; extended nutrients switch) and assessment notes
 - [x] Save / open / delete recipes (kept on the phone)
-- [ ] Ingredient library
+- [x] Ingredient library (Library tab): search, category filter, a food's
+      values per 100 g, add to recipe, edit, new food, delete
 - [ ] Optimiser, recipe generator
 - [x] Writable data folder on the phone: the built app keeps the library,
       settings and saved recipes in its private storage

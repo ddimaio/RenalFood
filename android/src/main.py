@@ -29,6 +29,7 @@ elif os.environ.get("FLET_APP_STORAGE_DATA"):
 
 import flet as ft                      # noqa: E402
 import renal_diet_calc as rc           # noqa: E402
+from library import LibraryView        # noqa: E402
 
 KEY_NUTRIENTS = ["Energy", "Protein", "Fat", "Phosphorus", "Calcium",
                  "Sodium", "Potassium", "EPA + DHA"]
@@ -215,9 +216,12 @@ def main(page: ft.Page):
     need_txt = ft.Text()
 
     food = ft.Dropdown(label="Food", enable_filter=True, editable=True,
-                       expand=True, menu_height=400, dense=True,
-                       options=[ft.DropdownOption(key=n, text=n)
-                                for n in sorted(db, key=str.lower)])
+                       expand=True, menu_height=400, dense=True)
+
+    def load_food_options():
+        food.options = [ft.DropdownOption(key=n, text=n)
+                        for n in sorted(db, key=str.lower)]
+    load_food_options()
     grams = ft.TextField(label="g/day", width=90, dense=True,
                          keyboard_type=ft.KeyboardType.NUMBER)
     title = ft.Text(weight=ft.FontWeight.BOLD)
@@ -365,9 +369,25 @@ def main(page: ft.Page):
     for c in (bw, factor):
         c.on_change = refresh
     stage.on_select = refresh
-    ext.on_change = refresh
 
-    page.add(ft.SafeArea(content=ft.Column([
+    # ---- library screen (shares db and recipe with this screen)
+    def library_changed():
+        load_food_options()
+        refresh()
+
+    def add_from_library(name, g):
+        recipe.append([name, g])
+        refresh()
+
+    library = LibraryView(page, db, recipe, lambda: bool(ext.value),
+                          library_changed, add_from_library)
+
+    def ext_changed(e):
+        refresh()
+        library.show_list()
+    ext.on_change = ext_changed
+
+    recipe_view = ft.Column([
         ft.Text("RenalFood", size=22, weight=ft.FontWeight.BOLD),
         ft.Row([bw, factor], wrap=True), stage, ext, need_txt,
         ft.Divider(),
@@ -383,7 +403,23 @@ def main(page: ft.Page):
         msg, items, ft.Divider(), results,
         ft.Text("Approximate tool – not veterinary advice.", size=11,
                 italic=True),
-    ])))
+    ])
+    body = ft.Container(content=recipe_view)
+
+    def switch(e):
+        body.content = (recipe_view if page.navigation_bar.selected_index == 0
+                        else library.root)
+        if body.content is library.root:
+            library.show_list()
+        page.update()
+    page.navigation_bar = ft.NavigationBar(
+        selected_index=0, on_change=switch,
+        destinations=[
+            ft.NavigationBarDestination(icon=ft.Icons.RESTAURANT,
+                                        label="Recipe"),
+            ft.NavigationBarDestination(icon=ft.Icons.MENU_BOOK,
+                                        label="Library")])
+    page.add(ft.SafeArea(content=body))
     refresh()
 
 
