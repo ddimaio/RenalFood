@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Flet
+.flet/
+build/
+
+# Copies made by sync_engine.py for building (the originals live in the
+# repo root - edit those, not these)
+src/renal_diet_calc.py
+src/renal_ingredients.json
+src/renal_references.json

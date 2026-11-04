@@ -1,0 +1,36 @@
+[project]
+name = "renalfood"
+version = "0.1.0"
+description = "RenalFood - renal diet calculator for dogs (Android/phone app)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Davide Di Maio" }
+]
+dependencies = [
+    "flet>=1.0.5"
+]
+
+[dependency-groups]
+dev = [
+    "flet-cli>=1.0.5",
+    "flet-desktop>=1.0.5",
+    "flet-web>=1.0.5",
+    "flet[test]>=1.0.5",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.flet]
+desktop_flavor = "light"
+org = "com.ddimaio"
+product = "RenalFood"
+company = "Davide Di Maio"
+copyright = "Copyright (C) 2026 Davide Di Maio"
+icon_background = "#2e7d5b"
+
+[tool.flet.app]
+path = "src"

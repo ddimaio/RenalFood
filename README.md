@@ -12,6 +12,7 @@ supplement and should be checked by a vet / veterinary nutritionist.
 |---|---|---|
 | `renal_diet_calc.py` | `python renal_diet_calc.py` | Python + Tkinter (standard library) |
 | `renal_diet_app.py` | `streamlit run renal_diet_app.py` | `pip install -r requirements.txt` |
+| `android/` (phone app, in progress) | `cd android` then `flet run` | `pip install "flet[all]"` – see `android/README.md` |
 
 Both share the same calculation engine (`renal_diet_calc.py`) and the same
 ingredient library file, `renal_ingredients.json`, created next to the
