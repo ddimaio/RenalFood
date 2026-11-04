@@ -61,8 +61,8 @@ build reports a missing Android SDK or Java.
 - [x] Recipe, key nutrients vs stage targets (a food is listed once:
       adding it again changes its amount)
 - [x] Full nutrient table (grouped; extended nutrients switch) and assessment notes
-- [x] Key nutrients, All nutrients and Assessment can be shown or hidden
-      (open sections remembered; Key nutrients shows a count when hidden)
+- [x] Key nutrients, Other nutrients and Assessment can be shown or hidden
+      (closed when a recipe is first shown; Key nutrients shows a count)
 - [x] Save / open / delete recipes (kept on the phone)
 - [x] Ingredient library (Library tab): search, category filter, a food's
       values per 100 g, add to recipe, edit, new food, delete; generator

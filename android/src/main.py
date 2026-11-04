@@ -84,27 +84,12 @@ def key_summary(rows):
     return " · ".join(f"{n} {w}" for n, w in parts if n) or "no targets"
 
 
-OPEN_KEY = "phone_open"                       # remembered open sections
-
-
-def open_sections():
-    d = rc.load_prefs().get(OPEN_KEY)
-    out = {"key": True, "all": False, "notes": False}
-    if isinstance(d, dict):
-        out.update({k: bool(v) for k, v in d.items() if k in out})
-    return out
-
-
-def save_open_sections(d):
-    p = rc.load_prefs()
-    p[OPEN_KEY] = d
-    rc.save_prefs(p)
-
-
 def grouped_rows(a):
-    """[(group title, rows)] for every nutrient the analysis returned, in
-    the groups above (empty groups left out)."""
-    by_key = {_KEY_OF.get(r[0]): (r, tag) for r, tag in a["rows"]}
+    """[(group title, rows)] for every nutrient the analysis returned except
+    the key nutrients (shown in their own table), in the groups above
+    (empty groups left out)."""
+    by_key = {_KEY_OF.get(r[0]): (r, tag) for r, tag in a["rows"]
+              if r[0] not in KEY_NUTRIENTS}
     out, seen = [], set()
     for title, keys in GROUPS:
         rows = [_row(*by_key[k]) for k in keys if k in by_key]
@@ -112,7 +97,7 @@ def grouped_rows(a):
         if rows:
             out.append((title, rows))
     rest = [_row(r, tag) for r, tag in a["rows"]
-            if _KEY_OF.get(r[0]) not in seen]
+            if _KEY_OF.get(r[0]) not in seen and r[0] not in KEY_NUTRIENTS]
     if rest:
         out.append(("More", rest))
     return out
@@ -234,13 +219,17 @@ def main(page: ft.Page):
     db = rc.load_db()
     recipe = []
     state = {"name": ""}                       # name of the open recipe
-    opened = open_sections()                   # Key / All / Assessment
+    # Key / Other / Assessment sections: closed when a recipe is first
+    # shown (new, opened or applied); kept as they are while it is edited
+    opened = {"key": False, "all": False, "notes": False}
+
+    def close_sections():
+        opened.update(dict.fromkeys(opened, False))
 
     def tile_toggled(key):
         def f(e):
             opened[key] = bool(e.data) if isinstance(e.data, bool) \
                 else str(e.data).lower() == "true"
-            save_open_sections(opened)
         return f
 
     dog = Dog()                                # Settings tab values
@@ -283,6 +272,7 @@ def main(page: ft.Page):
                                   on_click=remove)])
             for i, (n, g) in enumerate(recipe)]
         if not recipe:
+            close_sections()                 # the next recipe starts closed
             results.controls = [ft.Text("Add foods to see the nutrients.",
                                         italic=True)]
             return
@@ -304,7 +294,7 @@ def main(page: ft.Page):
                 controls=[ft.Column([nutrient_table(key_rows(a)),
                                      legend()])]),
             ft.ExpansionTile(
-                title=ft.Text("All nutrients"),
+                title=ft.Text("Other nutrients"),
                 expanded=opened["all"], on_change=tile_toggled("all"),
                 subtitle=ft.Text("per recipe and per 1000 kcal vs targets",
                                  size=11),
@@ -398,6 +388,7 @@ def main(page: ft.Page):
                         if k not in ("items", "saved", "name")})
             settings_view.load()                 # Settings tab shows them
             state["name"] = n
+            close_sections()
             page.pop_dialog()
             refresh()
             if missing:
@@ -445,6 +436,7 @@ def main(page: ft.Page):
         undo_stack.append(([list(r) for r in recipe], state["name"]))
         recipe[:] = [list(r) for r in rc.merge_duplicates(rows)]
         state["name"] = ""
+        close_sections()
         refresh()
         generator.show()
 
