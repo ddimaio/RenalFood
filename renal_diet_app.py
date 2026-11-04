@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.04"
+ENGINE_VERSION = "2026.11.04b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -866,6 +866,14 @@ with tab_rec:
                     f"{rc.RATING_LABELS[k]} {rparts[k] * 100:.0f}%"
                     for k in rc.RATING_W))
             st.subheader("Assessment")
+            head = rc.assessment_head(a)
+            if head:                      # score, rating, key nutrients
+                md = []
+                for ln in head:
+                    main, _, rest = ln[2:].partition(" – ")
+                    md.append(f"- **{main}**" + (f" – {rest}" if rest
+                                                 else ""))
+                st.markdown("\n".join(md))
             st.markdown("\n".join(
                 ("- " + ln[2:]) if ln.startswith("• ") else
                 (ln + "\n" if ln else "") for ln in a["notes"].splitlines()))

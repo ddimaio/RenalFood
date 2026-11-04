@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.04"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.04b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -4681,6 +4681,49 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None, meals=1):
     return res
 
 
+# the nutrients the phone app shows as "Key nutrients" (same set everywhere)
+KEY_NUTRIENT_KEYS = ("kcal", "protein", "fat", "p", "ca", "na", "k",
+                     "epa_dha")
+
+
+def key_nutrients_in_range(res):
+    """(in range, with a target, ["Calcium below", ...]) for the key
+    nutrients of an analyse_recipe() result."""
+    labels = {LABEL[k] for k in KEY_NUTRIENT_KEYS if k in LABEL}
+    ok, n, off = 0, 0, []
+    for r, _tag in res.get("rows", []):
+        st = (r[-1] or "") if r[0] in labels else ""
+        if not st:
+            continue                      # no target for this nutrient
+        n += 1
+        if "above" in st:
+            off.append(f"{r[0]} above")
+        elif "below" in st:
+            off.append(f"{r[0]} below")
+        else:
+            ok += 1
+    return ok, n, off
+
+
+def assessment_head(res):
+    """Lines ('• ...') that open the assessment: score, rating and how many
+    key nutrients are within range."""
+    out = []
+    extra = {lbl.split(" (")[0]: note for lbl, _, _, note in
+             res.get("summary", []) if lbl.startswith(("Score", "Rating"))}
+    if res.get("score") is not None:
+        out.append(f"• Score {res['score']:.3f} (0 = every target met)"
+                   + (f" – {extra['Score']}" if extra.get("Score") else ""))
+    if res.get("rating") is not None:
+        out.append(f"• Rating {res['rating']:.0f}/100 (higher = better)"
+                   + (f" – {extra['Rating']}" if extra.get("Rating") else ""))
+    ok, n, off = key_nutrients_in_range(res)
+    if n:
+        out.append(f"• Key nutrients within range: {ok} of {n}"
+                   + (" – outside: " + ", ".join(off) if off else ""))
+    return out
+
+
 LABEL_FIELDS = [("moist", "Moisture %"), ("protein", "Crude protein %"),
                 ("fat", "Crude fat / oils %"), ("fibre", "Crude fibre %"),
                 ("ash", "Crude ash %"), ("ca", "Calcium %"),
@@ -8011,7 +8054,9 @@ class App(tk.Tk):
                     ((f"light_{worst}",) if worst else ())
                 self.brk.insert("", "end", values=(row[0], txt) +
                                 tuple(row[1:]), tags=tags)
-        self.notes.insert("end", a["notes"])
+        head = assessment_head(a)
+        self.notes.insert("end", ("\n".join(head) + "\n\n" if head
+                                  else "") + a["notes"])
 
     def assess(self, t, miss, mass, kcal, need, capr, acid, k1000,
                renal_mode, stage_note, fat_frac):
