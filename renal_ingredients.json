@@ -28,7 +28,6 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 40000.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -43,13 +42,7 @@
    "thr": 0.0,
    "trp": 0.0,
    "val": 0.0,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -81,7 +74,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 5850.0,
    "arg": 0.0,
@@ -102,7 +94,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -134,7 +127,6 @@
    "vit_e": 0.07,
    "vit_c": 4.0,
    "epa_dha": 0.0,
-   "oxalate": 1.4,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.006,
@@ -154,8 +146,9 @@
    "cu": 0.031,
    "mn": 0.038,
    "zn": 0.05,
+   "se": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "oxalate": 1.4
   }
  },
  {
@@ -187,7 +180,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -208,7 +200,8 @@
    "mn": 0.1,
    "zn": 0.0,
    "i": 0.5,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "starch"
  },
@@ -241,7 +234,6 @@
    "vit_e": 0.894,
    "vit_c": 13.0,
    "epa_dha": 0.0,
-   "oxalate": 5.6,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.134,
@@ -262,7 +254,8 @@
    "mn": 0.224,
    "zn": 0.22,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 5.6
   }
  },
  {
@@ -294,7 +287,6 @@
    "vit_e": 0.15,
    "vit_c": 8.7,
    "epa_dha": 0.0,
-   "oxalate": 5.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.049,
@@ -314,8 +306,9 @@
    "cu": 0.078,
    "mn": 0.27,
    "zn": 0.15,
+   "se": 1.0,
    "i": 0.415,
-   "se": 1.0
+   "oxalate": 5.1
   }
  },
  {
@@ -347,7 +340,6 @@
    "vit_e": 0.0,
    "vit_c": 12.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.203,
@@ -368,7 +360,8 @@
    "mn": 0.09,
    "zn": 0.6,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
@@ -400,7 +393,6 @@
    "vit_e": 0.0,
    "vit_c": 2.0,
    "epa_dha": 0.0,
-   "oxalate": 56.5,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0546,
@@ -421,7 +413,8 @@
    "mn": 0.398,
    "zn": 0.65,
    "i": 1.6,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 56.5
   }
  },
  {
@@ -453,28 +446,15 @@
    "vit_e": 18.0,
    "vit_c": 10.0,
    "epa_dha": 225.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
+   "oxalate": null,
    "la": 1.89,
    "fe": 10.0,
    "cu": 1.0,
    "mn": 3.0,
    "zn": 12.0,
-   "i": 150.0,
-   "se": null
+   "i": 150.0
   },
   "assume_aafco": true,
   "max_dose": "30"
@@ -508,7 +488,6 @@
    "vit_e": 2.16,
    "vit_c": 64.9,
    "epa_dha": 0.0,
-   "oxalate": 6.7,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.2,
@@ -528,8 +507,9 @@
    "cu": 0.061,
    "mn": 0.194,
    "zn": 0.45,
+   "se": 1.6,
    "i": 1.14,
-   "se": 1.6
+   "oxalate": 6.7
   }
  },
  {
@@ -561,7 +541,6 @@
    "vit_e": 0.0,
    "vit_c": 69.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.267,
@@ -582,7 +561,8 @@
    "mn": 0.229,
    "zn": 0.34,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "veg"
  },
@@ -615,7 +595,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 123.5,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.253,
@@ -636,7 +615,8 @@
    "mn": 0.158,
    "zn": 0.62,
    "i": 0.7,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 123.5
   },
   "role": "starch"
  },
@@ -669,7 +649,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 10.6,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.393,
@@ -690,7 +669,8 @@
    "mn": 0.39,
    "zn": 0.7,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 10.6
   }
  },
  {
@@ -722,7 +702,6 @@
    "vit_e": 0.745,
    "vit_c": 6.0,
    "epa_dha": 0.0,
-   "oxalate": 4.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.159,
@@ -743,7 +722,8 @@
    "mn": 0.135,
    "zn": 0.15,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
@@ -775,7 +755,6 @@
    "vit_e": 0.18,
    "vit_c": 37.5,
    "epa_dha": 0.0,
-   "oxalate": 3.8,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.074,
@@ -795,8 +774,9 @@
    "cu": 0.017,
    "mn": 0.205,
    "zn": 0.2,
+   "se": 0.6,
    "i": 0.0,
-   "se": 0.6
+   "oxalate": 3.8
   }
  },
  {
@@ -828,7 +808,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 3900.0,
    "arg": 0.0,
@@ -849,7 +828,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -881,7 +861,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -902,7 +881,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -934,7 +914,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 3900.0,
    "arg": 0.0,
@@ -955,7 +934,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -987,7 +967,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -1008,7 +987,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -1040,7 +1020,6 @@
    "vit_e": 1.53,
    "vit_c": 3.6,
    "epa_dha": 0.0,
-   "oxalate": 11.5,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.075,
@@ -1060,8 +1039,9 @@
    "cu": 0.017,
    "mn": 0.155,
    "zn": 0.2,
+   "se": 0.7,
    "i": 0.673,
-   "se": 0.7
+   "oxalate": 11.5
   }
  },
  {
@@ -1093,28 +1073,17 @@
    "vit_e": 0.143,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 8.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": 0.142,
-   "val": null,
    "la": 4.01,
    "fe": 2.26,
    "cu": 0.279,
    "mn": 0.99,
    "zn": 1.39,
    "i": 2.21,
-   "se": 4.42
+   "se": 4.42,
+   "trp": 0.142,
+   "oxalate": 8.0
   }
  },
  {
@@ -1146,7 +1115,6 @@
    "vit_e": 0.0,
    "vit_c": 33.0,
    "epa_dha": 0.0,
-   "oxalate": 3.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.115,
@@ -1167,7 +1135,8 @@
    "mn": 0.13,
    "zn": 0.2,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.3
   }
  },
  {
@@ -1199,7 +1168,6 @@
    "vit_e": 0.0,
    "vit_c": 4.0,
    "epa_dha": 0.0,
-   "oxalate": 25.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0195,
@@ -1220,7 +1188,8 @@
    "mn": 0.14,
    "zn": 0.19,
    "i": 0.0,
-   "se": 1.5
+   "se": 1.5,
+   "oxalate": 25.0
   }
  },
  {
@@ -1252,7 +1221,6 @@
    "vit_e": 0.149,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 469.2,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 2.7,
@@ -1273,7 +1241,8 @@
    "mn": 4.3,
    "zn": 5.4,
    "i": 0.0,
-   "se": 12.0
+   "se": 12.0,
+   "oxalate": 469.2
   }
  },
  {
@@ -1305,7 +1274,6 @@
    "vit_e": 0.596,
    "vit_c": 3.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -1326,7 +1294,8 @@
    "mn": 2.15,
    "zn": 3.1,
    "i": 0.0,
-   "se": 68.0
+   "se": 68.0,
+   "oxalate": null
   },
   "role": "protein"
  },
@@ -1359,7 +1328,6 @@
    "vit_e": 0.52,
    "vit_c": 1.3,
    "epa_dha": 0.0,
-   "oxalate": 10.5,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.835,
@@ -1379,8 +1347,9 @@
    "cu": 0.352,
    "mn": 1.03,
    "zn": 1.53,
+   "se": 3.7,
    "i": 0.238,
-   "se": 3.7
+   "oxalate": 10.5
   }
  },
  {
@@ -1412,7 +1381,6 @@
    "vit_e": 0.0,
    "vit_c": 11.0,
    "epa_dha": 0.0,
-   "oxalate": 3.8,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.055,
@@ -1433,7 +1401,8 @@
    "mn": 0.117,
    "zn": 0.2,
    "i": 3.4,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.8
   }
  },
  {
@@ -1465,7 +1434,6 @@
    "vit_e": 0.16,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -1485,8 +1453,9 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
+   "se": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "oxalate": 0.0
   }
  },
  {
@@ -1518,7 +1487,6 @@
    "vit_e": 25.3,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -1539,7 +1507,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -1571,7 +1540,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -1592,7 +1560,8 @@
    "mn": 0.004,
    "zn": 0.02,
    "i": 11.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "starch"
  },
@@ -1625,7 +1594,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 3.6,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.677,
@@ -1646,7 +1614,8 @@
    "mn": 0.004,
    "zn": 0.24,
    "i": 15.3,
-   "se": 5.7
+   "se": 5.7,
+   "oxalate": 0.0
   }
  },
  {
@@ -1678,7 +1647,6 @@
    "vit_e": 0.18,
    "vit_c": 12.9,
    "epa_dha": 0.0,
-   "oxalate": 4.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.027,
@@ -1698,8 +1666,9 @@
    "cu": 0.052,
    "mn": 0.173,
    "zn": 0.33,
+   "se": 0.2,
    "i": 0.0,
-   "se": 0.2
+   "oxalate": 4.0
   }
  },
  {
@@ -1731,7 +1700,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 16.6,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -1752,7 +1720,8 @@
    "mn": 0.562,
    "zn": 0.49,
    "i": 0.4,
-   "se": 4.9
+   "se": 4.9,
+   "oxalate": 16.6
   }
  },
  {
@@ -1784,7 +1753,6 @@
    "vit_e": 0.0,
    "vit_c": 8.0,
    "epa_dha": 0.0,
-   "oxalate": 4.2,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0172,
@@ -1805,7 +1773,8 @@
    "mn": 0.0578,
    "zn": 0.4,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.2
   }
  },
  {
@@ -1837,7 +1806,6 @@
    "vit_e": 0.0,
    "vit_c": 125.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -1858,7 +1826,8 @@
    "mn": 50.0,
    "zn": 250.0,
    "i": 6000.0,
-   "se": 150.0
+   "se": 150.0,
+   "oxalate": 0.0
   },
   "max_dose": "10:7"
  },
@@ -1891,7 +1860,6 @@
    "vit_e": 0.0,
    "vit_c": 125.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -1912,7 +1880,8 @@
    "mn": 10.0,
    "zn": 450.0,
    "i": 4500.0,
-   "se": 550.0
+   "se": 550.0,
+   "oxalate": 0.0
   },
   "max_dose": "5:4, 10:8, 15:10, 25:15, 40:20, 60:28"
  },
@@ -1940,12 +1909,11 @@
    "b12": 150.0,
    "folate": 960.0,
    "b5": 40.5,
-   "choline": 3655.0,
+   "choline": 3655,
    "vit_d": 2450.0,
    "vit_e": 0.0,
    "vit_c": 122.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -1966,7 +1934,8 @@
    "mn": 9.8,
    "zn": 440.0,
    "i": 4400.0,
-   "se": 530.0
+   "se": 530.0,
+   "oxalate": 0.0
   },
   "max_dose": "5:4, 10:8, 15:10, 25:15, 40:20, 60:28"
  },
@@ -1999,7 +1968,6 @@
    "vit_e": 0.0,
    "vit_c": 9.0,
    "epa_dha": 0.0,
-   "oxalate": 1.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.02,
@@ -2020,7 +1988,8 @@
    "mn": 0.05,
    "zn": 0.1,
    "i": 3.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 1.0
   }
  },
  {
@@ -2052,7 +2021,6 @@
    "vit_e": 0.894,
    "vit_c": 15.0,
    "epa_dha": 0.0,
-   "oxalate": 29.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.83,
@@ -2073,7 +2041,8 @@
    "mn": 0.74,
    "zn": 1.3,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 29.3
   }
  },
  {
@@ -2105,7 +2074,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.648,
@@ -2125,8 +2093,9 @@
    "cu": 0.023,
    "mn": 0.011,
    "zn": 0.03,
+   "se": 20.0,
    "i": 0.0,
-   "se": 20.0
+   "oxalate": 0.0
   }
  },
  {
@@ -2158,7 +2127,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.648,
@@ -2178,8 +2146,9 @@
    "cu": 0.023,
    "mn": 0.011,
    "zn": 0.03,
+   "se": 20.0,
    "i": 0.0,
-   "se": 20.0
+   "oxalate": 0.0
   }
  },
  {
@@ -2211,7 +2180,6 @@
    "vit_e": 3.84,
    "vit_c": 0.0,
    "epa_dha": 114.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 1.099,
@@ -2231,8 +2199,9 @@
    "cu": 0.077,
    "mn": 0.055,
    "zn": 2.3,
+   "se": 56.0,
    "i": 81.5,
-   "se": 56.0
+   "oxalate": 0.0
   }
  },
  {
@@ -2264,7 +2233,6 @@
    "vit_e": 1.53,
    "vit_c": 0.0,
    "epa_dha": 37.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.755,
@@ -2284,8 +2252,9 @@
    "cu": 0.013,
    "mn": 0.026,
    "zn": 1.05,
+   "se": 30.8,
    "i": 48.6,
-   "se": 30.8
+   "oxalate": 0.0
   }
  },
  {
@@ -2317,7 +2286,6 @@
    "vit_e": 1.56,
    "vit_c": 0.0,
    "epa_dha": 37.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.82,
@@ -2337,8 +2305,9 @@
    "cu": 0.072,
    "mn": 0.028,
    "zn": 1.29,
+   "se": 30.7,
    "i": 57.4,
-   "se": 30.7
+   "oxalate": 0.0
   }
  },
  {
@@ -2370,7 +2339,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -2386,12 +2354,7 @@
    "trp": 0.0,
    "val": 0.0,
    "la": 0.0,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -2423,28 +2386,9 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -2476,28 +2420,9 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -2529,28 +2454,9 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -2582,28 +2488,9 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -2635,7 +2522,6 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 31200.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -2655,61 +2541,8 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
-   "i": null,
-   "se": 0.0
-  }
- },
- {
-  "name": "Flax Farm linseed oil",
-  "category": "food",
-  "note": "Flax Farm unrefined linseed oil (flaxfarm.co.uk), label per 100 ml: 835 kcal, fat 92.7 g (saturates 9.2, mono 13.9, poly 69.6 g), omega-3 58.2 g (the label prints 8.7 g per 100 ml and 58.2 g per 15 ml - the columns are swapped), salt 0. Converted to per 100 g at 0.93 g/ml; linoleic acid = polyunsaturates - omega-3. The omega-3 is ALA, which dogs convert poorly to EPA/DHA, so EPA+DHA = 0 - it does not replace fish or algal oil. Vitamins/minerals not on the label: taken from the generic linseed oil entry (USDA/AFCD). Keep refrigerated; do not cook or bake.",
-  "per100g": {
-   "kcal": 897.8,
-   "water": 0.0,
-   "protein": 0.0,
-   "fat": 99.7,
-   "carb": 0.0,
-   "fibre": 0.0,
-   "ca": 0.0,
-   "p": 0.0,
-   "na": 0.0,
-   "k": 0.0,
-   "mg": 0.0,
-   "vit_a": 0.0,
-   "b1": 0.0,
-   "b2": 0.0,
-   "b3": 0.0,
-   "b6": 0.0,
-   "b12": 0.0,
-   "folate": 0.0,
-   "b5": 0.0,
-   "choline": 0.0,
-   "vit_d": 0.0,
-   "vit_e": 0.7,
-   "vit_c": 0.0,
-   "epa_dha": 0.0,
-   "oxalate": 0.0,
-   "base_meq": 0.0,
-   "p_bind": 0.0,
-   "arg": 0.0,
-   "his": 0.0,
-   "ile": 0.0,
-   "leu": 0.0,
-   "lys": 0.0,
-   "met": 0.0,
-   "met_cys": 0.0,
-   "phe": 0.0,
-   "phe_tyr": 0.0,
-   "thr": 0.0,
-   "trp": 0.0,
-   "val": 0.0,
-   "la": 12.3,
-   "fe": 0.0,
-   "cu": 0.0,
-   "mn": 0.0,
-   "zn": 0.07,
-   "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2741,7 +2574,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -2762,7 +2594,8 @@
    "mn": 0.65,
    "zn": 0.52,
    "i": 14.0,
-   "se": 2.7
+   "se": 2.7,
+   "oxalate": null
   },
   "role": "starch"
  },
@@ -2795,7 +2628,6 @@
    "vit_e": 3.43,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -2816,7 +2648,8 @@
    "mn": 0.0,
    "zn": 0.01,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -2848,7 +2681,6 @@
    "vit_e": 0.69,
    "vit_c": 9.7,
    "epa_dha": 0.0,
-   "oxalate": 24.2,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.076,
@@ -2868,8 +2700,9 @@
    "cu": 0.057,
    "mn": 0.285,
    "zn": 0.25,
+   "se": 0.2,
    "i": 1.05,
-   "se": 0.2
+   "oxalate": 24.2
   }
  },
  {
@@ -2901,7 +2734,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 55.8,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.494,
@@ -2922,7 +2754,8 @@
    "mn": 0.56,
    "zn": 0.9,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": 55.8
   },
   "role": "protein"
  },
@@ -2955,7 +2788,6 @@
    "vit_e": 3.88,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -2976,7 +2808,8 @@
    "mn": 0.0911,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -3008,28 +2841,9 @@
    "vit_e": 80.0,
    "vit_c": 50.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": 0.0
   }
  },
  {
@@ -3061,28 +2875,9 @@
    "vit_e": 2.0,
    "vit_c": null,
    "epa_dha": null,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": null,
-   "his": null,
-   "ile": null,
-   "leu": null,
-   "lys": null,
-   "met": null,
-   "met_cys": null,
-   "phe": null,
-   "phe_tyr": null,
-   "thr": null,
-   "trp": null,
-   "val": null,
-   "la": null,
-   "fe": null,
-   "cu": null,
-   "mn": null,
-   "zn": null,
-   "i": null,
-   "se": null
+   "oxalate": null
   },
   "assume_aafco": true
  },
@@ -3115,7 +2910,6 @@
    "vit_e": 5.07,
    "vit_c": 32.0,
    "epa_dha": 0.0,
-   "oxalate": 4.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.096,
@@ -3136,7 +2930,8 @@
    "mn": 0.07,
    "zn": 0.3,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
@@ -3168,7 +2963,6 @@
    "vit_e": 0.16,
    "vit_c": 1.5,
    "epa_dha": 0.0,
-   "oxalate": 8.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.697,
@@ -3188,8 +2982,9 @@
    "cu": 0.251,
    "mn": 0.494,
    "zn": 1.27,
+   "se": 2.8,
    "i": 0.0,
-   "se": 2.8
+   "oxalate": 8.3
   }
  },
  {
@@ -3221,7 +3016,6 @@
    "vit_e": 0.149,
    "vit_c": 9.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.033,
@@ -3242,7 +3036,8 @@
    "mn": 0.235,
    "zn": 0.28,
    "i": 2.1,
-   "se": 0.5
+   "se": 0.5,
+   "oxalate": null
   }
  },
  {
@@ -3274,7 +3069,6 @@
    "vit_e": 0.7,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -3294,8 +3088,9 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.07,
+   "se": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "oxalate": 0.0
   }
  },
  {
@@ -3327,7 +3122,6 @@
    "vit_e": 0.894,
    "vit_c": 18.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.08,
@@ -3348,7 +3142,8 @@
    "mn": 0.8,
    "zn": 0.3,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   }
  },
  {
@@ -3380,7 +3175,6 @@
    "vit_e": 0.298,
    "vit_c": 39.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.1,
@@ -3401,7 +3195,8 @@
    "mn": 0.247,
    "zn": 0.47,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
@@ -3433,7 +3228,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 36.8,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.102,
@@ -3454,7 +3248,8 @@
    "mn": null,
    "zn": 0.89,
    "i": 0.6,
-   "se": 4.3
+   "se": 4.3,
+   "oxalate": 36.8
   }
  },
  {
@@ -3486,7 +3281,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -3507,7 +3301,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
@@ -3539,7 +3334,6 @@
    "vit_e": 0.149,
    "vit_c": 2.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.11,
@@ -3560,7 +3354,8 @@
    "mn": 0.06,
    "zn": 0.2,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   }
  },
  {
@@ -3592,28 +3387,28 @@
    "vit_e": 0.015,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 1.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": 0.123,
-   "his": 0.067,
+   "trp": 0.056,
+   "thr": 0.113,
    "ile": 0.099,
    "leu": 0.153,
    "lys": 0.252,
    "met": 0.048,
-   "met_cys": 0.054,
    "phe": 0.097,
-   "phe_tyr": 0.151,
-   "thr": 0.113,
-   "trp": 0.056,
    "val": 0.115,
+   "arg": 0.123,
+   "his": 0.067,
    "la": 0.04,
    "fe": 0.4,
+   "zn": 1.1,
    "cu": 0.5,
    "mn": 0.142,
-   "zn": 1.1,
+   "se": 26.0,
+   "met_cys": 0.054,
+   "phe_tyr": 0.151,
    "i": 0.0,
-   "se": 26.0
+   "oxalate": 1.3
   }
  },
  {
@@ -3645,28 +3440,28 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 1.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": 0.182,
-   "his": 0.07,
+   "trp": 0.042,
+   "thr": 0.14,
    "ile": 0.112,
    "leu": 0.168,
    "lys": 0.126,
    "met": 0.042,
-   "met_cys": 0.07,
    "phe": 0.112,
-   "phe_tyr": 0.196,
-   "thr": 0.14,
-   "trp": 0.042,
    "val": 0.197,
+   "arg": 0.182,
+   "his": 0.07,
    "la": 0.123,
    "fe": 1.33,
+   "zn": 0.77,
    "cu": 0.244,
    "mn": 0.113,
-   "zn": 0.77,
+   "se": 2.6,
+   "met_cys": 0.07,
+   "phe_tyr": 0.196,
    "i": 0.0,
-   "se": 2.6
+   "oxalate": 1.3
   }
  },
  {
@@ -3698,28 +3493,28 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 1.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": 0.12,
-   "his": 0.065,
+   "trp": 0.045,
+   "thr": 0.125,
    "ile": 0.09,
    "leu": 0.15,
    "lys": 0.11,
    "met": 0.035,
-   "met_cys": 0.055,
    "phe": 0.1,
-   "phe_tyr": 0.17,
-   "thr": 0.125,
-   "trp": 0.045,
    "val": 0.41,
+   "arg": 0.12,
+   "his": 0.065,
    "la": 0.287,
    "fe": 0.4,
+   "zn": 0.65,
    "cu": 0.389,
    "mn": 0.067,
-   "zn": 0.65,
+   "se": 21.9,
+   "met_cys": 0.055,
+   "phe_tyr": 0.17,
    "i": 0.0,
-   "se": 21.9
+   "oxalate": 1.3
   }
  },
  {
@@ -3751,28 +3546,28 @@
    "vit_e": 0.0,
    "vit_c": 0.3,
    "epa_dha": 0.0,
-   "oxalate": 1.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": 0.089,
-   "his": 0.022,
+   "trp": 0.004,
+   "thr": 0.068,
    "ile": 0.055,
    "leu": 0.093,
    "lys": 0.047,
    "met": 0.025,
-   "met_cys": 0.052,
    "phe": 0.067,
-   "phe_tyr": 0.111,
-   "thr": 0.068,
-   "trp": 0.004,
    "val": 0.067,
+   "arg": 0.089,
+   "his": 0.022,
    "la": 0.031,
    "fe": 0.44,
+   "zn": 1.33,
    "cu": 0.896,
    "mn": 0.204,
-   "zn": 1.33,
+   "se": 24.8,
+   "met_cys": 0.052,
+   "phe_tyr": 0.111,
    "i": null,
-   "se": 24.8
+   "oxalate": 1.3
   }
  },
  {
@@ -3804,28 +3599,28 @@
    "vit_e": 0.015,
    "vit_c": 4.0,
    "epa_dha": 0.0,
-   "oxalate": 1.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
-   "arg": 0.055,
-   "his": 0.04,
+   "trp": 0.024,
+   "thr": 0.075,
    "ile": 0.053,
    "leu": 0.084,
    "lys": 0.075,
    "met": 0.022,
-   "met_cys": 0.031,
    "phe": 0.06,
-   "phe_tyr": 0.091,
-   "thr": 0.075,
-   "trp": 0.024,
    "val": 0.163,
+   "arg": 0.055,
+   "his": 0.04,
    "la": 0.179,
    "fe": 1.74,
+   "zn": 0.87,
    "cu": 0.504,
    "mn": 0.115,
-   "zn": 0.87,
+   "se": 11.9,
+   "met_cys": 0.031,
+   "phe_tyr": 0.091,
    "i": 0.0,
-   "se": 11.9
+   "oxalate": 1.3
   }
  },
  {
@@ -3857,7 +3652,6 @@
    "vit_e": 0.745,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.95,
@@ -3878,7 +3672,8 @@
    "mn": 1.39,
    "zn": 1.9,
    "i": 0.0,
-   "se": 16.0
+   "se": 16.0,
+   "oxalate": null
   }
  },
  {
@@ -3910,7 +3705,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 2.4,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.17,
@@ -3931,7 +3725,8 @@
    "mn": 0.004,
    "zn": 0.57,
    "i": 24.0,
-   "se": 2.4
+   "se": 2.4,
+   "oxalate": 2.4
   },
   "role": "protein"
  },
@@ -3964,7 +3759,6 @@
    "vit_e": 0.63,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 32.7,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.85,
@@ -3984,8 +3778,9 @@
    "cu": 0.391,
    "mn": 3.63,
    "zn": 3.64,
+   "se": 28.9,
    "i": 72.7,
-   "se": 28.9
+   "oxalate": 32.7
   }
  },
  {
@@ -4017,7 +3812,6 @@
    "vit_e": 0.596,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.41,
@@ -4038,7 +3832,8 @@
    "mn": 0.4,
    "zn": 0.6,
    "i": 1.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": null
   },
   "role": "protein"
  },
@@ -4071,7 +3866,6 @@
    "vit_e": 0.447,
    "vit_c": 27.0,
    "epa_dha": 0.0,
-   "oxalate": 100.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.189,
@@ -4092,7 +3886,8 @@
    "mn": 0.521,
    "zn": 0.61,
    "i": 0.6,
-   "se": 0.7
+   "se": 0.7,
+   "oxalate": 100.0
   }
  },
  {
@@ -4124,7 +3919,6 @@
    "vit_e": 21.4,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -4144,8 +3938,9 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
+   "se": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "oxalate": 0.0
   }
  },
  {
@@ -4177,7 +3972,6 @@
    "vit_e": 0.149,
    "vit_c": 16.0,
    "epa_dha": 0.0,
-   "oxalate": 3.2,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.202,
@@ -4198,7 +3992,8 @@
    "mn": 0.276,
    "zn": 0.35,
    "i": 3.2,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 3.2
   }
  },
  {
@@ -4230,7 +4025,6 @@
    "vit_e": 0.149,
    "vit_c": 7.0,
    "epa_dha": 0.0,
-   "oxalate": 19.2,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.273,
@@ -4251,7 +4045,8 @@
    "mn": 0.161,
    "zn": 0.31,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 19.2
   }
  },
  {
@@ -4283,7 +4078,6 @@
    "vit_e": 0.09,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 18.8,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.211,
@@ -4303,8 +4097,9 @@
    "cu": 0.1,
    "mn": 0.322,
    "zn": 0.51,
+   "se": 26.4,
    "i": 4.4,
-   "se": 26.4
+   "oxalate": 18.8
   }
  },
  {
@@ -4336,7 +4131,6 @@
    "vit_e": 11.5,
    "vit_c": 6.0,
    "epa_dha": 0.0,
-   "oxalate": 124.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 3.18,
@@ -4357,7 +4151,8 @@
    "mn": 1.82,
    "zn": 2.84,
    "i": 17.5,
-   "se": 13.8
+   "se": 13.8,
+   "oxalate": 124.1
   }
  },
  {
@@ -4389,7 +4184,6 @@
    "vit_e": 0.447,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 10.7,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.205,
@@ -4410,7 +4204,8 @@
    "mn": 1.03,
    "zn": 0.51,
    "i": 1.4,
-   "se": 7.1
+   "se": 7.1,
+   "oxalate": 10.7
   }
  },
  {
@@ -4442,7 +4237,6 @@
    "vit_e": 0.21,
    "vit_c": 14.2,
    "epa_dha": 0.0,
-   "oxalate": 2.5,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.423,
@@ -4462,8 +4256,9 @@
    "cu": 0.173,
    "mn": 0.525,
    "zn": 1.19,
+   "se": 1.9,
    "i": 0.0,
-   "se": 1.9
+   "oxalate": 2.5
   }
  },
  {
@@ -4495,7 +4290,6 @@
    "vit_e": 3.58,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -4516,7 +4310,8 @@
    "mn": 0.01,
    "zn": 0.0,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 0.0
   }
  },
  {
@@ -4548,7 +4343,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 2.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0911,
@@ -4569,7 +4363,8 @@
    "mn": 0.27,
    "zn": 0.19,
    "i": 1.6,
-   "se": 2.3
+   "se": 2.3,
+   "oxalate": 2.0
   }
  },
  {
@@ -4601,7 +4396,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -4622,7 +4416,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4654,7 +4449,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -4675,7 +4469,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -4707,7 +4502,6 @@
    "vit_e": null,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -4728,7 +4522,8 @@
    "mn": null,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   },
   "role": "starch"
  },
@@ -4761,7 +4556,6 @@
    "vit_e": 0.01,
    "vit_c": 7.4,
    "epa_dha": 0.0,
-   "oxalate": 23.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.079,
@@ -4781,8 +4575,9 @@
    "cu": 0.167,
    "mn": 0.14,
    "zn": 0.27,
+   "se": 0.3,
    "i": 1.58,
-   "se": 0.3
+   "oxalate": 23.1
   }
  },
  {
@@ -4814,7 +4609,6 @@
    "vit_e": 1.19,
    "vit_c": 4.7,
    "epa_dha": 0.0,
-   "oxalate": 5.8,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.039,
@@ -4834,8 +4628,9 @@
    "cu": 0.091,
    "mn": 0.089,
    "zn": 0.23,
+   "se": 0.2,
    "i": 0.0,
-   "se": 0.2
+   "oxalate": 5.8
   }
  },
  {
@@ -4867,7 +4662,6 @@
    "vit_e": 0.894,
    "vit_c": 0.0,
    "epa_dha": 12.5,
-   "oxalate": 61.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.296,
@@ -4888,7 +4682,8 @@
    "mn": 0.686,
    "zn": 0.91,
    "i": 0.7,
-   "se": 1.3
+   "se": 1.3,
+   "oxalate": 61.1
   }
  },
  {
@@ -4920,7 +4715,6 @@
    "vit_e": 26.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -4940,8 +4734,9 @@
    "cu": 0.0,
    "mn": 0.0,
    "zn": 0.0,
+   "se": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "oxalate": 0.0
   }
  },
  {
@@ -4973,7 +4768,6 @@
    "vit_e": 6.26,
    "vit_c": 240.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0396,
@@ -4994,7 +4788,8 @@
    "mn": 0.067,
    "zn": 0.13,
    "i": 0.0,
-   "se": 0.8
+   "se": 0.8,
+   "oxalate": null
   }
  },
  {
@@ -5026,7 +4821,6 @@
    "vit_e": 48.1,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5047,7 +4841,8 @@
    "mn": 0.0,
    "zn": 0.01,
    "i": 0.0,
-   "se": 0.3
+   "se": 0.3,
+   "oxalate": 0.0
   }
  },
  {
@@ -5079,7 +4874,6 @@
    "vit_e": 0.894,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -5100,7 +4894,8 @@
    "mn": 3.15,
    "zn": 1.45,
    "i": 10.2,
-   "se": 14.0
+   "se": 14.0,
+   "oxalate": null
   },
   "role": "starch"
  },
@@ -5133,7 +4928,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.186,
@@ -5154,7 +4948,8 @@
    "mn": 0.18,
    "zn": 0.37,
    "i": 3.7,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": null
   }
  },
  {
@@ -5186,7 +4981,6 @@
    "vit_e": 0.04,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 5.6,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.196,
@@ -5206,8 +5000,9 @@
    "cu": 0.1,
    "mn": 0.905,
    "zn": 0.63,
+   "se": 9.8,
    "i": 7.06,
-   "se": 9.8
+   "oxalate": 5.6
   }
  },
  {
@@ -5239,7 +5034,6 @@
    "vit_e": 0.06,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 1.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.224,
@@ -5259,8 +5053,9 @@
    "cu": 0.069,
    "mn": 0.472,
    "zn": 0.49,
+   "se": 7.5,
    "i": 2.15,
-   "se": 7.5
+   "oxalate": 1.1
   }
  },
  {
@@ -5292,7 +5087,6 @@
    "vit_e": 0.16,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 3.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.594,
@@ -5312,8 +5106,9 @@
    "cu": 0.22,
    "mn": 1.088,
    "zn": 1.09,
+   "se": 15.1,
    "i": 0.0,
-   "se": 15.1
+   "oxalate": 3.1
   }
  },
  {
@@ -5345,7 +5140,6 @@
    "vit_e": 0.894,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -5366,7 +5160,8 @@
    "mn": 0.006,
    "zn": 0.73,
    "i": 19.0,
-   "se": 5.9
+   "se": 5.9,
+   "oxalate": 0.0
   },
   "role": "protein"
  },
@@ -5399,7 +5194,6 @@
    "vit_e": 40.2,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5420,7 +5214,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 0.0
   }
  },
  {
@@ -5452,7 +5247,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5473,7 +5267,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -5505,7 +5300,6 @@
    "vit_e": 0.596,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5526,7 +5320,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -5558,7 +5353,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5579,7 +5373,8 @@
    "mn": 0.03,
    "zn": 0.1,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": null
   },
   "role": "other"
  },
@@ -5612,7 +5407,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 1190.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5633,7 +5427,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -5665,7 +5460,6 @@
    "vit_e": 0.149,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.14,
@@ -5686,7 +5480,8 @@
    "mn": 0.12,
    "zn": 0.2,
    "i": 0.0,
-   "se": 6.0
+   "se": 6.0,
+   "oxalate": null
   }
  },
  {
@@ -5718,7 +5513,6 @@
    "vit_e": 0.149,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 3.7,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.31,
@@ -5739,7 +5533,8 @@
    "mn": 0.23,
    "zn": 0.3,
    "i": 0.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 3.7
   },
   "role": "protein"
  },
@@ -5772,7 +5567,6 @@
    "vit_e": 1.49,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 45.3,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 1.16,
@@ -5793,7 +5587,8 @@
    "mn": 1.1,
    "zn": 1.6,
    "i": 0.0,
-   "se": 9.0
+   "se": 9.0,
+   "oxalate": 45.3
   }
  },
  {
@@ -5825,7 +5620,6 @@
    "vit_e": 14.9,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -5846,7 +5640,8 @@
    "mn": 0.0,
    "zn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 0.0
   }
  },
  {
@@ -5878,7 +5673,6 @@
    "vit_e": 3.1,
    "vit_c": 9.8,
    "epa_dha": 0.0,
-   "oxalate": 566.7,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.168,
@@ -5898,8 +5692,9 @@
    "cu": 0.174,
    "mn": 0.935,
    "zn": 0.76,
+   "se": 1.5,
    "i": 0.0,
-   "se": 1.5
+   "oxalate": 566.7
   }
  },
  {
@@ -5931,7 +5726,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 4.1,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.538,
@@ -5952,7 +5746,8 @@
    "mn": 0.24,
    "zn": 0.6,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": 4.1
   }
  },
  {
@@ -5984,7 +5779,6 @@
    "vit_e": 0.894,
    "vit_c": 23.0,
    "epa_dha": 0.0,
-   "oxalate": 4.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -6005,7 +5799,8 @@
    "mn": null,
    "zn": 0.23,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.0
   }
  },
  {
@@ -6037,7 +5832,6 @@
    "vit_e": 61.2,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -6055,10 +5849,11 @@
    "la": 65.7,
    "fe": 0.0,
    "cu": 0.0,
-   "mn": 0.0,
    "zn": 0.0,
+   "se": 0.0,
+   "mn": 0.0,
    "i": 0.0,
-   "se": 0.0
+   "oxalate": 0.0
   }
  },
  {
@@ -6090,7 +5885,6 @@
    "vit_e": 0.0,
    "vit_c": 19.0,
    "epa_dha": 0.0,
-   "oxalate": 4.7,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.064,
@@ -6111,7 +5905,8 @@
    "mn": null,
    "zn": 0.2,
    "i": 0.0,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 4.7
   }
  },
  {
@@ -6143,7 +5938,6 @@
    "vit_e": 1.4,
    "vit_c": 12.8,
    "epa_dha": 0.0,
-   "oxalate": 126.4,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.048,
@@ -6163,8 +5957,9 @@
    "cu": 0.094,
    "mn": 0.266,
    "zn": 0.2,
+   "se": 0.2,
    "i": 0.0,
-   "se": 0.2
+   "oxalate": 126.4
   }
  },
  {
@@ -6196,7 +5991,6 @@
    "vit_e": 1.04,
    "vit_c": 8.0,
    "epa_dha": 0.0,
-   "oxalate": 334.9,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -6217,7 +6011,8 @@
    "mn": 1.21,
    "zn": 0.64,
    "i": 3.4,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 334.9
   }
  },
  {
@@ -6302,7 +6097,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 5.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.0,
@@ -6323,7 +6117,8 @@
    "mn": 0.277,
    "zn": 0.02,
    "i": 2.6,
-   "se": 0.0
+   "se": 0.0,
+   "oxalate": 5.0
   },
   "role": "starch"
  },
@@ -6356,7 +6151,6 @@
    "vit_e": 0.0,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 0.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": null,
@@ -6377,7 +6171,8 @@
    "mn": null,
    "zn": null,
    "i": null,
-   "se": null
+   "se": null,
+   "oxalate": 0.0
   },
   "max_dose": "0.176/kg"
  },
@@ -6410,7 +6205,6 @@
    "vit_e": 0.01,
    "vit_c": 0.2,
    "epa_dha": 0.0,
-   "oxalate": 8.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 1.05,
@@ -6430,8 +6224,9 @@
    "cu": 0.378,
    "mn": 1.181,
    "zn": 1.57,
+   "se": 17.4,
    "i": 2.63,
-   "se": 17.4
+   "oxalate": 8.0
   }
  },
  {
@@ -6463,7 +6258,6 @@
    "vit_e": 0.149,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": 8.0,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.383,
@@ -6478,13 +6272,14 @@
    "thr": 0.215,
    "trp": 0.068,
    "val": 0.295,
-   "la": 1.6,
    "fe": 0.82,
    "cu": 0.207,
-   "mn": 0.34,
    "zn": 0.52,
+   "la": 1.6,
+   "mn": 0.34,
    "i": 1.0,
-   "se": 1.0
+   "se": 1.0,
+   "oxalate": 8.0
   }
  },
  {
@@ -6516,7 +6311,6 @@
    "vit_e": 0.0,
    "vit_c": 16.0,
    "epa_dha": 0.0,
-   "oxalate": 2.6,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.05,
@@ -6537,7 +6331,8 @@
    "mn": null,
    "zn": 0.2,
    "i": 0.4,
-   "se": 0.2
+   "se": 0.2,
+   "oxalate": 2.6
   }
  },
  {
@@ -6569,7 +6364,6 @@
    "vit_e": 0.149,
    "vit_c": 0.0,
    "epa_dha": 0.0,
-   "oxalate": null,
    "base_meq": 0.0,
    "p_bind": 0.0,
    "arg": 0.093,
@@ -6590,7 +6384,272 @@
    "mn": 0.12,
    "zn": 0.1,
    "i": 0.0,
-   "se": 2.0
+   "se": 2.0,
+   "oxalate": null
+  }
+ },
+ {
+  "name": "Vital wheat gluten (seitan base), dry",
+  "category": "food",
+  "note": "Very high protein, low phosphorus. From AFCD R3 F004220 (Gluten, from wheat (vital wheat gluten)). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 01071 (こむぎ ［その他］ 小麦たんぱく 粉末状), scaled.",
+  "per100g": {
+   "kcal": 360.2,
+   "water": 8.2,
+   "protein": 75.2,
+   "fat": 0.0,
+   "carb": 13.8,
+   "fibre": 0.6,
+   "ca": 142.0,
+   "p": 260.0,
+   "na": 29.0,
+   "k": 100.0,
+   "mg": 25.0,
+   "vit_a": 0.0,
+   "b1": 0.0,
+   "b2": 0.0,
+   "b3": 0.0,
+   "b6": 0.0,
+   "b12": 0.0,
+   "folate": 0.0,
+   "b5": 0.599,
+   "choline": null,
+   "vit_d": 0.0,
+   "vit_e": 0.0,
+   "vit_c": 0.0,
+   "epa_dha": 0.0,
+   "base_meq": 0.0,
+   "p_bind": 0.0,
+   "arg": 2.92,
+   "his": 1.88,
+   "ile": 3.24,
+   "leu": 5.64,
+   "lys": 1.46,
+   "met": 1.36,
+   "met_cys": 3.03,
+   "phe": 4.28,
+   "phe_tyr": 7.0,
+   "thr": 2.3,
+   "trp": 0.795,
+   "val": 3.55,
+   "la": 0.0,
+   "fe": 5.2,
+   "cu": 0.736,
+   "mn": 2.62,
+   "zn": 0.85,
+   "i": 3.0,
+   "se": 39.7,
+   "oxalate": null
+  }
+ },
+ {
+  "name": "Walnut oil",
+  "category": "food",
+  "note": "Approx. USDA. Linoleic acid + some ALA; EPA+DHA = 0.",
+  "per100g": {
+   "kcal": 884.0,
+   "water": 0.0,
+   "protein": 0.0,
+   "fat": 100.0,
+   "carb": 0.0,
+   "fibre": 0.0,
+   "ca": 0.0,
+   "p": 0.0,
+   "na": 0.0,
+   "k": 0.0,
+   "mg": 0.0,
+   "vit_a": 0.0,
+   "b1": 0.0,
+   "b2": 0.0,
+   "b3": 0.0,
+   "b6": 0.0,
+   "b12": 0.0,
+   "folate": 0.0,
+   "b5": 0.0,
+   "choline": 0.0,
+   "vit_d": 0.0,
+   "vit_e": 0.57,
+   "vit_c": 0.0,
+   "epa_dha": 0.0,
+   "base_meq": 0.0,
+   "p_bind": 0.0,
+   "arg": 0.0,
+   "his": 0.0,
+   "ile": 0.0,
+   "leu": 0.0,
+   "lys": 0.0,
+   "met": 0.0,
+   "met_cys": 0.0,
+   "phe": 0.0,
+   "phe_tyr": 0.0,
+   "thr": 0.0,
+   "trp": 0.0,
+   "val": 0.0,
+   "la": 52.9,
+   "fe": 0.0,
+   "cu": 0.0,
+   "zn": 0.0,
+   "se": 0.0,
+   "oxalate": 0.0
+  }
+ },
+ {
+  "name": "Wheat flour, white, plain",
+  "category": "food",
+  "note": "Baking flour. From AFCD R3 F004007 (Flour, wheat, white, plain).",
+  "per100g": {
+   "kcal": 353.5,
+   "water": 12.2,
+   "protein": 10.0,
+   "fat": 1.3,
+   "carb": 75.4,
+   "fibre": 2.2,
+   "ca": 21.0,
+   "p": 130.0,
+   "na": 3.0,
+   "k": 170.0,
+   "mg": 36.0,
+   "vit_a": 0.0,
+   "b1": 0.23,
+   "b2": 0.0,
+   "b3": 1.0,
+   "b6": 0.06,
+   "b12": 0.0,
+   "folate": 11.0,
+   "b5": 0.23,
+   "choline": null,
+   "vit_d": 0.0,
+   "vit_e": 0.149,
+   "vit_c": 0.0,
+   "epa_dha": 0.0,
+   "base_meq": 0.0,
+   "p_bind": 0.0,
+   "arg": 0.401,
+   "his": 0.23,
+   "ile": 0.44,
+   "leu": 0.794,
+   "lys": 0.248,
+   "met": 0.172,
+   "met_cys": 0.431,
+   "phe": 0.574,
+   "phe_tyr": 0.947,
+   "thr": 0.315,
+   "trp": 0.13,
+   "val": 0.479,
+   "la": 0.52,
+   "fe": 1.2,
+   "cu": 0.17,
+   "mn": 1.3,
+   "zn": 0.84,
+   "i": 7.5,
+   "se": 12.0,
+   "oxalate": null
+  },
+  "role": "starch"
+ },
+ {
+  "name": "Winter melon, boiled",
+  "category": "food",
+  "note": "From Standard Tables of Food Composition in Japan 2023 (MEXT), 06174 とうがん 果実 ゆで.",
+  "per100g": {
+   "kcal": 15.0,
+   "water": 95.3,
+   "protein": 0.6,
+   "fat": 0.1,
+   "carb": 3.7,
+   "fibre": 1.5,
+   "ca": 22.0,
+   "p": 19.0,
+   "na": 1.0,
+   "k": 200.0,
+   "mg": 7.0,
+   "vit_a": 0.0,
+   "b1": 0.01,
+   "b2": 0.01,
+   "b3": 0.4,
+   "b6": 0.03,
+   "b12": 0.0,
+   "folate": 25.0,
+   "b5": 0.2,
+   "choline": null,
+   "vit_d": 0.0,
+   "vit_e": 0.149,
+   "vit_c": 27.0,
+   "epa_dha": 0.0,
+   "base_meq": 0.0,
+   "p_bind": 0.0,
+   "arg": 0.025,
+   "his": 0.0094,
+   "ile": 0.017,
+   "leu": 0.028,
+   "lys": 0.023,
+   "met": 0.0068,
+   "met_cys": 0.012,
+   "phe": 0.018,
+   "phe_tyr": 0.032,
+   "thr": 0.015,
+   "trp": 0.0065,
+   "val": 0.021,
+   "la": 0.044,
+   "fe": 0.3,
+   "cu": 0.01,
+   "mn": 0.02,
+   "zn": 0.1,
+   "i": null,
+   "se": null,
+   "oxalate": null
+  }
+ },
+ {
+  "name": "Flax Farm linseed oil",
+  "category": "food",
+  "note": "Flax Farm unrefined linseed oil (flaxfarm.co.uk), label per 100 ml: 835 kcal, fat 92.7 g (saturates 9.2, mono 13.9, poly 69.6 g), omega-3 58.2 g (the label prints 8.7 g per 100 ml and 58.2 g per 15 ml - the columns are swapped), salt 0. Converted to per 100 g at 0.93 g/ml; linoleic acid = polyunsaturates - omega-3. The omega-3 is ALA, which dogs convert poorly to EPA/DHA, so EPA+DHA = 0 - it does not replace fish or algal oil. Vitamins/minerals not on the label: taken from the generic linseed oil entry (USDA/AFCD). Keep refrigerated; do not cook or bake.",
+  "per100g": {
+   "kcal": 897.8,
+   "water": 0.0,
+   "protein": 0.0,
+   "fat": 99.7,
+   "carb": 0.0,
+   "fibre": 0.0,
+   "ca": 0.0,
+   "p": 0.0,
+   "na": 0.0,
+   "k": 0.0,
+   "mg": 0.0,
+   "vit_a": 0.0,
+   "b1": 0.0,
+   "b2": 0.0,
+   "b3": 0.0,
+   "b6": 0.0,
+   "b12": 0.0,
+   "folate": 0.0,
+   "b5": 0.0,
+   "choline": 0.0,
+   "vit_d": 0.0,
+   "vit_e": 0.7,
+   "vit_c": 0.0,
+   "epa_dha": 0.0,
+   "oxalate": 0.0,
+   "base_meq": 0.0,
+   "p_bind": 0.0,
+   "arg": 0.0,
+   "his": 0.0,
+   "ile": 0.0,
+   "leu": 0.0,
+   "lys": 0.0,
+   "met": 0.0,
+   "met_cys": 0.0,
+   "phe": 0.0,
+   "phe_tyr": 0.0,
+   "thr": 0.0,
+   "trp": 0.0,
+   "val": 0.0,
+   "la": 12.3,
+   "fe": 0.0,
+   "cu": 0.0,
+   "mn": 0.0,
+   "zn": 0.07,
+   "i": 0.0,
+   "se": 0.0
   }
  },
  {
@@ -6754,218 +6813,5 @@
    "se": 8.0
   },
   "assume_aafco": true
- },
- {
-  "name": "Vital wheat gluten (seitan base), dry",
-  "category": "food",
-  "note": "Very high protein, low phosphorus. From AFCD R3 F004220 (Gluten, from wheat (vital wheat gluten)). arg, his, ile, leu, lys, met, met_cys, phe, phe_tyr, thr, val, b5, cu, mn from Japan 2023 tables 01071 (こむぎ ［その他］ 小麦たんぱく 粉末状), scaled.",
-  "per100g": {
-   "kcal": 360.2,
-   "water": 8.2,
-   "protein": 75.2,
-   "fat": 0.0,
-   "carb": 13.8,
-   "fibre": 0.6,
-   "ca": 142.0,
-   "p": 260.0,
-   "na": 29.0,
-   "k": 100.0,
-   "mg": 25.0,
-   "vit_a": 0.0,
-   "b1": 0.0,
-   "b2": 0.0,
-   "b3": 0.0,
-   "b6": 0.0,
-   "b12": 0.0,
-   "folate": 0.0,
-   "b5": 0.599,
-   "choline": null,
-   "vit_d": 0.0,
-   "vit_e": 0.0,
-   "vit_c": 0.0,
-   "epa_dha": 0.0,
-   "oxalate": null,
-   "base_meq": 0.0,
-   "p_bind": 0.0,
-   "arg": 2.92,
-   "his": 1.88,
-   "ile": 3.24,
-   "leu": 5.64,
-   "lys": 1.46,
-   "met": 1.36,
-   "met_cys": 3.03,
-   "phe": 4.28,
-   "phe_tyr": 7.0,
-   "thr": 2.3,
-   "trp": 0.795,
-   "val": 3.55,
-   "la": 0.0,
-   "fe": 5.2,
-   "cu": 0.736,
-   "mn": 2.62,
-   "zn": 0.85,
-   "i": 3.0,
-   "se": 39.7
-  }
- },
- {
-  "name": "Walnut oil",
-  "category": "food",
-  "note": "Approx. USDA. Linoleic acid + some ALA; EPA+DHA = 0.",
-  "per100g": {
-   "kcal": 884.0,
-   "water": 0.0,
-   "protein": 0.0,
-   "fat": 100.0,
-   "carb": 0.0,
-   "fibre": 0.0,
-   "ca": 0.0,
-   "p": 0.0,
-   "na": 0.0,
-   "k": 0.0,
-   "mg": 0.0,
-   "vit_a": 0.0,
-   "b1": 0.0,
-   "b2": 0.0,
-   "b3": 0.0,
-   "b6": 0.0,
-   "b12": 0.0,
-   "folate": 0.0,
-   "b5": 0.0,
-   "choline": 0.0,
-   "vit_d": 0.0,
-   "vit_e": 0.57,
-   "vit_c": 0.0,
-   "epa_dha": 0.0,
-   "oxalate": 0.0,
-   "base_meq": 0.0,
-   "p_bind": 0.0,
-   "arg": 0.0,
-   "his": 0.0,
-   "ile": 0.0,
-   "leu": 0.0,
-   "lys": 0.0,
-   "met": 0.0,
-   "met_cys": 0.0,
-   "phe": 0.0,
-   "phe_tyr": 0.0,
-   "thr": 0.0,
-   "trp": 0.0,
-   "val": 0.0,
-   "la": 52.9,
-   "fe": 0.0,
-   "cu": 0.0,
-   "mn": null,
-   "zn": 0.0,
-   "i": null,
-   "se": 0.0
-  }
- },
- {
-  "name": "Wheat flour, white, plain",
-  "category": "food",
-  "note": "Baking flour. From AFCD R3 F004007 (Flour, wheat, white, plain).",
-  "per100g": {
-   "kcal": 353.5,
-   "water": 12.2,
-   "protein": 10.0,
-   "fat": 1.3,
-   "carb": 75.4,
-   "fibre": 2.2,
-   "ca": 21.0,
-   "p": 130.0,
-   "na": 3.0,
-   "k": 170.0,
-   "mg": 36.0,
-   "vit_a": 0.0,
-   "b1": 0.23,
-   "b2": 0.0,
-   "b3": 1.0,
-   "b6": 0.06,
-   "b12": 0.0,
-   "folate": 11.0,
-   "b5": 0.23,
-   "choline": null,
-   "vit_d": 0.0,
-   "vit_e": 0.149,
-   "vit_c": 0.0,
-   "epa_dha": 0.0,
-   "oxalate": null,
-   "base_meq": 0.0,
-   "p_bind": 0.0,
-   "arg": 0.401,
-   "his": 0.23,
-   "ile": 0.44,
-   "leu": 0.794,
-   "lys": 0.248,
-   "met": 0.172,
-   "met_cys": 0.431,
-   "phe": 0.574,
-   "phe_tyr": 0.947,
-   "thr": 0.315,
-   "trp": 0.13,
-   "val": 0.479,
-   "la": 0.52,
-   "fe": 1.2,
-   "cu": 0.17,
-   "mn": 1.3,
-   "zn": 0.84,
-   "i": 7.5,
-   "se": 12.0
-  },
-  "role": "starch"
- },
- {
-  "name": "Winter melon, boiled",
-  "category": "food",
-  "note": "From Standard Tables of Food Composition in Japan 2023 (MEXT), 06174 とうがん 果実 ゆで.",
-  "per100g": {
-   "kcal": 15.0,
-   "water": 95.3,
-   "protein": 0.6,
-   "fat": 0.1,
-   "carb": 3.7,
-   "fibre": 1.5,
-   "ca": 22.0,
-   "p": 19.0,
-   "na": 1.0,
-   "k": 200.0,
-   "mg": 7.0,
-   "vit_a": 0.0,
-   "b1": 0.01,
-   "b2": 0.01,
-   "b3": 0.4,
-   "b6": 0.03,
-   "b12": 0.0,
-   "folate": 25.0,
-   "b5": 0.2,
-   "choline": null,
-   "vit_d": 0.0,
-   "vit_e": 0.149,
-   "vit_c": 27.0,
-   "epa_dha": 0.0,
-   "oxalate": null,
-   "base_meq": 0.0,
-   "p_bind": 0.0,
-   "arg": 0.025,
-   "his": 0.0094,
-   "ile": 0.017,
-   "leu": 0.028,
-   "lys": 0.023,
-   "met": 0.0068,
-   "met_cys": 0.012,
-   "phe": 0.018,
-   "phe_tyr": 0.032,
-   "thr": 0.015,
-   "trp": 0.0065,
-   "val": 0.021,
-   "la": 0.044,
-   "fe": 0.3,
-   "cu": 0.01,
-   "mn": 0.02,
-   "zn": 0.1,
-   "i": null,
-   "se": null
-  }
  }
 ]
