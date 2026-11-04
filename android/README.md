@@ -58,9 +58,9 @@ build reports a missing Android SDK or Java.
 - [x] Save / open / delete recipes (kept on the phone)
 - [x] Ingredient library (Library tab): search, category filter, a food's
       values per 100 g, add to recipe, edit, new food, delete
-- [x] Improve tab: optimiser (lock foods; add / swap / remove; ranked
-      options with Apply) and recipe generator (fixed base, vegetables,
-      foods per recipe), progress bar and Cancel, Undo; foods left out
+- [x] Improve tab: recipe generator (fixed base, vegetables, foods per
+      recipe) and optimiser (lock foods; add / swap / remove; ranked
+      options with Apply), progress bar and Cancel, Undo; foods left out
       with 'Use in Improve' on a food's page in the Library
 - [x] Writable data folder on the phone: the built app keeps the library,
       settings and saved recipes in its private storage

@@ -1,7 +1,7 @@
 """
-Improve screen for the RenalFood phone app: the optimiser (better versions
-of the current recipe) and the recipe generator (new balanced recipes from
-the library), both through the shared engine. Long runs go to a background
+Improve screen for the RenalFood phone app: the recipe generator (new
+balanced recipes from the library) and the optimiser (better versions of
+the current recipe), both through the shared engine. Long runs go to a background
 thread with a progress bar and a Cancel button; nothing changes until a
 result is applied (and Undo restores the previous recipe).
 """
@@ -110,7 +110,7 @@ def summary(names, grams, db, ctx):
 
 # ---------------------------------------------------------------- screen
 class ImproveView:
-    """Optimise / Generate inside one Column. `get_settings()` returns
+    """Generate / Optimise inside one Column. `get_settings()` returns
     (bw, factor, stage, extended, need); `apply(recipe_rows, label)` puts a
     result in the Recipe screen; `undo()` restores the previous recipe."""
 
@@ -121,11 +121,11 @@ class ImproveView:
         self.cancel_flag = False
         self.running = False
         self.mode = ft.SegmentedButton(
-            selected=["opt"], allow_empty_selection=False,
-            segments=[ft.Segment(value="opt", label=ft.Text("Optimise"),
-                                 icon=ft.Icon(ft.Icons.TUNE)),
-                      ft.Segment(value="gen", label=ft.Text("Generate"),
-                                 icon=ft.Icon(ft.Icons.AUTO_AWESOME))],
+            selected=["gen"], allow_empty_selection=False,
+            segments=[ft.Segment(value="gen", label=ft.Text("Generate"),
+                                 icon=ft.Icon(ft.Icons.AUTO_AWESOME)),
+                      ft.Segment(value="opt", label=ft.Text("Optimise"),
+                                 icon=ft.Icon(ft.Icons.TUNE))],
             on_change=self._mode_changed)
         # optimiser settings
         self.o_add = ft.Checkbox(label="Add foods", value=True)
