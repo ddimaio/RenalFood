@@ -31,6 +31,7 @@ import flet as ft                      # noqa: E402
 import renal_diet_calc as rc           # noqa: E402
 from library import LibraryView        # noqa: E402
 from improve import ImproveView        # noqa: E402
+from settings import Dog, SettingsView  # noqa: E402
 
 KEY_NUTRIENTS = ["Energy", "Protein", "Fat", "Phosphorus", "Calcium",
                  "Sodium", "Potassium", "EPA + DHA"]
@@ -54,11 +55,13 @@ def need_kcal(bw, factor):
     return rc.mer(bw, factor)
 
 
-def analyse(recipe, db, bw, factor, stage, extended=False):
+def analyse(recipe, db, bw, factor, stage, extended=False, max_g=None,
+            meals=1):
     """Engine analysis of a recipe [[name, g], ...] for this dog."""
     need = need_kcal(bw, factor)
-    ctx = rc.build_score_context(None, stage, need, bw, extended)
-    return rc.analyse_recipe(recipe, db, need, stage, ctx)
+    ctx = rc.build_score_context(None, stage, need, bw, extended,
+                                 max_g or None)
+    return rc.analyse_recipe(recipe, db, need, stage, ctx, meals)
 
 
 def _row(r, tag):
@@ -134,12 +137,14 @@ def saved_recipes():
     return d if isinstance(d, dict) else {}
 
 
-def save_recipe(name, recipe, bw, factor, stage, extended):
+def save_recipe(name, recipe, dog_values):
+    """Store a recipe with the dog settings it was made for (same keys as
+    the desktop/Streamlit recipe files: bw, age, activity, factor, max_g,
+    meals, stage) plus 'extended'."""
     p = rc.load_prefs()
     d = p.get(SAVED_KEY, {})
     d = d if isinstance(d, dict) else {}
-    d[name] = {"items": [[n, g] for n, g in recipe], "bw": bw,
-               "factor": factor, "stage": stage, "extended": extended,
+    d[name] = {"items": [[n, g] for n, g in recipe], **dog_values,
                "saved": datetime.date.today().isoformat()}
     p[SAVED_KEY] = d
     rc.save_prefs(p)
@@ -205,16 +210,8 @@ def main(page: ft.Page):
     recipe = []
     state = {"name": ""}                       # name of the open recipe
 
-    bw = ft.TextField(label="Body weight (kg)", value="6", width=170,
-                      keyboard_type=ft.KeyboardType.NUMBER, dense=True)
-    factor = ft.TextField(label="MER factor", value="1.6", width=110,
-                          keyboard_type=ft.KeyboardType.NUMBER, dense=True)
-    stage = ft.Dropdown(label="IRIS stage", value="Stage 2", width=260,
-                        dense=True,
-                        options=[ft.DropdownOption(key=s, text=s)
-                                 for s in rc.STAGES])
-    ext = ft.Switch(label="Extended nutrients", value=False)
-    need_txt = ft.Text()
+    dog = Dog()                                # Settings tab values
+    need_txt = ft.Text(size=12, expand=True)
 
     food = ft.Dropdown(label="Food", enable_filter=True, editable=True,
                        expand=True, menu_height=400, dense=True)
@@ -240,13 +237,14 @@ def main(page: ft.Page):
         page.show_dialog(ft.SnackBar(ft.Text(text)))
 
     def refresh(e=None):
-        b, f = num(bw, 6.0), num(factor, 1.6)
-        need_txt.value = f"Daily energy need: {need_kcal(b, f):.0f} kcal"
+        need_txt.value = dog.summary()
         title.value = (f"Recipe: {state['name']}" if state["name"]
                        else "Recipe")
+        per_meal = dog.meals > 1
         items.controls = [
             ft.Row([ft.Text(f"{n}", expand=True),
-                    ft.Text(f"{g:g} g"),
+                    ft.Text(f"{g:g} g" + (f" · {g / dog.meals:.1f}/meal"
+                                          if per_meal else "")),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE,
                                   tooltip="Remove", data=i,
                                   on_click=remove)])
@@ -255,10 +253,17 @@ def main(page: ft.Page):
             results.controls = [ft.Text("Add foods to see the nutrients.",
                                         italic=True)]
             return
-        a = analyse(recipe, db, b, f, stage.value, ext.value)
+        a = analyse(recipe, db, dog.bw, dog.factor, dog.stage,
+                    dog.extended, dog.max_g, dog.meals)
+        over = dog.max_g and a["mass"] > dog.max_g
         results.controls = [
-            ft.Text(f"{a['mass']:.0f} g, {a['totals']['kcal']:.0f} kcal",
+            ft.Text(f"{a['mass']:.0f} g, {a['totals']['kcal']:.0f} kcal"
+                    + (f" · {a['mass'] / dog.meals:.0f} g per meal"
+                       if per_meal else ""),
                     weight=ft.FontWeight.BOLD),
+            ft.Text(f"More than the {dog.max_g:g} g/day food limit.",
+                    color=ft.Colors.ORANGE_800, size=12) if over
+            else ft.Container(),
             ft.Text("Key nutrients", size=16, weight=ft.FontWeight.BOLD),
             nutrient_table(key_rows(a)),
             legend(),
@@ -314,8 +319,7 @@ def main(page: ft.Page):
             if not n:
                 name_f.error = "Enter a name"
                 return
-            save_recipe(n, recipe, num(bw, 6.0), num(factor, 1.6),
-                        stage.value, ext.value)
+            save_recipe(n, recipe, dog.values())
             state["name"] = n
             page.pop_dialog()
             refresh()
@@ -338,11 +342,9 @@ def main(page: ft.Page):
             missing = [x for x, _ in d.get("items", []) if x not in db]
             recipe[:] = [[x, float(g)] for x, g in d.get("items", [])
                          if x in db]
-            bw.value = f"{d.get('bw', num(bw, 6.0)):g}"
-            factor.value = f"{d.get('factor', num(factor, 1.6)):g}"
-            if d.get("stage") in rc.STAGES:
-                stage.value = d["stage"]
-            ext.value = bool(d.get("extended", ext.value))
+            dog.update({k: v for k, v in d.items()
+                        if k not in ("items", "saved", "name")})
+            settings_view.load()                 # Settings tab shows them
             state["name"] = n
             page.pop_dialog()
             refresh()
@@ -367,10 +369,6 @@ def main(page: ft.Page):
             actions=[ft.TextButton("Close",
                                    on_click=lambda e: page.pop_dialog())]))
 
-    for c in (bw, factor):
-        c.on_change = refresh
-    stage.on_select = refresh
-
     # ---- library screen (shares db and recipe with this screen)
     def library_changed():
         load_food_options()
@@ -380,15 +378,14 @@ def main(page: ft.Page):
         recipe.append([name, g])
         refresh()
 
-    library = LibraryView(page, db, recipe, lambda: bool(ext.value),
+    library = LibraryView(page, db, recipe, lambda: bool(dog.extended),
                           library_changed, add_from_library)
 
     # ---- improve screen (optimiser + generator)
     undo_stack = []
 
     def settings():
-        b, f = num(bw, 6.0), num(factor, 1.6)
-        return b, f, stage.value, bool(ext.value), need_kcal(b, f)
+        return dog.as_tuple()
 
     def apply_result(rows, label):
         undo_stack.append(([list(r) for r in recipe], state["name"]))
@@ -409,14 +406,21 @@ def main(page: ft.Page):
 
     improve = ImproveView(page, db, recipe, settings, apply_result, undo)
 
-    def ext_changed(e):
+    # ---- settings screen
+    def dog_changed():
         refresh()
-        library.show_list()
-    ext.on_change = ext_changed
+
+    settings_view = SettingsView(page, dog, dog_changed)
+
+    def go_settings(e=None):
+        page.navigation_bar.selected_index = 3
+        switch(None)
 
     recipe_view = ft.Column([
         ft.Text("RenalFood", size=22, weight=ft.FontWeight.BOLD),
-        ft.Row([bw, factor], wrap=True), stage, ext, need_txt,
+        ft.Row([ft.Icon(ft.Icons.PETS, size=16), need_txt,
+                ft.TextButton("Settings", icon=ft.Icons.SETTINGS,
+                              on_click=go_settings)]),
         ft.Divider(),
         ft.Row([title, ft.Row([
             ft.IconButton(icon=ft.Icons.FOLDER_OPEN, tooltip="Open",
@@ -435,7 +439,8 @@ def main(page: ft.Page):
 
     def switch(e):
         i = page.navigation_bar.selected_index
-        body.content = [recipe_view, library.root, improve.root][i]
+        body.content = [recipe_view, library.root, improve.root,
+                        settings_view.root][i]
         if i == 1:
             library.show_list()
         elif i == 2:
@@ -450,7 +455,9 @@ def main(page: ft.Page):
             ft.NavigationBarDestination(icon=ft.Icons.MENU_BOOK,
                                         label="Library"),
             ft.NavigationBarDestination(icon=ft.Icons.AUTO_AWESOME,
-                                        label="Improve")])
+                                        label="Improve"),
+            ft.NavigationBarDestination(icon=ft.Icons.SETTINGS,
+                                        label="Settings")])
     page.add(ft.SafeArea(content=body))
     refresh()
 

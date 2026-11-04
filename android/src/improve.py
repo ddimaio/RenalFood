@@ -19,9 +19,11 @@ class Cancelled(Exception):
 
 
 # ---------------------------------------------------------------- logic
-def context(stage, need, bw, extended, ignore_vitamins=False):
-    """Scoring context for this dog (same as the other apps' defaults)."""
-    ctx = rc.build_score_context(None, stage, need, bw, extended)
+def context(stage, need, bw, extended, ignore_vitamins=False, max_g=None):
+    """Scoring context for this dog (same as the other apps' defaults);
+    max_g = daily food limit (g) or None."""
+    ctx = rc.build_score_context(None, stage, need, bw, extended,
+                                 max_g or None)
     if ignore_vitamins:
         ctx["weights"]["vitamins"] = 0.0
     return ctx
@@ -124,7 +126,7 @@ def summary(names, grams, db, ctx):
 # ---------------------------------------------------------------- screen
 class ImproveView:
     """Generate / Optimise inside one Column. `get_settings()` returns
-    (bw, factor, stage, extended, need); `apply(recipe_rows, label)` puts a
+    (bw, factor, stage, extended, need, max_g); `apply(recipe_rows, label)` puts a
     result in the Recipe screen; `undo()` restores the previous recipe."""
 
     def __init__(self, page, db, recipe, get_settings, apply, undo):
@@ -348,8 +350,8 @@ class ImproveView:
             self.page.update()
 
     def _run_opt(self):
-        bw, factor, stage, ext, need = self.get_settings()
-        ctx = context(stage, need, bw, ext)
+        bw, factor, stage, ext, need, max_g = self.get_settings()
+        ctx = context(stage, need, bw, ext, max_g=max_g)
         cands = opt_candidates(self.recipe, self.db, ext,
                                bool(self.o_full.value))
         locked = {n for n, cb in self.locks.items() if cb.value}
@@ -375,8 +377,8 @@ class ImproveView:
         self.results.controls = self.results_for["opt"]
 
     def _run_gen(self):
-        bw, factor, stage, ext, need = self.get_settings()
-        ctx = context(stage, need, bw, ext, bool(self.g_ign.value))
+        bw, factor, stage, ext, need, max_g = self.get_settings()
+        ctx = context(stage, need, bw, ext, bool(self.g_ign.value), max_g)
         fixed = [tuple(r) for r in self.recipe] if self.g_fixed.value else ()
         pool, forced, max_each = gen_inputs(self.db, ext,
                                             bool(self.g_full.value), fixed)

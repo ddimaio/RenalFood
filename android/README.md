@@ -18,6 +18,7 @@ android/
     library.py       the Library screen
     improve.py       the Improve screen (generator + optimiser)
     choices.py       per-food generator choices, shared by Library and Improve
+    settings.py      the Settings screen (dog, feeding, stage), remembered
     assets/icon.png  app icon
 ```
 
@@ -54,7 +55,10 @@ build reports a missing Android SDK or Java.
 
 ## Status
 
-- [x] Dog settings, recipe, key nutrients vs stage targets
+- [x] Settings tab: body weight, age + activity (suggested MER factor),
+      max food per day, meals per day, IRIS stage, extended nutrients;
+      remembered between launches and saved with each recipe
+- [x] Recipe, key nutrients vs stage targets
 - [x] Full nutrient table (grouped; extended nutrients switch) and assessment notes
 - [x] Save / open / delete recipes (kept on the phone)
 - [x] Ingredient library (Library tab): search, category filter, a food's
