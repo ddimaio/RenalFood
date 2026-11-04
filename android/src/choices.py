@@ -1,6 +1,6 @@
 """
 Per-food generator choices for the RenalFood phone app - one place for the
-Library and the Improve tab's Food choices, so both show and change the
+Library and the Generator tab's Food choices, so both show and change the
 same settings: use (or leave out), always include, min g/day, max g/day.
 
 Stored like the other apps' generator (the excluded-foods list and prefs
@@ -67,7 +67,7 @@ def setting_text(st):
 
 
 def open_dialog(page, name, on_saved=None):
-    """The one dialog for changing a food's choices (Library and Improve).
+    """The one dialog for changing a food's choices (Library and Generator).
     on_saved() is called after a successful save."""
     st = food_setting(name)
     use = ft.Switch(label="Use this food", value=st["use"])

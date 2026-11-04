@@ -125,7 +125,7 @@ class SettingsView:
         self.ext.on_change = self.changed
         self.root = ft.Column([
             ft.Text("Settings", size=18, weight=ft.FontWeight.BOLD),
-            ft.Text("Used on every tab (recipe analysis, Improve). "
+            ft.Text("Used on every tab (recipe analysis, Generator). "
                     "Remembered on this device.", size=12),
             ft.Text("Dog", weight=ft.FontWeight.BOLD),
             self.bw, ft.Row([self.age, self.activity], wrap=True),

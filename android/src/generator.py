@@ -1,5 +1,5 @@
 """
-Improve screen for the RenalFood phone app: the recipe generator (new
+Generator screen for the RenalFood phone app: the recipe generator (new
 balanced recipes from the library) and the optimiser (better versions of
 the current recipe), both through the shared engine. Long runs go to a background
 thread with a progress bar and a Cancel button; nothing changes until a
@@ -124,7 +124,7 @@ def summary(names, grams, db, ctx):
 
 
 # ---------------------------------------------------------------- screen
-class ImproveView:
+class GeneratorView:
     """Generate / Optimise inside one Column. `get_settings()` returns
     (bw, factor, stage, extended, need, max_g); `apply(recipe_rows, label)` puts a
     result in the Recipe screen; `undo()` restores the previous recipe."""
@@ -201,7 +201,7 @@ class ImproveView:
     def show(self, e=None):
         opt = "opt" in self.mode.selected
         self.run_btn.content = "Find options" if opt else "Generate"
-        head = [ft.Row([ft.Text("Improve", size=18,
+        head = [ft.Row([ft.Text("Generator", size=18,
                                 weight=ft.FontWeight.BOLD),
                         ft.TextButton("Undo last change", icon=ft.Icons.UNDO,
                                       on_click=lambda e: self.undo())],

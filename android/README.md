@@ -16,8 +16,8 @@ android/
   src/
     main.py          the phone app: Recipe screen + bottom navigation
     library.py       the Library screen
-    improve.py       the Improve screen (generator + optimiser)
-    choices.py       per-food generator choices, shared by Library and Improve
+    generator.py     the Generator screen (generator + optimiser)
+    choices.py       per-food generator choices, shared by Library and Generator
     settings.py      the Settings screen (dog, feeding, stage), remembered
     assets/icon.png  app icon
 ```
@@ -63,8 +63,8 @@ build reports a missing Android SDK or Java.
 - [x] Save / open / delete recipes (kept on the phone)
 - [x] Ingredient library (Library tab): search, category filter, a food's
       values per 100 g, add to recipe, edit, new food, delete; generator
-      choices on each food's page (same as Improve → Food choices)
-- [x] Improve tab: recipe generator (fixed base, vegetables, foods per
+      choices on each food's page (same as Generator → Food choices)
+- [x] Generator tab: recipe generator (fixed base, vegetables, foods per
       recipe; food choices: leave out, always include with a minimum,
       maximum g – shared with the other apps' generator) and optimiser (lock foods; add / swap / remove; ranked
       options with Apply), progress bar and Cancel, Undo; foods left out

@@ -30,7 +30,7 @@ elif os.environ.get("FLET_APP_STORAGE_DATA"):
 import flet as ft                      # noqa: E402
 import renal_diet_calc as rc           # noqa: E402
 from library import LibraryView        # noqa: E402
-from improve import ImproveView        # noqa: E402
+from generator import GeneratorView        # noqa: E402
 from settings import Dog, SettingsView  # noqa: E402
 
 KEY_NUTRIENTS = ["Energy", "Protein", "Fat", "Phosphorus", "Calcium",
@@ -381,7 +381,7 @@ def main(page: ft.Page):
     library = LibraryView(page, db, recipe, lambda: bool(dog.extended),
                           library_changed, add_from_library)
 
-    # ---- improve screen (optimiser + generator)
+    # ---- generator screen (optimiser + generator)
     undo_stack = []
 
     def settings():
@@ -392,7 +392,7 @@ def main(page: ft.Page):
         recipe[:] = [list(r) for r in rows]
         state["name"] = ""
         refresh()
-        improve.show()
+        generator.show()
 
     def undo():
         if not undo_stack:
@@ -401,10 +401,10 @@ def main(page: ft.Page):
         recipe[:] = rows
         state["name"] = name
         refresh()
-        improve.show()
+        generator.show()
         return True
 
-    improve = ImproveView(page, db, recipe, settings, apply_result, undo)
+    generator = GeneratorView(page, db, recipe, settings, apply_result, undo)
 
     # ---- settings screen
     def dog_changed():
@@ -439,12 +439,12 @@ def main(page: ft.Page):
 
     def switch(e):
         i = page.navigation_bar.selected_index
-        body.content = [recipe_view, library.root, improve.root,
+        body.content = [recipe_view, library.root, generator.root,
                         settings_view.root][i]
         if i == 1:
             library.show_list()
         elif i == 2:
-            improve.show()
+            generator.show()
         page.update()
         page.run_task(page.scroll_to, offset=0)      # each tab from the top
     page.navigation_bar = ft.NavigationBar(
@@ -455,7 +455,7 @@ def main(page: ft.Page):
             ft.NavigationBarDestination(icon=ft.Icons.MENU_BOOK,
                                         label="Library"),
             ft.NavigationBarDestination(icon=ft.Icons.AUTO_AWESOME,
-                                        label="Improve"),
+                                        label="Generator"),
             ft.NavigationBarDestination(icon=ft.Icons.SETTINGS,
                                         label="Settings")])
     page.add(ft.SafeArea(content=body))
