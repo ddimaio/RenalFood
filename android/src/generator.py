@@ -311,7 +311,7 @@ class GeneratorView:
         self.running, self.cancel_flag = True, False
         self.run_btn.disabled = True
         self.cancel_btn.visible = True
-        self.bar.visible, self.bar.value = True, 0
+        self.bar.visible, self.bar.value = True, None   # moving until counted
         self.status.value = "Starting…"
         self.page.update()
         self.page.run_thread(self._work, opt)
@@ -323,10 +323,16 @@ class GeneratorView:
             if self.cancel_flag:
                 raise Cancelled()
             now = time.monotonic()
-            if now - last[0] > 0.25:              # do not flood the UI
+            if now - last[0] > 0.25 or total <= 1:  # do not flood the UI
                 last[0] = now
-                self.bar.value = min(1.0, (i + 1) / max(1, total))
-                self.status.value = f"{label} {i + 1}/{total}"
+                if total <= 1:                  # one step: no count to show
+                    self.bar.value = None
+                    self.status.value = f"{label}…"
+                else:
+                    self.bar.value = min(1.0, (i + 1) / total)
+                    count = f"{i + 1}/{total}"
+                    self.status.value = (label if count in label
+                                         else f"{label} {count}")
                 self.page.update()
         return prog
 
