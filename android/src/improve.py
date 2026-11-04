@@ -98,6 +98,65 @@ def gen_pool(db, extended=False, complete=False, keep=()):
         if complete else pool
 
 
+def food_setting(name):
+    """Generator settings of one food: use (not left out), forced (always
+    include), min g, max g - stored like the other apps' generator."""
+    gs = rc.load_gen_settings()
+    return {"use": name not in rc.load_excluded(),
+            "forced": name in gs["forced"],
+            "min": gs["min"].get(name), "max": gs["max"].get(name)}
+
+
+def set_food_setting(name, use=True, forced=False, min_g=None, max_g=None):
+    """Store one food's generator settings. Raises ValueError when min is
+    larger than max."""
+    if min_g is not None and max_g is not None and min_g > max_g:
+        raise ValueError("Min g is larger than max g.")
+    ex = rc.load_excluded()
+    rc.save_excluded((ex - {name}) if use else (ex | {name}))
+    gs = rc.load_gen_settings()
+    gs["forced"] = [n for n in gs["forced"] if n != name] + \
+        ([name] if forced else [])
+    for key, v in (("min", min_g), ("max", max_g)):
+        gs[key].pop(name, None)
+        if v is not None:
+            gs[key][name] = float(v)
+    rc.save_gen_settings(gs)
+
+
+def set_foods(db):
+    """Foods with any non-default generator setting, sorted."""
+    gs = rc.load_gen_settings()
+    names = set(rc.load_excluded()) | set(gs["forced"]) | set(gs["min"]) \
+        | set(gs["max"])
+    return sorted((n for n in names if n in db), key=str.lower)
+
+
+def setting_text(st):
+    """'left out', 'always · min 40 g', 'max 5 g'..."""
+    parts = []
+    if not st["use"]:
+        parts.append("left out")
+    if st["forced"]:
+        parts.append("always included")
+    if st["min"] is not None:
+        parts.append(f"min {st['min']:g} g")
+    if st["max"] is not None:
+        parts.append(f"max {st['max']:g} g")
+    return " · ".join(parts) or "default"
+
+
+def gen_inputs(db, extended=False, complete=False, fixed=()):
+    """(pool, forced {name: min g or None}, max_each {name: g}) for
+    rc.generate_recipes from the stored settings, as the other apps do:
+    forced foods are always in the pool."""
+    gs = rc.load_gen_settings()
+    forced = {n: gs["min"].get(n) for n in gs["forced"] if usable(db, n)}
+    max_each = {n: g for n, g in gs["max"].items() if n in db}
+    keep = set(forced) | {n for n, _ in fixed}
+    return gen_pool(db, extended, complete, keep), forced, max_each
+
+
 def summary(names, grams, db, ctx):
     """Key figures of a recipe: mass, kcal, P and protein per 1000 kcal,
     rating."""
@@ -220,14 +279,101 @@ class ImproveView:
                 ft.Row([self.o_max, self.o_full], wrap=True)]
 
     def _gen_settings(self):
-        n_ex = len(rc.load_excluded())
-        return [ft.Text("Builds new balanced recipes from the library. "
-                        f"{n_ex} food{'s' if n_ex != 1 else ''} left out – "
-                        "switch 'Use in Improve' on a food's page in the "
-                        "Library (e.g. to leave out fish oil).", size=12),
+        return [ft.Text("Builds new balanced recipes from the library.",
+                        size=12),
                 ft.Row([self.g_n, self.g_max], wrap=True),
                 ft.Row([self.g_vmin, self.g_vmax], wrap=True),
-                self.g_fixed, self.g_ign, self.g_full]
+                self.g_fixed, self.g_ign, self.g_full,
+                self._food_choices()]
+
+    def _food_choices(self):
+        """Per-food settings: leave out, always include, min g, max g."""
+        pick = ft.Dropdown(label="Food", enable_filter=True, editable=True,
+                           expand=True, menu_height=350, dense=True,
+                           options=[ft.DropdownOption(key=n, text=n)
+                                    for n in sorted(self.db, key=str.lower)
+                                    if usable(self.db, n)])
+
+        def open_pick(e):
+            n = pick.value if pick.value in self.db else next(
+                (x for x in self.db if (pick.text or "").strip().lower()
+                 and x.lower() == (pick.text or "").strip().lower()), None)
+            if n is None:
+                self.toast("Pick a food first.")
+                return
+            self.edit_food(n)
+        rows = [ft.Row([
+            ft.Text(n, expand=True, size=13),
+            ft.Text(setting_text(food_setting(n)), size=11),
+            ft.IconButton(icon=ft.Icons.EDIT, tooltip="Change", data=n,
+                          on_click=lambda e: self.edit_food(e.control.data)),
+            ft.IconButton(icon=ft.Icons.RESTART_ALT, tooltip="Reset",
+                          data=n, on_click=self._reset_food)])
+            for n in set_foods(self.db)]
+        def toggled(e):
+            self.choices_open = bool(e.data) if isinstance(e.data, bool) \
+                else str(e.data).lower() == "true"
+        return ft.ExpansionTile(
+            expanded=getattr(self, "choices_open", False),
+            on_change=toggled,
+            title=ft.Text(f"Food choices ({len(rows)} set)"),
+            subtitle=ft.Text("leave out, always include, min and max g",
+                             size=11),
+            controls=[ft.Column([
+                ft.Text("Pick a food to leave it out, always include it "
+                        "(with a minimum) or cap it (maximum). Also used "
+                        "by the other apps' generator.", size=11),
+                ft.Row([pick, ft.FilledButton("Set…", on_click=open_pick)]),
+            ] + (rows or [ft.Text("No food choices yet.", italic=True,
+                                  size=12)]))])
+
+    def _reset_food(self, e):
+        set_food_setting(e.control.data)
+        self.choices_open = True
+        self.show()
+
+    def edit_food(self, name):
+        st = food_setting(name)
+        use = ft.Switch(label="Use this food", value=st["use"])
+        forced = ft.Checkbox(label="Always include", value=st["forced"])
+        f_min = ft.TextField(label="Min g/day", width=120, dense=True,
+                             keyboard_type=ft.KeyboardType.NUMBER,
+                             value="" if st["min"] is None else
+                             f"{st['min']:g}")
+        f_max = ft.TextField(label="Max g/day", width=120, dense=True,
+                             keyboard_type=ft.KeyboardType.NUMBER,
+                             value="" if st["max"] is None else
+                             f"{st['max']:g}")
+        err = ft.Text(color=ft.Colors.RED_700, size=12)
+
+        def save(e):
+            try:
+                mn, mx = rc.to_float(f_min.value or ""), \
+                    rc.to_float(f_max.value or "")
+                if (mn is not None and mn < 0) or (mx is not None and mx < 0):
+                    raise ValueError("Grams cannot be negative.")
+                set_food_setting(name, bool(use.value), bool(forced.value),
+                                 mn, mx)
+            except ValueError as ex:
+                err.value = str(ex) if "float" not in str(ex) \
+                    else "Enter numbers for min and max."
+                self.page.update()
+                return
+            self.page.pop_dialog()
+            self.choices_open = True              # keep the list open
+            self.show()
+        self.page.show_dialog(ft.AlertDialog(
+            title=ft.Text(name, size=16),
+            content=ft.Column([
+                use, forced,
+                ft.Row([f_min, f_max], wrap=True),
+                ft.Text("Min applies when the food is always included "
+                        "(blank = 5 g, 0.5 g for oils/supplements). Max "
+                        "caps the food whenever it is used.", size=11),
+                err], tight=True),
+            actions=[ft.TextButton("Cancel",
+                                   on_click=lambda e: self.page.pop_dialog()),
+                     ft.FilledButton("Save", on_click=save)]))
 
     # ---- running
     def cancel(self, e=None):
@@ -314,8 +460,8 @@ class ImproveView:
         bw, factor, stage, ext, need = self.get_settings()
         ctx = context(stage, need, bw, ext, bool(self.g_ign.value))
         fixed = [tuple(r) for r in self.recipe] if self.g_fixed.value else ()
-        pool = gen_pool(self.db, ext, bool(self.g_full.value),
-                        keep={n for n, _ in fixed})
+        pool, forced, max_each = gen_inputs(self.db, ext,
+                                            bool(self.g_full.value), fixed)
         vmin, vmax = int(self.g_vmin.value), int(self.g_vmax.value)
         if vmax < vmin:
             vmax = vmin
@@ -323,7 +469,8 @@ class ImproveView:
         res = rc.generate_recipes(
             self.db, pool, ctx, int(self.g_n.value), int(self.g_max.value),
             fixed, lambda text, i, total: prog(text, i, total),
-            cancelled=lambda: self.cancel_flag, n_veg=vmin, veg_max=vmax)
+            cancelled=lambda: self.cancel_flag, n_veg=vmin, veg_max=vmax,
+            forced=forced, max_each=max_each)
         if self.cancel_flag:
             raise Cancelled()
         cards = [self._card(f"Recipe {i + 1}", "", names, grams, score,
