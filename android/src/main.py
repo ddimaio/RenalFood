@@ -337,6 +337,7 @@ def main(page: ft.Page):
         a = analyse(recipe, db, dog.bw, dog.factor, dog.stage,
                     dog.extended, dog.max_g, dog.meals)
         over = dog.max_g and a["mass"] > dog.max_g
+        tox = rc.toxic_foods_in(n for n, _ in recipe)
         results.controls = [
             ft.Text(f"{a['mass']:.0f} g, {a['totals']['kcal']:.0f} kcal"
                     + (f" · {a['mass'] / dog.meals:.0f} g per meal"
@@ -344,6 +345,11 @@ def main(page: ft.Page):
                     weight=ft.FontWeight.BOLD),
             ft.Text(f"More than the {dog.max_g:g} g/day food limit.",
                     color=ft.Colors.ORANGE_800, size=12) if over
+            else ft.Container(),
+            ft.Text("⚠ Toxic for dogs – remove: " + "; ".join(
+                f"{n} ({t})" for n, lv, t in tox if lv == "toxic"),
+                color=ft.Colors.RED_700, weight=ft.FontWeight.BOLD,
+                size=13) if any(lv == "toxic" for _, lv, _ in tox)
             else ft.Container(),
             ft.ExpansionTile(
                 title=ft.Text("Key nutrients", weight=ft.FontWeight.BOLD),
@@ -387,14 +393,17 @@ def main(page: ft.Page):
 
     def put_food(name, g):
         """Add a food, or change its amount if it is already in the recipe
-        (a food is never listed twice). Returns what happened."""
+        (a food is never listed twice). Returns what happened (with a
+        warning if the food is toxic for dogs)."""
+        warn = rc.toxic_warning(name)
         for r in recipe:
             if r[0] == name:
                 old, r[1] = r[1], g
                 return (f"{name} is already in the recipe – amount changed "
-                        f"from {old:g} g to {g:g} g.")
+                        f"from {old:g} g to {g:g} g." + (f" {warn}"
+                                                       if warn else ""))
         recipe.append([name, g])
-        return ""
+        return warn
 
     def remove(e):
         recipe.pop(e.control.data)

@@ -142,6 +142,8 @@ class LibraryView:
         # the list screen is built once; typing only refreshes the results
         # (rebuilding the search box would drop its keyboard focus)
         self.count = ft.Text(size=11)
+        self.tox_banner = ft.Text(color=ft.Colors.RED_700, size=12,
+                                  weight=ft.FontWeight.BOLD)
         self.list_col = ft.Column(spacing=0)
         self.more = ft.Text(size=11)
         self.list_screen = [
@@ -150,8 +152,8 @@ class LibraryView:
                     ft.IconButton(icon=ft.Icons.ADD, tooltip="New food",
                                   on_click=lambda e: self.show_edit(None))],
                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Row([self.query, self.cat]), self.count, self.list_col,
-            self.more]
+            ft.Row([self.query, self.cat]), self.tox_banner, self.count,
+            self.list_col, self.more]
         self.root = ft.Column(self.list_screen)
         self.show_list()
 
@@ -172,7 +174,9 @@ class LibraryView:
             return (" · " + choices.setting_text(choices.food_setting(n))
                     if n in chosen else "")
         tiles = [ft.ListTile(
-            title=ft.Text(n),
+            title=ft.Text(("⚠ TOXIC  " if rc.is_toxic(n) else "") + n,
+                          color=ft.Colors.RED_700 if rc.is_toxic(n)
+                          else None),
             subtitle=ft.Text(f"{self.db[n]['category']} · "
                              f"{rc.ingredient_role(self.db[n])} · "
                              f"{rc.fmt(self.db[n]['per100g']['kcal'])} kcal"
@@ -183,6 +187,11 @@ class LibraryView:
         more = (len(names) - 300) if len(names) > 300 else 0
         self.count.value = (f"{len(names)} of {len(self.db)} foods · "
                             "values per 100 g")
+        bad = [n for n, lv, _ in rc.toxic_foods_in(self.db) if lv == "toxic"]
+        self.tox_banner.value = (
+            "⚠ Toxic for dogs (never used by the generator): "
+            + ", ".join(bad) + " – remove from the library." if bad else "")
+        self.tox_banner.visible = bool(bad)
         self.list_col.controls = tiles
         self.more.value = (f"…and {more} more – refine the search."
                            if more else "")
@@ -242,6 +251,10 @@ class LibraryView:
                     ft.OutlinedButton("Delete", icon=ft.Icons.DELETE_OUTLINE,
                                       on_click=lambda e: self.confirm_delete(
                                           name))]),
+            ft.Text(rc.toxic_warning(name), size=13,
+                    color=ft.Colors.RED_700 if rc.is_toxic(name)
+                    else ft.Colors.ORANGE_800, weight=ft.FontWeight.BOLD,
+                    visible=bool(rc.toxic_check(name))),
             use,
             ft.Text(" · ".join(extra), size=12),
             ft.Text(it.get("note", ""), size=12, italic=True,
@@ -323,7 +336,11 @@ class LibraryView:
                 return
             self.on_changed()
             self.show_detail(stored)
-            self.toast(f"Saved {stored}.")
+            warn = rc.toxic_warning(stored)
+            self.toast(f"Saved {stored}." + (
+                f" {warn}" + (" The generator will never use it."
+                              if rc.is_toxic(stored) else "")
+                if warn else ""))
 
         self._set([
             ft.Row([ft.IconButton(icon=ft.Icons.ARROW_BACK, tooltip="Back",

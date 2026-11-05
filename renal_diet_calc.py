@@ -35,6 +35,7 @@ import csv
 import json
 import io
 import os
+import re
 try:
     import tkinter as tk
     from tkinter import ttk, filedialog, messagebox, simpledialog
@@ -49,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.05"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.05b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -2175,6 +2176,8 @@ def suggest_additions(names, db, bounds, x0, ctx, candidates, max_add=3,
     build a greedy best combination of up to max_add additions. With a
     reference-match objective the amounts and the combination come from
     match_reference() (least squares over the whole candidate list)."""
+    # never offer a food that is toxic to dogs (TOXIC_FOODS)
+    candidates = not_toxic(candidates, db)
     if ctx.get("ref_match"):
         mb = match_reference(names, db, bounds, x0, ctx, (), 0)
         b0 = optimise(names, db, bounds, x0, ctx)
@@ -2337,6 +2340,8 @@ def match_reference(names, db, bounds, x0, ctx, candidates=(), max_add=3,
     then forward selection of up to max_add library foods (each step tries
     every candidate), each result polished with optimise(). Returns
     (names, grams, score, terms, added)."""
+    # never offer a food that is toxic to dogs (TOXIC_FOODS)
+    candidates = not_toxic(candidates, db)
     def solve(nn, bb, xx):
         if _sp_lsq is None:
             return optimise(nn, db, bb, xx, ctx)
@@ -2629,6 +2634,8 @@ def suggest_substitutions(names, db, bounds, base, ctx, candidates,
     base = optimise(...) result. Returns [(old, new, names, grams, score,
     terms)] that improve the score by >= 2 %, best first (best swap per
     old/new pair)."""
+    # never offer a food that is toxic to dogs (TOXIC_FOODS)
+    candidates = not_toxic(candidates, db)
     g0, s0, _ = base
     jobs = []
     for i, n in enumerate(names):
@@ -2710,6 +2717,98 @@ def _family(name):
 UNLIMITED_CAP = 20     # safety cap on items in an "unlimited" recipe
 
 
+# ------------------------------------------------------------ toxic foods
+# Foods toxic to dogs, from Kovalkovičová N, Šutiaková I, Pistl J, Šutiak V.
+# "Some food toxic for pets". Interdiscip Toxicol 2009;2(3):169-176
+# (PMC2984110). Matched on the food's NAME (lower case). "toxic": never
+# offered by the generator / optimiser and flagged in every assessment;
+# "caution": allowed, with a warning. (pattern, exceptions, level, text)
+TOXIC_REF = ("Kovalkovičová et al., Some food toxic for pets, Interdiscip "
+             "Toxicol 2009 (PMC2984110)")
+TOXIC_FOODS = [
+    (r"chocolate|cocoa|cacao", None, "toxic",
+     "chocolate/cocoa – theobromine and caffeine (vomiting, arrhythmias, "
+     "tremors, seizures)"),
+    (r"coffee|caffeine|\btea\b|\bcola\b|guarana|energy drink", None, "toxic",
+     "caffeine (methylxanthine, like chocolate)"),
+    (r"grape|raisin|sultana|currant", r"grapeseed|grape seed|black ?currant|"
+     r"red ?currant|white ?currant", "toxic",
+     "grapes/raisins/sultanas – acute kidney failure, any dose (especially "
+     "dangerous in kidney disease)"),
+    (r"onion|shallot|leek|chive|scallion|allium", None, "toxic",
+     "onion family – damages red blood cells (Heinz-body anaemia)"),
+    (r"garlic", None, "toxic",
+     "garlic – damages red blood cells (Heinz bodies, anaemia)"),
+    (r"avocado", None, "toxic",
+     "avocado – persin (vomiting, diarrhoea, fluid around heart and lungs)"),
+    (r"macadamia", None, "toxic",
+     "macadamia nuts – weakness, hind-limb paralysis, tremors, fever"),
+    (r"xylitol|birch sugar", None, "toxic",
+     "xylitol – insulin release, low blood sugar, liver failure"),
+    (r"alcohol|ethanol|\bbeer\b|\bwine\b|liqueur|\bhops?\b", r"vinegar|"
+     r"sugar alcohol", "toxic",
+     "alcohol/hops – dogs cannot tolerate even small amounts"),
+    (r"bread dough|pizza dough|yeast dough|fresh yeast|baker'?s yeast|"
+     r"active dry yeast|instant yeast", None, "toxic",
+     "raw yeast dough – expands in the stomach and makes alcohol"),
+    (r"rhubarb", None, "toxic",
+     "rhubarb – toxic (and very high in oxalate)"),
+    (r"green tomato|tomato (leaves|plant|stem)", None, "toxic",
+     "green tomatoes and tomato plants – solanine"),
+    (r"potato", r"sweet potato|boiled|baked|steamed|mashed|cooked|starch|"
+     r"protein|flour", "caution",
+     "potato – feed only cooked and peeled; raw or green potato is toxic"),
+    (r"tomato", r"green tomato", "caution",
+     "tomato – ripe flesh only; green tomatoes, leaves and stems are toxic"),
+    (r"walnut", None, "caution",
+     "walnuts – may trigger pancreatitis (mouldy walnuts are toxic)"),
+    (r"peanut", None, "caution",
+     "peanuts – possible allergy; peanut butter must be xylitol-free"),
+    (r"persimmon", None, "caution",
+     "persimmon – listed as toxic for pets; seeds and pits can block the "
+     "gut"),
+]
+
+
+def toxic_check(name):
+    """[(level, text)] for a food name ('toxic' first), [] if none."""
+    n = (name or "").lower()
+    out = []
+    for pat, exc, level, text in TOXIC_FOODS:
+        if re.search(pat, n) and not (exc and re.search(exc, n)):
+            out.append((level, text))
+    return sorted(out, key=lambda x: x[0] != "toxic")
+
+
+def is_toxic(name):
+    return any(lv == "toxic" for lv, _ in toxic_check(name))
+
+
+def not_toxic(names, db=None):
+    """names (list or {name: value}) without the foods toxic to dogs."""
+    if names is None:
+        return None
+    if isinstance(names, dict):
+        return {n: v for n, v in names.items() if not is_toxic(n)}
+    return [n for n in names if not is_toxic(n)]
+
+
+def toxic_warning(name):
+    """One line for a message box / toast, or '' when the food is fine."""
+    hits = toxic_check(name)
+    if not hits:
+        return ""
+    lv, _ = hits[0]
+    head = ("TOXIC FOR DOGS – do not feed" if lv == "toxic"
+            else "Caution for dogs")
+    return f"⚠ {name}: {head}: " + "; ".join(t for _, t in hits) + "."
+
+
+def toxic_foods_in(names):
+    """[(name, level, text)] for the foods in `names` that match."""
+    return [(n, lv, t) for n in names for lv, t in toxic_check(n)[:1]]
+
+
 def merge_duplicates(rows):
     """[(name, grams)] with each food once (repeated foods' grams added
     together), in first-seen order."""
@@ -2747,6 +2846,8 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
               rises by >= 1 point (safety cap UNLIMITED_CAP items).
     Returns up to n_recipes distinct (names, grams, score, terms), best first.
     """
+    # never offer a food that is toxic to dogs (TOXIC_FOODS)
+    pool, forced = not_toxic(pool, db), not_toxic(forced, db)
     if unlimited:
         max_ing = max_extra = UNLIMITED_CAP
         veg_max = UNLIMITED_CAP
@@ -3061,6 +3162,8 @@ def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
     supplements are day-level. Returns [plan] best first; plan = dict(
     meals=[[(name, g)]], serving=[(name, g)], fixed=[(name, g)],
     names, grams (day, in optimiser order), score, terms)."""
+    # never offer a food that is toxic to dogs (TOXIC_FOODS)
+    pool, forced = not_toxic(pool, db), not_toxic(forced, db)
     shares = [float(x) for x in shares]
     tot = sum(shares) or 1.0
     shares = [x / tot for x in shares]
@@ -3787,6 +3890,8 @@ def generate_biscuits(db, pool, ctx, n_recipes=5, batch=300.0, forced=None,
     always included (None = 5 % of the batch); max_each: {name: max g}.
     Returns [(names, grams, score, per1000, kcal)], best first, varied
     (different flour/binder sets)."""
+    # never offer a food that is toxic to dogs (TOXIC_FOODS)
+    pool, forced = not_toxic(pool, db), not_toxic(forced, db)
     forced = {n: (m if m else round(0.05 * batch, 1))
               for n, m in (forced or {}).items()
               if n in db and biscuit_role(db[n])}   # dough foods only
@@ -4682,6 +4787,12 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None, meals=1):
                          " not declared for " + ", ".join(foods) +
                          " – taken at the AAFCO minimum (complete food). Ask "
                          "the manufacturer for the real values.")
+    # foods toxic to dogs first (TOXIC_FOODS), whatever else the notes say
+    tox = toxic_foods_in([n for n, g in recipe if g])
+    if tox:
+        res["notes"] = "\n".join(
+            f"• ⚠ {'TOXIC FOR DOGS – remove' if lv == 'toxic' else 'Caution'}"
+            f": {n} – {t}." for n, lv, t in tox) + "\n" + res["notes"]
     return res
 
 
@@ -7473,7 +7584,8 @@ class App(tk.Tk):
                                             n.lower()))
         for n in self._shown:
             cat = self.db[n]["category"]
-            self.lib_list.insert("end", n if cat == "food" else f"{n}  [{cat}]")
+            self.lib_list.insert("end", ("⚠ TOXIC  " if is_toxic(n) else "")
+                                 + (n if cat == "food" else f"{n}  [{cat}]"))
 
     def selected_lib(self):
         sel = self.lib_list.curselection()
@@ -7486,6 +7598,9 @@ class App(tk.Tk):
             unk = [LABEL[k] for k in visible_keys(self.ext.get())
                    if item["per100g"][k] is None]
             txt = item.get("note", "")
+            warn = toxic_warning(n)
+            if warn:
+                txt = warn + ("  " + txt if txt else "")
             if unk:
                 txt += ("  " if txt else "") + "Unknown: " + ", ".join(unk)
             if item.get("assume_aafco"):
@@ -7504,6 +7619,12 @@ class App(tk.Tk):
         save_db(self.db)
         self.refresh_list()
         self.refresh_recipe()
+        warn = toxic_warning(item["name"])
+        if warn:
+            messagebox.showwarning("Food check", warn + "\n\n" + (
+                "It is saved, but the recipe generator and optimiser will "
+                "never use it." if is_toxic(item["name"]) else
+                "It is saved and can be used.") + f"\n\nSource: {TOXIC_REF}")
 
     def new_ing(self):
         d = IngredientDialog(self)
@@ -7576,6 +7697,13 @@ class App(tk.Tk):
             self.recalc()
             messagebox.showinfo("Import", f"Imported {len(items)} "
                                 f"({new} new, {len(items) - new} updated).")
+            bad = [n for n, lv, _ in toxic_foods_in(
+                str(i["name"]).strip() for i in items) if lv == "toxic"]
+            if bad:
+                messagebox.showwarning(
+                    "Food check", "Toxic for dogs (never used by the "
+                    "generator or optimiser): " + ", ".join(bad) +
+                    f"\n\nSource: {TOXIC_REF}")
         except (OSError, ValueError, KeyError) as e:
             messagebox.showerror("Import", f"Import failed:\n{e}")
 
@@ -7627,6 +7755,11 @@ class App(tk.Tk):
             g = float(self.amount.get().replace(",", "."))
         except ValueError:
             messagebox.showerror("Amount", "Enter grams as a number.")
+            return
+        warn = toxic_warning(n)
+        if warn and is_toxic(n) and not messagebox.askyesno(
+                "Toxic for dogs", warn + "\n\nAdd it to the recipe anyway?",
+                icon="warning"):
             return
         if self.plan:                     # add to a meal of the plan
             nm = len(self.plan["meals"])

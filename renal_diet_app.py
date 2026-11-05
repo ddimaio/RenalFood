@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.05"
+ENGINE_VERSION = "2026.11.05b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -744,6 +744,11 @@ with tab_rec:
                 set_recipe(list(latest.items()))
                 st.rerun()
             ss.recipe = rows
+        _bad = [f"{n} – {t}" for n, lv, t in
+                rc.toxic_foods_in(n for n, g in ss.recipe if g)
+                if lv == "toxic"]
+        if _bad:
+            st.error("⚠ Toxic for dogs – remove: " + "; ".join(_bad) + ".")
         record_history()
         uc = st.columns(2)
         uc[0].button("↶ Undo", key="undo", on_click=undo,
@@ -2061,6 +2066,17 @@ with tab_lib:
     st.subheader("Ingredient library")
     st.caption(f"{len(db)} ingredients · values per 100 g · blank = unknown "
                f"· shared with the desktop app ({os.path.basename(rc.DB_PATH)})")
+    # food check: anything toxic to dogs in the library?
+    _tox = rc.toxic_foods_in(names_all)
+    _bad = [f"**{n}** – {t}" for n, lv, t in _tox if lv == "toxic"]
+    _care = [f"**{n}** – {t}" for n, lv, t in _tox if lv != "toxic"]
+    if _bad:
+        st.error("⚠ Toxic for dogs – never used by the generator or "
+                 "optimiser; remove them from the library:\n\n" +
+                 "\n".join("- " + x for x in _bad))
+    if _care:
+        st.caption("Caution: " + "; ".join(_care) + ".")
+    st.caption(f"Food check: {rc.TOXIC_REF}.")
     lib_keys = rc.visible_keys(ss.ext)
     lib_rows = []
     for n in names_all:
