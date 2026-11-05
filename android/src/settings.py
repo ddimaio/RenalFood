@@ -83,32 +83,36 @@ class Dog:
                 + (" · max " + f"{self.max_g:g} g" if self.max_g else ""))
 
 
+def small(text):
+    return ft.Text(text, size=12)
+
+
 class SettingsView:
     """The Settings tab. on_changed() is called after any valid change."""
 
     def __init__(self, page, dog, on_changed):
         self.page, self.dog, self.on_changed = page, dog, on_changed
         num = ft.KeyboardType.NUMBER
-        self.bw = ft.TextField(label="Body weight (kg)", width=200,
-                               dense=True, keyboard_type=num,
-                               helper="ideal weight if over/under")
-        self.age = ft.TextField(label="Age (years, 0 = not set)", width=200,
-                                dense=True, keyboard_type=num)
+        # short labels and fields that share the width, so they still fit
+        # with large text (phone/computer text size); explanations are
+        # ordinary text below that can wrap
+        self.bw = ft.TextField(label="Weight (kg)", expand=True, dense=True,
+                               keyboard_type=num)
+        self.age = ft.TextField(label="Age (years)", expand=True, dense=True,
+                                keyboard_type=num)
         self.activity = ft.Dropdown(
-            label="Activity", width=150, dense=True,
+            label="Activity", expand=True, dense=True,
             options=[ft.DropdownOption(key=a, text=a) for a in rc.ACTIVITY])
-        self.factor = ft.TextField(
-            label="MER factor (× 70·BW^0.75)", width=300, dense=True,
-            keyboard_type=num,
-            helper="≈1.6 adult · 1.2–1.4 less active")
-        self.max_g = ft.TextField(label="Max food per day (g, 0 = no limit)",
-                                  width=260, dense=True, keyboard_type=num)
+        self.factor = ft.TextField(label="MER factor", expand=True,
+                                   dense=True, keyboard_type=num)
+        self.max_g = ft.TextField(label="Max g/day", expand=True, dense=True,
+                                  keyboard_type=num)
         self.meals = ft.Dropdown(
-            label="Meals per day", width=150, dense=True,
+            label="Meals/day", expand=True, dense=True,
             options=[ft.DropdownOption(key=str(i), text=str(i))
                      for i in range(1, 7)])
         self.stage = ft.Dropdown(
-            label="IRIS stage", width=280, dense=True,
+            label="IRIS stage", expand=True, dense=True,
             options=[ft.DropdownOption(key=s, text=s) for s in rc.STAGES])
         self.ext = ft.Switch(label="Extended nutrients")
         self.need = ft.Text(size=16, weight=ft.FontWeight.BOLD)
@@ -128,14 +132,21 @@ class SettingsView:
             ft.Text("Used on every tab (recipe analysis, Generator). "
                     "Remembered on this device.", size=12),
             ft.Text("Dog", weight=ft.FontWeight.BOLD),
-            self.bw, ft.Row([self.age, self.activity], wrap=True),
-            self.factor, self.sugg, self.sugg_btn, self.need,
+            ft.Row([self.bw, self.age]),
+            small("Weight: her ideal weight if she is over- or "
+                  "underweight. Age: 0 = not set."),
+            ft.Row([self.activity, self.factor]),
+            small("Daily energy = MER factor × 70 × weight^0.75. About 1.6 "
+                  "for a neutered adult, 1.2–1.4 if less active."),
+            self.sugg, self.sugg_btn, self.need,
             ft.Divider(),
             ft.Text("Feeding", weight=ft.FontWeight.BOLD),
-            self.max_g, self.meals,
+            ft.Row([self.max_g, self.meals]),
+            small("Max g/day: the most food she will eat in a day "
+                  "(0 = no limit)."),
             ft.Divider(),
             ft.Text("Kidney disease", weight=ft.FontWeight.BOLD),
-            self.stage, self.stage_note,
+            ft.Row([self.stage]), self.stage_note,
             ft.Divider(),
             ft.Text("Analysis", weight=ft.FontWeight.BOLD),
             self.ext,

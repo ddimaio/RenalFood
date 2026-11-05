@@ -72,10 +72,10 @@ def open_dialog(page, name, on_saved=None):
     st = food_setting(name)
     use = ft.Switch(label="Use this food", value=st["use"])
     forced = ft.Checkbox(label="Always include", value=st["forced"])
-    f_min = ft.TextField(label="Min g/day", width=120, dense=True,
+    f_min = ft.TextField(label="Min g", expand=True, dense=True,
                          keyboard_type=ft.KeyboardType.NUMBER,
                          value="" if st["min"] is None else f"{st['min']:g}")
-    f_max = ft.TextField(label="Max g/day", width=120, dense=True,
+    f_max = ft.TextField(label="Max g", expand=True, dense=True,
                          keyboard_type=ft.KeyboardType.NUMBER,
                          value="" if st["max"] is None else f"{st['max']:g}")
     err = ft.Text(color=ft.Colors.RED_700, size=12)
@@ -102,9 +102,9 @@ def open_dialog(page, name, on_saved=None):
         title=ft.Text(name, size=16),
         content=ft.Column([
             use, forced,
-            ft.Row([f_min, f_max], wrap=True),
-            ft.Text("Used by the recipe generator (and 'Use' also by the "
-                    "optimiser). Min applies when the food is always "
+            ft.Row([f_min, f_max]),
+            ft.Text("Grams per day. Used by the recipe generator (and "
+                    "'Use' also by the optimiser). Min applies when the food is always "
                     "included (blank = 5 g, 0.5 g for oils/supplements). "
                     "Max caps the food whenever it is used.", size=11),
             err], tight=True),

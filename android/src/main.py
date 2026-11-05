@@ -279,13 +279,13 @@ def main(page: ft.Page):
     need_txt = ft.Text(size=12, expand=True)
 
     food = ft.Dropdown(label="Food", enable_filter=True, editable=True,
-                       expand=True, menu_height=400, dense=True)
+                       expand=5, menu_height=400, dense=True)
 
     def load_food_options():
         food.options = [ft.DropdownOption(key=n, text=n)
                         for n in sorted(db, key=str.lower)]
     load_food_options()
-    grams = ft.TextField(label="g/day", width=90, dense=True,
+    grams = ft.TextField(label="g/day", expand=3, dense=True,
                          keyboard_type=ft.KeyboardType.NUMBER)
     title = ft.Text(weight=ft.FontWeight.BOLD)
     items = ft.Column(spacing=0)

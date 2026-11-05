@@ -146,7 +146,7 @@ class GeneratorView:
         self.o_add = ft.Checkbox(label="Add foods", value=True)
         self.o_swap = ft.Checkbox(label="Swap foods", value=True)
         self.o_rem = ft.Checkbox(label="Remove foods", value=True)
-        self.o_max = ft.Dropdown(label="Add up to", value="3", width=150,
+        self.o_max = ft.Dropdown(label="Add up to", value="3", expand=True,
                                  dense=True,
                                  options=[ft.DropdownOption(key=str(i),
                                                             text=f"{i} foods")
@@ -189,7 +189,7 @@ class GeneratorView:
 
     @staticmethod
     def _num_dd(label, lo, hi, val):
-        return ft.Dropdown(label=label, value=str(val), width=110,
+        return ft.Dropdown(label=label, value=str(val), expand=True,
                            dense=True,
                            options=[ft.DropdownOption(key=str(i), text=str(i))
                                     for i in range(lo, hi + 1)])
@@ -233,13 +233,14 @@ class GeneratorView:
                         "Library).", size=12),
                 ft.Column(rows, spacing=0),
                 ft.Row([self.o_add, self.o_swap, self.o_rem], wrap=True),
-                ft.Row([self.o_max, self.o_full], wrap=True)]
+                ft.Row([self.o_max, ft.Container(expand=True)]),
+                self.o_full]
 
     def _gen_settings(self):
         return [ft.Text("Builds new balanced recipes from the library.",
                         size=12),
-                ft.Row([self.g_n, self.g_max], wrap=True),
-                ft.Row([self.g_vmin, self.g_vmax], wrap=True),
+                ft.Row([self.g_n, self.g_max]),
+                ft.Row([self.g_vmin, self.g_vmax]),
                 self.g_fixed, self.g_ign, self.g_full,
                 self._food_choices()]
 
@@ -274,7 +275,7 @@ class GeneratorView:
             expanded=getattr(self, "choices_open", False),
             on_change=toggled,
             title=ft.Text(f"Food choices ({len(rows)} set)"),
-            subtitle=ft.Text("leave out, always include, min and max g",
+            subtitle=ft.Text("leave out, always include, min/max",
                              size=11),
             controls=[ft.Column([
                 ft.Text("Pick a food to leave it out, always include it "

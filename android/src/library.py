@@ -131,11 +131,11 @@ class LibraryView:
         self.page, self.db, self.recipe = page, db, recipe
         self.get_extended, self.on_changed = get_extended, on_changed
         self.add_to_recipe = add_to_recipe
-        self.query = ft.TextField(label="Search", dense=True, expand=True,
+        self.query = ft.TextField(label="Search", dense=True, expand=3,
                                   prefix_icon=ft.Icons.SEARCH,
                                   on_change=lambda e: self.show_list())
         self.cat = ft.Dropdown(
-            label="Category", value="all", width=170, dense=True,
+            label="Category", value="all", expand=2, dense=True,
             options=[ft.DropdownOption(key="all", text="All")] +
             [ft.DropdownOption(key=c, text=c) for c in CATEGORIES],
             on_select=lambda e: self.show_list())
@@ -195,7 +195,7 @@ class LibraryView:
         it = self.db.get(name)
         if it is None:
             return self.show_list()
-        grams = ft.TextField(label="g/day", width=100, dense=True,
+        grams = ft.TextField(label="g/day", expand=True, dense=True,
                              keyboard_type=ft.KeyboardType.NUMBER)
 
         def add(e):
@@ -273,11 +273,11 @@ class LibraryView:
         old = self.db.get(name) if name else None
         ext = self.get_extended()
         f_name = ft.TextField(label="Name", value=name or "", dense=True)
-        f_cat = ft.Dropdown(label="Category", dense=True, width=200,
+        f_cat = ft.Dropdown(label="Category", dense=True, expand=True,
                             value=(old or {}).get("category", "food"),
                             options=[ft.DropdownOption(key=c, text=c)
                                      for c in CATEGORIES])
-        f_role = ft.Dropdown(label="Role", dense=True, width=170,
+        f_role = ft.Dropdown(label="Role", dense=True, expand=True,
                              value=(old or {}).get("role") or "auto",
                              options=[ft.DropdownOption(key="auto",
                                                         text="automatic")]
@@ -286,10 +286,12 @@ class LibraryView:
         f_note = ft.TextField(label="Note", value=(old or {}).get("note", ""),
                               multiline=True, min_lines=1, max_lines=4,
                               dense=True)
-        f_max = ft.TextField(label="Recommended max g/day",
+        f_max = ft.TextField(label="Max g/day",
                              value=(old or {}).get("max_dose", "") or "",
-                             dense=True,
-                             helper="e.g. 7 · 0.18/kg · 5:4, 10:8")
+                             dense=True)
+        f_max_hint = ft.Text("Recommended maximum, e.g. 7 (fixed) · 0.18/kg (per kg body "
+                             "weight) · 5:4, 10:8 (up to 5 kg: 4 g, up to "
+                             "10 kg: 8 g)", size=11)
         f_assume = ft.Checkbox(label="Complete food (assume AAFCO)",
                                value=bool((old or {}).get("assume_aafco")),
                                tooltip="Missing extended nutrients are taken "
@@ -330,7 +332,7 @@ class LibraryView:
                     ft.Text("Edit food" if name else "New food", size=16,
                             weight=ft.FontWeight.BOLD, expand=True),
                     ft.FilledButton("Save", on_click=save)]),
-            err, f_name, ft.Row([f_cat, f_role], wrap=True), f_note, f_max,
+            err, f_name, ft.Row([f_cat]), ft.Row([f_role]), f_note, f_max, f_max_hint,
             f_assume,
             ft.Text("Values per 100 g as fed; leave blank if unknown."
                     + ("" if ext else " Switch on Extended nutrients to "
