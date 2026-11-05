@@ -323,10 +323,10 @@ def main(page: ft.Page):
         per_meal = dog.meals > 1
         items.controls = [
             ft.Row([ft.Text(f"{n}", expand=1),
-                    ft.Text(f"{g:g} g{rc.egg_note(n, g)}"
-                            + (("\n" if rc.egg_note(n, g) else " · ")
+                    ft.Text(f"{g:g} g{rc.units_note(n, g)}"
+                            + (("\n" if rc.units_note(n, g) else " · ")
                                + f"{g / dog.meals:.1f}/meal"
-                               f"{rc.egg_note(n, g / dog.meals)}"
+                               f"{rc.units_note(n, g / dog.meals)}"
                                if per_meal else ""), expand=1,
                             text_align=ft.TextAlign.RIGHT),
                     ft.IconButton(icon=ft.Icons.DELETE_OUTLINE,

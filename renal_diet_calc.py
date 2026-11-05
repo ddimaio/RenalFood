@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.05c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.05d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1028,8 +1028,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
         kc = db[n]["per100g"]["kcal"]
         rows_i.append(
             "<tr><td>" + _esc(n) + "</td><td class=n>" + f"{g:.1f}" +
-            _esc(egg_note(n, g)) + "</td>" +
-            (f"<td class=n>{g / meals:.1f}{_esc(egg_note(n, g / meals))}"
+            _esc(units_note(n, g)) + "</td>" +
+            (f"<td class=n>{g / meals:.1f}{_esc(units_note(n, g / meals))}"
              "</td>" if meals > 1 else "") +
             f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
             "</td><td class=c>☐</td></tr>")
@@ -1062,8 +1062,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
             batch = isinstance(tg, int)
             rows = "".join(
                 "<tr><td>" + _esc(n) + f"</td><td class=n>{g:.1f}"
-                f"{_esc(egg_note(n, g))}</td>" +
-                (f"<td class=n>{g * days:.0f}{_esc(egg_note(n, g * days))}"
+                f"{_esc(units_note(n, g))}</td>" +
+                (f"<td class=n>{g * days:.0f}{_esc(units_note(n, g * days))}"
                  "</td>" if batch else "<td class=n></td>") +
                 f"<td class=n>{(db[n]['per100g']['kcal'] or 0) * g / 100:.0f}"
                 "</td><td class=c>☐</td></tr>" for n, g in its)
@@ -2811,41 +2811,107 @@ def toxic_foods_in(names):
     return [(n, lv, t) for n in names for lv, t in toxic_check(n)[:1]]
 
 
-# ------------------------------------------------------------ egg units
-# Egg amounts are also shown as a number of eggs: grams of edible egg per
-# egg (no shell) - a UK medium / US large egg. (pattern, exceptions, g,
-# singular, plural); the first match wins.
-EGG_UNITS = [
+# ------------------------------------------------------------ units
+# Amounts are also shown in kitchen units: a count for foods that come in
+# pieces (eggs, a tray, a chew) and spoons / cups for foods measured by
+# volume. Volume is converted with grams per US cup (240 ml; 1 tbsp =
+# 1/16 cup = 15 ml, 1 tsp = 1/48 cup = 5 ml) - approximate household
+# weights (USDA household measures; cooked foods as they are measured,
+# e.g. chopped or mashed). Foods not listed (and not oils) show no unit.
+UNITS_NOTE = ("approximate: 1 egg ≈ 50 g without shell (UK medium / US "
+              "large), egg white ≈ 33 g, yolk ≈ 17 g; cup = 240 ml, tbsp = "
+              "15 ml, tsp = 5 ml; oils ≈ 13.6 g per tbsp")
+# count units: (pattern on the lower-case name, exceptions, grams each,
+# singular, plural); the first match wins
+PIECE_UNITS = [
     (r"egg yolk|yolk", None, 17.0, "egg yolk", "egg yolks"),
     (r"egg white|albumen", None, 33.0, "egg white", "egg whites"),
     (r"\beggs?\b", r"eggshell|egg ?shell|eggplant|egg-free|egg free|"
      r"egg replacer", 50.0, "egg", "eggs"),
+    (r"\((\d+(?:\.\d+)?) g tray\)", None, None, "tray", "trays"),
+    (r"chew\b.*?\((\d+(?:\.\d+)?) g\)", None, None, "chew", "chews"),
+    (r"\((\d+(?:\.\d+)?) g\)", r"tofu", None, "piece", "pieces"),
+    (r"tofu\b.*?(\d+(?:\.\d+)?) g\)", None, None, "block", "blocks"),
 ]
-EGG_UNITS_NOTE = ("1 egg ≈ 50 g without shell (UK medium / US large); "
-                  "1 egg white ≈ 33 g; 1 yolk ≈ 17 g")
+# grams per US cup (240 ml) by food name; oils default to 218 g
+CUP_G = {
+    "Rice, white, boiled (unenriched)": 158, "Rice, brown, boiled": 195,
+    "Rice, white, raw (dry, unenriched)": 185, "Quinoa, boiled": 185,
+    "Couscous, boiled": 157, "Millet, boiled": 174, "Buckwheat, boiled": 168,
+    "Pearl barley, boiled": 157, "Pasta, boiled (unenriched)": 140,
+    "Rice noodles, boiled": 176, "Oats, rolled, dry": 81,
+    "Wheat flour, white, plain": 125, "Rice flour, white": 158,
+    "Chickpea flour (besan)": 92, "Cornflour (maize starch)": 128,
+    "Arrowroot flour": 128,
+    "Lentils, boiled": 198, "Chickpeas, boiled": 164,
+    "Haricot beans, boiled": 182, "Butter (lima) beans, boiled": 188,
+    "Soya beans, boiled": 172, "Split peas, boiled": 196,
+    "Edamame, boiled": 155, "Peas, green, boiled": 160, "Natto": 175,
+    "Broccoli, boiled": 156, "Carrot, boiled": 156,
+    "Cauliflower, boiled": 124, "Green beans, boiled": 125,
+    "Spinach, boiled": 180, "Cabbage, boiled": 150,
+    "Courgette, boiled": 180, "Pumpkin, boiled": 245,
+    "Butternut squash, boiled": 205, "Sweet potato, boiled, no skin": 328,
+    "Potato, boiled, no skin": 156, "Swede, boiled": 170,
+    "Turnip, boiled": 156, "Parsnip, boiled": 156, "Beetroot, boiled": 170,
+    "Asparagus, boiled": 180, "Brussels sprouts, boiled": 156,
+    "Mushrooms, white (button), boiled": 156,
+    "Pak choi (bok choy), steamed": 170, "Okra, boiled": 160,
+    "Apple, peeled, raw": 110, "Banana": 150, "Bean sprouts, raw": 104,
+    "Mung bean sprouts, boiled": 124, "Red pepper (capsicum), raw": 149,
+    "Cucumber, peeled, raw": 133, "Celery, raw": 101,
+    "Lettuce, cos, raw": 47, "Swiss chard (silverbeet), boiled": 175,
+    "Mangetout (snow peas), boiled": 160,
+    "Daikon (white radish), boiled": 147,
+    "Natural yoghurt (~3% fat)": 245, "Cottage cheese": 210,
+    "Ricotta": 246, "Soy milk, unsweetened": 243,
+    "Tahini (sesame paste, hulled, roasted)": 240,
+    "Peanut butter, no added salt or sugar": 258,
+    "Salt (sodium chloride)": 288, "Sodium bicarbonate": 220,
+}
+OIL_CUP_G = 218.0
 
 
-def egg_units(name, grams):
-    """'1.2 eggs', '1 egg', '0.5 egg whites' for an egg food, else ''."""
+def _num_text(k):
+    return f"{k:.1f}".rstrip("0").rstrip(".")
+
+
+def household_units(name, grams):
+    """The amount in kitchen units – '1.2 eggs', '0.5 tray', '2 tsp',
+    '1.5 tbsp', '0.8 cup' – or '' when the food has no unit."""
+    try:
+        g = float(grams)
+    except (TypeError, ValueError):
+        return ""
+    if g <= 0:
+        return ""
     n_ = (name or "").lower()
-    for pat, exc, size, one, many in EGG_UNITS:
-        if re.search(pat, n_) and not (exc and re.search(exc, n_)):
-            try:
-                k = float(grams) / size
-            except (TypeError, ValueError):
-                return ""
-            if k <= 0:
-                return ""
+    for pat, exc, size, one, many in PIECE_UNITS:
+        m = re.search(pat, n_)
+        if m and not (exc and re.search(exc, n_)):
+            size = size or float(m.group(1))
+            k = g / size
             if k < 0.05:
                 return f"<0.1 {one}"
-            t = f"{k:.1f}".rstrip("0").rstrip(".")
+            t = _num_text(k)
             return f"{t} {one if t == '1' else many}"
-    return ""
+    cup = CUP_G.get(name)
+    if cup is None and re.search(r"\boil\b", n_):
+        cup = OIL_CUP_G
+    if not cup:
+        return ""
+    if g >= cup / 4:
+        t = _num_text(g / cup)
+        return f"{t} cup{'' if t == '1' else 's'}"
+    if g >= cup / 16:
+        return f"{_num_text(g / (cup / 16))} tbsp"
+    k = g / (cup / 48)
+    return "<0.1 tsp" if k < 0.05 else f"{_num_text(k)} tsp"
 
 
-def egg_note(name, grams):
-    """' (1.2 eggs)' after a gram amount of an egg food, else ''."""
-    u = egg_units(name, grams)
+def units_note(name, grams):
+    """' (1.2 eggs)' / ' (2 tsp)' after a gram amount, else ''."""
+    u = household_units(name, grams)
     return f" ({u})" if u else ""
 
 
@@ -3425,7 +3491,7 @@ def meal_plan_report(plans, db, ctx):
                  f"{rt:.0f}/100")
         vecs_all = {n: _vec(db[n]) for n in p["names"]}
         if p["fixed"]:
-            L.append("  Fixed: " + ", ".join(f"{n} {g:g} g{egg_note(n, g)}"
+            L.append("  Fixed: " + ", ".join(f"{n} {g:g} g{units_note(n, g)}"
                                              for n, g in p["fixed"]))
         if p.get("treats"):
             L.append("  Biscuits (treats): " + ", ".join(
@@ -3438,10 +3504,10 @@ def meal_plan_report(plans, db, ctx):
                      f" energy): {sum(g for _, g in m):.0f} g, {kc:.0f} kcal,"
                      f" {pp:.0f} mg P")
             for n, g in m:
-                L.append(f"     {n:<44} {g:>6.1f} g{egg_note(n, g)}")
+                L.append(f"     {n:<44} {g:>6.1f} g{units_note(n, g)}")
         if p["serving"]:
             L.append("  Add at serving (split between meals): " + ", ".join(
-                f"{n} {g:g} g{egg_note(n, g)}" for n, g in p["serving"]))
+                f"{n} {g:g} g{units_note(n, g)}" for n, g in p["serving"]))
         day = meal_plan_day(p)
         names, grams = [n for n, _ in day], [g for _, g in day]
         kcal, per, _ = per1000_from(grams, [vecs_all.get(n) or _vec(db[n])
@@ -3738,18 +3804,18 @@ def meal_plan_print_html(plan, db, ctx, days=7, title="Renal meal plan",
     for j, m in enumerate(plan["meals"]):
         kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100 for n, g in m)
         rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g"
-                       f"{_esc(egg_note(n, g))}</td><td class=n>"
-                       f"{g * days:.0f} g{_esc(egg_note(n, g * days))}</td>"
+                       f"{_esc(units_note(n, g))}</td><td class=n>"
+                       f"{g * days:.0f} g{_esc(units_note(n, g * days))}</td>"
                        "<td>☐</td></tr>" for n, g in m)
         cards.append(f"<h2>{MEAL_NAMES[j]} – one portion {sum(g for _, g in m):.0f} g, "
                      f"{kc:.0f} kcal</h2><table><tr><th>Ingredient</th>"
                      f"<th class=n>Per day</th><th class=n>Batch for {days} "
                      f"days</th><th>✓</th></tr>{rows}</table>")
     serv = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g"
-                   f"{_esc(egg_note(n, g))}</td></tr>"
+                   f"{_esc(units_note(n, g))}</td></tr>"
                    for n, g in plan["serving"])
     fixed = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g"
-                    f"{_esc(egg_note(n, g))}</td></tr>"
+                    f"{_esc(units_note(n, g))}</td></tr>"
                     for n, g in plan["fixed"])
     day = meal_plan_day(plan)
     names, grams = [n for n, _ in day], [g for _, g in day]
@@ -4137,7 +4203,7 @@ def biscuit_to_ingredient(b, db, name, n_biscuits):
     unk = _unknown(grams, vecs)
     per = {k: (None if k in unk else round(t[KI[k]] * 100 / mass, 4))
            for k in KEYS}
-    recipe_txt = ", ".join(f"{n} {g:.0f} g{egg_note(n, g)}"
+    recipe_txt = ", ".join(f"{n} {g:.0f} g{units_note(n, g)}"
                            for n, g in zip(names, grams))
     return normalise({
         "name": name, "category": "treat", "per100g": per,
@@ -4162,7 +4228,7 @@ def biscuit_report(results, db, ctx, need_kcal=None):
         w = max(len(n) for n, *_ in d["ingredients"]) + 2
         for n, g, k in d["ingredients"]:
             L.append(f"  {n:<{w}} {g:>6.0f} g  {k:>5} kcal"
-                     f"{egg_note(n, g)}")
+                     f"{units_note(n, g)}")
         if d["water_ml"]:
             L.append(f"  {'Water (as needed)':<{w}} {d['water_ml']:>6.0f} ml")
         L.append("  Per 1000 kcal:")
@@ -4179,7 +4245,7 @@ def biscuit_print_html(b, db, ctx, need_kcal=None, title="Renal-friendly "
     import datetime
     d = biscuit_details(b, db, ctx, need_kcal)
     rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g"
-                   f"{_esc(egg_note(n, g))}</td>"
+                   f"{_esc(units_note(n, g))}</td>"
                    f"<td class=n>{k}</td><td>☐</td></tr>"
                    for n, g, k in d["ingredients"])
     if d["water_ml"]:
@@ -6432,7 +6498,7 @@ class GenResultsWindow(tk.Toplevel):
                        "  (forced)" if n in self.forced else "")
                 L.append(f"  {n:<{w}} {a:>7.1f} g  {kc:>5.0f} kcal"
                          f"  [{ingredient_role(db[n])}]{tag}"
-                         f"{egg_note(n, a)}")
+                         f"{units_note(n, a)}")
             capr = per["ca"] / per["p"] if per["p"] else 0
             L.append(f"  per 1000 kcal: protein {per['protein']:.0f} g, "
                      f"P {max(0, per['p'] - per['p_bind']):.0f} mg, "
@@ -7139,7 +7205,7 @@ class ResultsWindow(tk.Toplevel):
                 a_ = was.get(n)
                 L.append(f"  {n:<{w}} "
                          + ("    new  " if a_ is None else f"{a_:>7.1f} g")
-                         + f" → {b_:>7.1f} g{egg_note(n, b_)}")
+                         + f" → {b_:>7.1f} g{units_note(n, b_)}")
             for n in self.names:
                 if n not in names:
                     L.append(f"  {n:<{w}} {was[n]:>7.1f} g →  removed")
@@ -7967,7 +8033,7 @@ class App(tk.Tk):
                 for k, n, g in its:
                     kc1 = self.db[n]["per100g"]["kcal"]
                     self.rec_tree.insert(head, "end", iid=f"p:{k}", text=n,
-                                         values=(f"{g:g}{egg_note(n, g)}", "",
+                                         values=(f"{g:g}{units_note(n, g)}", "",
                                                  "?" if kc1 is None else
                                                  f"{kc1 * g / 100:.0f}"))
         else:
@@ -7975,8 +8041,8 @@ class App(tk.Tk):
                 kc = self.db[n]["per100g"]["kcal"] if n in self.db else None
                 gm = g / self.meals_n()
                 self.rec_tree.insert("", "end", iid=str(i), text=n,
-                                     values=(f"{g:g}{egg_note(n, g)}",
-                                             f"{gm:.1f}{egg_note(n, gm)}",
+                                     values=(f"{g:g}{units_note(n, g)}",
+                                             f"{gm:.1f}{units_note(n, gm)}",
                                              "?" if kc is None
                                              else f"{kc * g / 100:.0f}"))
         self.recalc()
