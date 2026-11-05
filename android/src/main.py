@@ -183,6 +183,21 @@ def resolve_food(value, text, names):
 
 
 # ---- saved recipes (same item format as the desktop/Streamlit files)
+def print_html(recipe, db, dog, title=""):
+    """The printable page (A4, same as the desktop and web apps)."""
+    need = dog.need()
+    ctx = rc.build_score_context(None, dog.stage, need, dog.bw, dog.extended,
+                                 dog.max_g or None)
+    return rc.recipe_print_html(
+        recipe, db, need, dog.stage, ctx, dog.meals, bw=dog.bw,
+        factor=dog.factor, title=title or "Renal diet recipe")
+
+
+def print_file_name(title):
+    safe = "".join(c if c.isalnum() else "_" for c in (title or "recipe"))
+    return f"{safe.strip('_') or 'recipe'}_{datetime.date.today():%Y-%m-%d}.html"
+
+
 def saved_recipes():
     """{name: {"items": [[food, g], ...], "bw", "factor", "stage",
     "extended", "saved"}} kept in the engine's settings file."""
@@ -385,6 +400,43 @@ def main(page: ft.Page):
         recipe.pop(e.control.data)
         refresh()
 
+    # ---- print: the same A4 page as the other apps. Computer: opens in the
+    # web browser (print from there); phone: share sheet (open in Chrome /
+    # save / send, then print); web: downloads the page.
+    file_picker = ft.FilePicker()
+    share = ft.Share()
+
+    async def print_recipe(e):
+        if not recipe:
+            toast("Add foods first.")
+            return
+        html_ = print_html(recipe, db, dog, state["name"])
+        name = print_file_name(state["name"])
+        data = html_.encode("utf-8")
+        try:
+            if page.web:
+                await file_picker.save_file(file_name=name, src_bytes=data,
+                                            allowed_extensions=["html"])
+            elif page.platform in (ft.PagePlatform.ANDROID,
+                                   ft.PagePlatform.IOS):
+                await share.share_files(
+                    [ft.ShareFile.from_bytes(data, mime_type="text/html",
+                                             name=name)],
+                    subject=state["name"] or "Renal diet recipe",
+                    text="Open in a web browser to print.")
+            else:
+                import pathlib
+                import tempfile
+                import webbrowser
+                fd, path = tempfile.mkstemp(suffix=".html",
+                                            prefix="recipe_print_")
+                with os.fdopen(fd, "wb") as f:
+                    f.write(data)
+                webbrowser.open(pathlib.Path(path).resolve().as_uri())
+                toast("Opened in your web browser – print from there.")
+        except Exception as ex:                     # keep the app alive
+            toast(f"Could not print: {ex}")
+
     def clear(e):
         recipe.clear()
         state["name"] = ""
@@ -520,6 +572,8 @@ def main(page: ft.Page):
                alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         ft.Row([food, grams, ft.FilledButton("Add", on_click=add)]),
         msg, items, ft.Divider(), results,
+        ft.OutlinedButton("Print recipe", icon=ft.Icons.PRINT,
+                          on_click=print_recipe),
         ft.Text("Approximate tool – not veterinary advice.", size=11,
                 italic=True),
     ])

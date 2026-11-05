@@ -49,7 +49,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.04b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.05"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1118,6 +1118,10 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                                  key=lambda kv: -kv[1]) if v > 1e-3][:5]
     notes = [ln[2:] if ln.startswith("• ") else ln
              for ln in (a.get("notes") or "").splitlines() if ln.strip()]
+    # how many key nutrients are within range (score and rating are
+    # printed under the ingredients)
+    notes = [ln[2:] for ln in assessment_head(a)
+             if ln.startswith("• Key nutrients")] + notes
     per_meal_kcal = kcal / meals
     dog = " · ".join(x for x in [
         _esc(dog_name) if dog_name else "",

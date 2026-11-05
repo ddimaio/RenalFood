@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.04b"
+ENGINE_VERSION = "2026.11.05"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 

@@ -65,6 +65,8 @@ build reports a missing Android SDK or Java.
 - [x] Key nutrients, Other nutrients and Assessment can be shown or hidden
       (closed when a recipe is first shown; Key nutrients shows a count)
 - [x] Save / open / delete recipes (kept on the phone)
+- [x] Print recipe (bottom of the Recipe tab): the same A4 page as the other
+      apps – opens in the browser on a computer, share sheet on a phone
 - [x] Ingredient library (Library tab): search, category filter, a food's
       values per 100 g, add to recipe, edit, new food, delete; generator
       choices on each food's page (same as Generator → Food choices)
