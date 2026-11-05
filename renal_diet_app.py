@@ -863,10 +863,15 @@ with tab_rec:
                             src_opts[lf_src], db, nm, kind, lf_n)
                         rc.save_db(db)
                         ss.lib_ver += 1
-                        st.success(f"Saved '{nm}' to the library "
-                                   f"(category {kind}).")
+                        ss.lf_msg = (f"Saved '{nm}' to the library "
+                                     f"(category {kind}).")
+                        # rerun so every food list and the library table
+                        # include it straight away
+                        st.rerun()
                     except ValueError as e:
                         st.error(str(e))
+            if ss.get("lf_msg"):
+                st.success(ss.pop("lf_msg"))
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,
@@ -2175,7 +2180,8 @@ with tab_lib:
         with _m:
             st.caption("📱 This table is wide – swipe sideways, or edit on a "
                        "larger screen.")
-    led = st.data_editor(ldf, key=f"lib_{ss.lib_ver}", num_rows="dynamic",
+    led = st.data_editor(ldf, key=f"lib_{ss.lib_ver}_{len(names_all)}",
+                         num_rows="dynamic",
                          hide_index=True, **FULL,
                          height=420, column_config=cfg)
     lc = st.columns(3)
