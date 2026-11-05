@@ -181,6 +181,99 @@ for key, val in {"recipe": [], "rec_ver": 0, "recipe_note": "",
     ss.setdefault(key, val)
 db = ss.db
 
+# ---- My Dog (dog settings, blood results and the targets adapted from
+#      them): remembered in renal_prefs.json next to the app ('web_dog') and
+#      in this browser (localStorage) - the browser copy wins, as for the
+#      other remembered settings (the server file may be reset on a cloud
+#      host)
+DOG_PREF, LS_DOG = "web_dog", "renalfood_dog"
+DOG_STORE = ("bw", "age", "activity", "factor", "max_g", "meals", "stage",
+             "ext")
+
+
+def apply_dog_state(d):
+    """Put a stored My Dog state into the session (invalid parts ignored)."""
+    if not isinstance(d, dict):
+        return
+    dog = d.get("dog") or {}
+    for k in ("bw", "age", "factor", "max_g"):
+        try:
+            v = float(dog[k])
+            if v >= 0 and (v > 0 or k in ("age", "max_g")):
+                ss[k] = v
+        except (KeyError, TypeError, ValueError):
+            pass
+    try:
+        ss.meals = max(1, min(6, int(dog["meals"])))
+    except (KeyError, TypeError, ValueError):
+        pass
+    if dog.get("activity") in rc.ACTIVITY:
+        ss.activity = dog["activity"]
+    if dog.get("stage") in rc.STAGES:
+        ss.stage = dog["stage"]
+    if "ext" in dog:
+        ss.ext = bool(dog["ext"])
+    bl = d.get("bloods") or {}
+    for k, *_ in rc.BLOOD_FIELDS:
+        try:
+            ss[f"bl_{k}"] = None if bl.get(k) is None else float(bl[k])
+        except (TypeError, ValueError):
+            ss[f"bl_{k}"] = None
+    if bl.get("weight_trend") in ("stable", "losing", "gaining"):
+        ss.bl_trend = bl["weight_trend"]
+    ss.bl_date = str(bl.get("date") or "")
+    sc = d.get("score_ctx")
+    ss.score_ctx = sc if isinstance(sc, dict) else None
+    ss.dog_ver = ss.get("dog_ver", 0) + 1     # forms show the new values
+
+
+def dog_state_json():
+    """The My Dog state to remember, as JSON text."""
+    bl = {"date": str(ss.get("bl_date") or ""),
+          "weight_trend": ss.get("bl_trend", "stable")}
+    for k, *_ in rc.BLOOD_FIELDS:
+        bl[k] = ss.get(f"bl_{k}")
+    return json.dumps({"dog": {k: ss.get(k) for k in DOG_STORE},
+                       "bloods": bl, "score_ctx": ss.score_ctx},
+                      sort_keys=True, ensure_ascii=False, default=list)
+
+
+if "dog_file_loaded" not in ss:
+    ss.dog_file_loaded = True
+    apply_dog_state(rc.load_prefs().get(DOG_PREF))
+    ss.dog_ls_loaded = streamlit_js_eval is None
+    ss.dog_saved = dog_state_json()
+if not ss.dog_ls_loaded:
+    raw = streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{LS_DOG}') || 'null'",
+        key="ls_get_dog")
+    if raw is not None:                # None = browser not answered yet
+        ss.dog_ls_loaded = True
+        try:
+            got = json.loads(raw)
+        except (TypeError, ValueError):
+            got = None
+        if isinstance(got, dict):      # browser copy wins over the file
+            apply_dog_state(got)
+            ss.dog_saved = dog_state_json()
+
+
+def store_dog():
+    """Remember My Dog when it changed (end of every run)."""
+    cur = dog_state_json()
+    if cur == ss.get("dog_saved"):
+        return
+    ss.dog_saved = cur
+    p = rc.load_prefs()
+    p[DOG_PREF] = json.loads(cur)
+    rc.save_prefs(p)
+    if streamlit_js_eval is not None and ss.dog_ls_loaded:
+        streamlit_js_eval(
+            js_expressions=f"localStorage.setItem('{LS_DOG}', "
+                           f"{json.dumps(cur)}) || 1",
+            key=f"ls_set_dog_{abs(hash(cur))}")
+
+
 # ---- excluded foods (generator pool / optimiser additions), remembered in
 #      this browser (localStorage) and in renal_prefs.json next to the app
 LS_KEY = "renalfood_excluded"
@@ -535,64 +628,11 @@ def apply_dog(use_factor=None):
 
 
 with st.sidebar:
-    st.header("🐕 Dog")
-    _v = ss.dog_ver
-    with st.form("dog_form", border=False):
-        st.number_input("Body weight (kg)", 0.5, 100.0, step=0.1,
-                        value=float(ss.bw), key=f"f_bw_{_v}",
-                        help="Use ideal weight if she is over- or "
-                             "underweight.")
-        ac = st.columns(2)
-        ac[0].number_input("Age (years, 0 = not set)", 0.0, 25.0, step=0.5,
-                           value=float(ss.age), key=f"f_age_{_v}",
-                           help="Only used to suggest a starting MER "
-                                "factor.")
-        ac[1].selectbox("Activity", rc.ACTIVITY,
-                        index=rc.ACTIVITY.index(ss.activity)
-                        if ss.activity in rc.ACTIVITY else 0,
-                        key=f"f_activity_{_v}")
-        st.number_input("MER factor (× 70·BW^0.75)", 0.8, 3.0, step=0.1,
-                        value=float(ss.factor), key=f"f_factor_{_v}",
-                        help="≈1.6 neutered adult, 1.8 intact, 1.2–1.4 less "
-                             "active / weight-gain prone. Adjust to keep "
-                             "weight stable.")
-        st.number_input("Max food per day (g, 0 = no limit)", 0.0, 5000.0,
-                        step=10.0, value=float(ss.max_g),
-                        key=f"f_max_g_{_v}",
-                        help="For a small appetite: the optimiser and "
-                             "generator then prefer energy-dense recipes "
-                             "that fit in this amount.")
-        st.number_input("Meals per day", 1, 6, step=1, value=int(ss.meals),
-                        key=f"f_meals_{_v}",
-                        help="Recipes stay daily totals; per-meal amounts "
-                             "are the daily amounts divided by this number "
-                             "(nutrient balance per 1000 kcal is the "
-                             "same).")
-        st.selectbox("IRIS stage", list(rc.STAGES),
-                     index=list(rc.STAGES).index(ss.stage),
-                     key=f"f_stage_{_v}")
-        st.form_submit_button("Apply", type="primary", on_click=apply_dog,
-                              use_container_width=True,
-                              help="Updates the energy need and targets on "
-                                   "every tab (recipe analysis, generator, "
-                                   "optimiser, scaling, printouts).")
-        _sug = rc.suggest_mer_factor(ss.age, ss.bw, ss.activity)
-        if _sug:
-            st.caption(_sug[1])
-            if abs(_sug[0] - ss.factor) > 1e-9:
-                st.form_submit_button(f"Apply with factor {_sug[0]:g}",
-                                      on_click=apply_dog, args=(_sug[0],),
-                                      use_container_width=True)
-    if ss.get("dog_msg"):
-        st.success(ss.pop("dog_msg"))
-    st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal",
-              help=f"{ss.bw:g} kg × factor {ss.factor:g} (applied values)")
-    st.caption(rc.STAGES[ss.stage][1])
-    st.toggle("Extended nutrients", key="ext",
-              help="Also show and check essential amino acids, linoleic "
-                   "acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) against "
-                   "AAFCO adult minimums. Needs these values in the "
-                   "ingredient library.")
+    st.header("🐕 " + (ss.get("dog_name") or "My dog"))
+    st.markdown(f"{ss.bw:g} kg · {ss.stage} · **{need_now():.0f} kcal/day**"
+                + (f" · {ss.meals} meals" if ss.meals > 1 else ""))
+    st.caption("Change her details and blood results in the 🐕 My Dog "
+               "tab – they are remembered.")
     st.divider()
     st.radio("Layout", ["Auto", "Phone", "Desktop"], key="layout",
              horizontal=True, help="Auto picks by screen width.")
@@ -600,8 +640,8 @@ with st.sidebar:
                "diet should be balanced by a vet nutritionist.")
 layout_css(ss.get("layout", "Auto"))
 
-tab_rec, tab_blood, tab_gen, tab_opt, tab_lib, tab_about = st.tabs(
-    ["🍲 Recipe & analysis", "🩸 Blood results", "✨ Generate recipes",
+tab_rec, tab_dog, tab_gen, tab_opt, tab_lib, tab_about = st.tabs(
+    ["🍲 Recipe & analysis", "🐕 My Dog", "✨ Generate recipes",
      "⚙️ Optimise", "📚 Ingredient library", "ℹ️ About"])
 
 names_all = sorted(db, key=str.lower)
@@ -698,7 +738,7 @@ with tab_rec:
     if _m:
         with _m:
             st.caption(f"🐕 {ss.bw:g} kg · {ss.stage} · {need_now():.0f} "
-                       "kcal/day — change in the sidebar (› top left)")
+                       "kcal/day — change in the 🐕 My Dog tab")
     if ss.recipe_note:
         edited = ss.recipe != ss.applied
         st.success(ss.recipe_note + ("   (edited since)" if edited else ""))
@@ -1089,7 +1129,71 @@ with tab_rec:
                            file_name="diet_results.csv", mime="text/csv")
 
 # ================================================================ BLOODS
-with tab_blood:
+with tab_dog:
+    st.subheader("My dog")
+    st.caption("Used on every tab (recipe analysis, generator, optimiser, "
+               "scaling, printouts). Remembered – on this computer and in "
+               "this browser.")
+    _v = ss.dog_ver
+    with st.form("dog_form", border=False):
+        r1 = st.columns(3)
+        r1[0].number_input("Body weight (kg)", 0.5, 100.0, step=0.1,
+                           value=float(ss.bw), key=f"f_bw_{_v}",
+                           help="Use ideal weight if she is over- or "
+                                "underweight.")
+        r1[1].number_input("Age (years, 0 = not set)", 0.0, 25.0, step=0.5,
+                           value=float(ss.age), key=f"f_age_{_v}",
+                           help="Only used to suggest a starting MER "
+                                "factor.")
+        r1[2].selectbox("Activity", rc.ACTIVITY,
+                        index=rc.ACTIVITY.index(ss.activity)
+                        if ss.activity in rc.ACTIVITY else 0,
+                        key=f"f_activity_{_v}")
+        r2 = st.columns(3)
+        r2[0].number_input("MER factor (× 70·BW^0.75)", 0.8, 3.0, step=0.1,
+                           value=float(ss.factor), key=f"f_factor_{_v}",
+                           help="≈1.6 neutered adult, 1.8 intact, 1.2–1.4 "
+                                "less active / weight-gain prone. Adjust to "
+                                "keep weight stable.")
+        r2[1].number_input("Max food per day (g, 0 = no limit)", 0.0,
+                           5000.0, step=10.0, value=float(ss.max_g),
+                           key=f"f_max_g_{_v}",
+                           help="For a small appetite: the optimiser and "
+                                "generator then prefer energy-dense recipes "
+                                "that fit in this amount.")
+        r2[2].number_input("Meals per day", 1, 6, step=1,
+                           value=int(ss.meals), key=f"f_meals_{_v}",
+                           help="Recipes stay daily totals; per-meal amounts "
+                                "are the daily amounts divided by this "
+                                "number (nutrient balance per 1000 kcal is "
+                                "the same).")
+        r3 = st.columns(3)
+        r3[0].selectbox("IRIS stage", list(rc.STAGES),
+                        index=list(rc.STAGES).index(ss.stage),
+                        key=f"f_stage_{_v}")
+        st.form_submit_button("Apply", type="primary", on_click=apply_dog,
+                              use_container_width=True,
+                              help="Updates the energy need and targets on "
+                                   "every tab (recipe analysis, generator, "
+                                   "optimiser, scaling, printouts).")
+        _sug = rc.suggest_mer_factor(ss.age, ss.bw, ss.activity)
+        if _sug:
+            st.caption(_sug[1])
+            if abs(_sug[0] - ss.factor) > 1e-9:
+                st.form_submit_button(f"Apply with factor {_sug[0]:g}",
+                                      on_click=apply_dog, args=(_sug[0],),
+                                      use_container_width=True)
+    if ss.get("dog_msg"):
+        st.success(ss.pop("dog_msg"))
+    st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal",
+              help=f"{ss.bw:g} kg × factor {ss.factor:g} (applied values)")
+    st.caption(rc.STAGES[ss.stage][1])
+    st.toggle("Extended nutrients", key="ext",
+              help="Also show and check essential amino acids, linoleic "
+                   "acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) against "
+                   "AAFCO adult minimums. Needs these values in the "
+                   "ingredient library.")
+    st.divider()
     st.subheader("Blood results → adapted targets")
     st.caption("Enter what was tested (leave the rest blank). The app "
                "suggests the IRIS stage and tightens or relaxes the nutrient "
@@ -2391,3 +2495,4 @@ Sources: [UC Davis – Nutritional Management of Chronic Renal Disease]
 """)
 
 store_excluded_in_browser()
+store_dog()
