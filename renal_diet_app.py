@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.05b"
+ENGINE_VERSION = "2026.11.05c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -606,6 +606,13 @@ tab_rec, tab_blood, tab_gen, tab_opt, tab_lib, tab_about = st.tabs(
 
 names_all = sorted(db, key=str.lower)
 
+def egg_col(names, grams):
+    """{'eggs': ['1.2 eggs', ...]} for a results table when it has an egg
+    food (amounts as a number of eggs), else {}."""
+    u = [rc.egg_units(n, g) for n, g in zip(names, grams)]
+    return {"eggs": u} if any(u) else {}
+
+
 def _save_biscuit(b, name, n_b):
     """Save a generated biscuit recipe as a library treat; returns name."""
     name = (name or "").strip() or "Renal biscuits"
@@ -749,6 +756,12 @@ with tab_rec:
                 if lv == "toxic"]
         if _bad:
             st.error("⚠ Toxic for dogs – remove: " + "; ".join(_bad) + ".")
+        _eggs = [f"{n} {g:g} g = {rc.egg_units(n, g)}" + (
+                 f" ({rc.egg_units(n, g / ss.meals)} per meal)"
+                 if ss.meals > 1 else "")
+                 for n, g in ss.recipe if rc.egg_units(n, g)]
+        if _eggs:
+            st.caption("🥚 " + "; ".join(_eggs) + f". {rc.EGG_UNITS_NOTE}.")
         record_history()
         uc = st.columns(2)
         uc[0].button("↶ Undo", key="undo", on_click=undo,
@@ -1366,7 +1379,8 @@ with tab_opt:
                 old = old or {}
                 d_ = {"Ingredient": names,
                       "was g": [round(old.get(n, 0.0), 1) for n in names],
-                      "g/day": [round(x, 1) for x in grams]}
+                      "g/day": [round(x, 1) for x in grams],
+                      **egg_col(names, grams)}
                 if ss.meals > 1:
                     d_["g/meal"] = [round(x / ss.meals, 1) for x in grams]
                 d_["kcal"] = [fmt_kcal(n, x) for n, x in zip(names, grams)]
@@ -1850,7 +1864,8 @@ with tab_gen:
                                 f"{p['score']:.3f} · rating {rt_p:.0f}/100")
                     if p["fixed"]:
                         st.caption("Fixed every day: " + ", ".join(
-                            f"{n} {g:g} g" for n, g in p["fixed"]))
+                            f"{n} {g:g} g{rc.egg_note(n, g)}"
+                            for n, g in p["fixed"]))
                     if p.get("treats"):
                         st.caption("Biscuits every day: " + ", ".join(
                             f"{n} – {rc.biscuit_count_text(db[n], g)}"
@@ -1865,11 +1880,14 @@ with tab_gen:
                                          f"(target {sh * 100:.0f}%)")
                         show_df(cols[j], pd.DataFrame(
                             {"Ingredient": [n for n, _ in m],
-                             "g / portion": [round(g, 1) for _, g in m]}),
+                             "g / portion": [round(g, 1) for _, g in m],
+                             **egg_col([n for n, _ in m],
+                                       [g for _, g in m])}),
                             hide_index=True, **FULL)
                     if p["serving"]:
                         st.caption("Add at serving (split between meals): "
                                    + ", ".join(f"{n} {g:g} g"
+                                               f"{rc.egg_note(n, g)}"
                                                for n, g in p["serving"]))
                     day = rc.meal_plan_day(p)
                     kcal_d, per_d, _ = rc.per1000_from(
@@ -2038,6 +2056,7 @@ with tab_gen:
                     "Ingredient": names,
                     "Role": [rc.ingredient_role(db[n]) for n in names],
                     "g/day": [round(x, 1) for x in g],
+                    **egg_col(names, g),
                     **({"g/meal": [round(x / ss.meals, 1) for x in g]}
                        if ss.meals > 1 else {}),
                     "kcal": [fmt_kcal(n, x) for n, x in zip(names, g)],

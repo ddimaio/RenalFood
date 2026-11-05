@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.05b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.05c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1028,8 +1028,9 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
         kc = db[n]["per100g"]["kcal"]
         rows_i.append(
             "<tr><td>" + _esc(n) + "</td><td class=n>" + f"{g:.1f}" +
-            "</td>" + (f"<td class=n>{g / meals:.1f}</td>" if meals > 1
-                       else "") +
+            _esc(egg_note(n, g)) + "</td>" +
+            (f"<td class=n>{g / meals:.1f}{_esc(egg_note(n, g / meals))}"
+             "</td>" if meals > 1 else "") +
             f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
             "</td><td class=c>☐</td></tr>")
     tot_row = (f"<tr class=tot><td>Total</td><td class=n>{mass:.0f}</td>" +
@@ -1060,9 +1061,10 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                         f"{sum(g for _, g in its):.0f} g")
             batch = isinstance(tg, int)
             rows = "".join(
-                "<tr><td>" + _esc(n) + f"</td><td class=n>{g:.1f}</td>" +
-                (f"<td class=n>{g * days:.0f}</td>" if batch else
-                 "<td class=n></td>") +
+                "<tr><td>" + _esc(n) + f"</td><td class=n>{g:.1f}"
+                f"{_esc(egg_note(n, g))}</td>" +
+                (f"<td class=n>{g * days:.0f}{_esc(egg_note(n, g * days))}"
+                 "</td>" if batch else "<td class=n></td>") +
                 f"<td class=n>{(db[n]['per100g']['kcal'] or 0) * g / 100:.0f}"
                 "</td><td class=c>☐</td></tr>" for n, g in its)
             parts.append(
@@ -2809,6 +2811,44 @@ def toxic_foods_in(names):
     return [(n, lv, t) for n in names for lv, t in toxic_check(n)[:1]]
 
 
+# ------------------------------------------------------------ egg units
+# Egg amounts are also shown as a number of eggs: grams of edible egg per
+# egg (no shell) - a UK medium / US large egg. (pattern, exceptions, g,
+# singular, plural); the first match wins.
+EGG_UNITS = [
+    (r"egg yolk|yolk", None, 17.0, "egg yolk", "egg yolks"),
+    (r"egg white|albumen", None, 33.0, "egg white", "egg whites"),
+    (r"\beggs?\b", r"eggshell|egg ?shell|eggplant|egg-free|egg free|"
+     r"egg replacer", 50.0, "egg", "eggs"),
+]
+EGG_UNITS_NOTE = ("1 egg ≈ 50 g without shell (UK medium / US large); "
+                  "1 egg white ≈ 33 g; 1 yolk ≈ 17 g")
+
+
+def egg_units(name, grams):
+    """'1.2 eggs', '1 egg', '0.5 egg whites' for an egg food, else ''."""
+    n_ = (name or "").lower()
+    for pat, exc, size, one, many in EGG_UNITS:
+        if re.search(pat, n_) and not (exc and re.search(exc, n_)):
+            try:
+                k = float(grams) / size
+            except (TypeError, ValueError):
+                return ""
+            if k <= 0:
+                return ""
+            if k < 0.05:
+                return f"<0.1 {one}"
+            t = f"{k:.1f}".rstrip("0").rstrip(".")
+            return f"{t} {one if t == '1' else many}"
+    return ""
+
+
+def egg_note(name, grams):
+    """' (1.2 eggs)' after a gram amount of an egg food, else ''."""
+    u = egg_units(name, grams)
+    return f" ({u})" if u else ""
+
+
 def merge_duplicates(rows):
     """[(name, grams)] with each food once (repeated foods' grams added
     together), in first-seen order."""
@@ -3385,7 +3425,7 @@ def meal_plan_report(plans, db, ctx):
                  f"{rt:.0f}/100")
         vecs_all = {n: _vec(db[n]) for n in p["names"]}
         if p["fixed"]:
-            L.append("  Fixed: " + ", ".join(f"{n} {g:g} g"
+            L.append("  Fixed: " + ", ".join(f"{n} {g:g} g{egg_note(n, g)}"
                                              for n, g in p["fixed"]))
         if p.get("treats"):
             L.append("  Biscuits (treats): " + ", ".join(
@@ -3398,10 +3438,10 @@ def meal_plan_report(plans, db, ctx):
                      f" energy): {sum(g for _, g in m):.0f} g, {kc:.0f} kcal,"
                      f" {pp:.0f} mg P")
             for n, g in m:
-                L.append(f"     {n:<44} {g:>6.1f} g")
+                L.append(f"     {n:<44} {g:>6.1f} g{egg_note(n, g)}")
         if p["serving"]:
             L.append("  Add at serving (split between meals): " + ", ".join(
-                f"{n} {g:g} g" for n, g in p["serving"]))
+                f"{n} {g:g} g{egg_note(n, g)}" for n, g in p["serving"]))
         day = meal_plan_day(p)
         names, grams = [n for n, _ in day], [g for _, g in day]
         kcal, per, _ = per1000_from(grams, [vecs_all.get(n) or _vec(db[n])
@@ -3697,16 +3737,19 @@ def meal_plan_print_html(plan, db, ctx, days=7, title="Renal meal plan",
     cards = []
     for j, m in enumerate(plan["meals"]):
         kc = sum(g * (db[n]["per100g"]["kcal"] or 0) / 100 for n, g in m)
-        rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g</td>"
-                       f"<td class=n>{g * days:.0f} g</td><td>☐</td></tr>"
-                       for n, g in m)
+        rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g"
+                       f"{_esc(egg_note(n, g))}</td><td class=n>"
+                       f"{g * days:.0f} g{_esc(egg_note(n, g * days))}</td>"
+                       "<td>☐</td></tr>" for n, g in m)
         cards.append(f"<h2>{MEAL_NAMES[j]} – one portion {sum(g for _, g in m):.0f} g, "
                      f"{kc:.0f} kcal</h2><table><tr><th>Ingredient</th>"
                      f"<th class=n>Per day</th><th class=n>Batch for {days} "
                      f"days</th><th>✓</th></tr>{rows}</table>")
-    serv = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g</td></tr>"
+    serv = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g"
+                   f"{_esc(egg_note(n, g))}</td></tr>"
                    for n, g in plan["serving"])
-    fixed = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g</td></tr>"
+    fixed = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:g} g"
+                    f"{_esc(egg_note(n, g))}</td></tr>"
                     for n, g in plan["fixed"])
     day = meal_plan_day(plan)
     names, grams = [n for n, _ in day], [g for _, g in day]
@@ -4094,7 +4137,8 @@ def biscuit_to_ingredient(b, db, name, n_biscuits):
     unk = _unknown(grams, vecs)
     per = {k: (None if k in unk else round(t[KI[k]] * 100 / mass, 4))
            for k in KEYS}
-    recipe_txt = ", ".join(f"{n} {g:.0f} g" for n, g in zip(names, grams))
+    recipe_txt = ", ".join(f"{n} {g:.0f} g{egg_note(n, g)}"
+                           for n, g in zip(names, grams))
     return normalise({
         "name": name, "category": "treat", "per100g": per,
         "piece_g": mass / max(1, n_biscuits), "role": "other",
@@ -4117,7 +4161,8 @@ def biscuit_report(results, db, ctx, need_kcal=None):
                  f"dough, {d['kcal']:.0f} kcal, ~{d['n_biscuits']} biscuits)")
         w = max(len(n) for n, *_ in d["ingredients"]) + 2
         for n, g, k in d["ingredients"]:
-            L.append(f"  {n:<{w}} {g:>6.0f} g  {k:>5} kcal")
+            L.append(f"  {n:<{w}} {g:>6.0f} g  {k:>5} kcal"
+                     f"{egg_note(n, g)}")
         if d["water_ml"]:
             L.append(f"  {'Water (as needed)':<{w}} {d['water_ml']:>6.0f} ml")
         L.append("  Per 1000 kcal:")
@@ -4133,7 +4178,8 @@ def biscuit_print_html(b, db, ctx, need_kcal=None, title="Renal-friendly "
     """A4 printable page for one biscuit recipe."""
     import datetime
     d = biscuit_details(b, db, ctx, need_kcal)
-    rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g</td>"
+    rows = "".join(f"<tr><td>{_esc(n)}</td><td class=n>{g:.0f} g"
+                   f"{_esc(egg_note(n, g))}</td>"
                    f"<td class=n>{k}</td><td>☐</td></tr>"
                    for n, g, k in d["ingredients"])
     if d["water_ml"]:
@@ -6385,7 +6431,8 @@ class GenResultsWindow(tk.Toplevel):
                 tag = ("  (fixed)" if j < n_fixed else
                        "  (forced)" if n in self.forced else "")
                 L.append(f"  {n:<{w}} {a:>7.1f} g  {kc:>5.0f} kcal"
-                         f"  [{ingredient_role(db[n])}]{tag}")
+                         f"  [{ingredient_role(db[n])}]{tag}"
+                         f"{egg_note(n, a)}")
             capr = per["ca"] / per["p"] if per["p"] else 0
             L.append(f"  per 1000 kcal: protein {per['protein']:.0f} g, "
                      f"P {max(0, per['p'] - per['p_bind']):.0f} mg, "
@@ -7092,7 +7139,7 @@ class ResultsWindow(tk.Toplevel):
                 a_ = was.get(n)
                 L.append(f"  {n:<{w}} "
                          + ("    new  " if a_ is None else f"{a_:>7.1f} g")
-                         + f" → {b_:>7.1f} g")
+                         + f" → {b_:>7.1f} g{egg_note(n, b_)}")
             for n in self.names:
                 if n not in names:
                     L.append(f"  {n:<{w}} {was[n]:>7.1f} g →  removed")
@@ -7452,8 +7499,9 @@ class App(tk.Tk):
         self.rec_tree.heading("gm", text="g/meal")
         self.rec_tree.heading("kcal", text="kcal")
         self.rec_tree.column("#0", width=200, minwidth=120, stretch=True)
-        self.rec_tree.column("g", width=60, anchor="e", stretch=False)
-        self.rec_tree.column("gm", width=60, anchor="e", stretch=False)
+        # wide enough for '60 (1.2 eggs)'
+        self.rec_tree.column("g", width=100, anchor="e", stretch=False)
+        self.rec_tree.column("gm", width=100, anchor="e", stretch=False)
         self.rec_tree.column("kcal", width=60, anchor="e", stretch=False)
         rtbox.pack(fill="both", expand=True)
         self.rec_tree.bind("<Double-Button-1>", lambda e: self.edit_amount())
@@ -7919,15 +7967,16 @@ class App(tk.Tk):
                 for k, n, g in its:
                     kc1 = self.db[n]["per100g"]["kcal"]
                     self.rec_tree.insert(head, "end", iid=f"p:{k}", text=n,
-                                         values=(f"{g:g}", "",
+                                         values=(f"{g:g}{egg_note(n, g)}", "",
                                                  "?" if kc1 is None else
                                                  f"{kc1 * g / 100:.0f}"))
         else:
             for i, (n, g) in enumerate(self.recipe):
                 kc = self.db[n]["per100g"]["kcal"] if n in self.db else None
+                gm = g / self.meals_n()
                 self.rec_tree.insert("", "end", iid=str(i), text=n,
-                                     values=(f"{g:g}",
-                                             f"{g / self.meals_n():.1f}",
+                                     values=(f"{g:g}{egg_note(n, g)}",
+                                             f"{gm:.1f}{egg_note(n, gm)}",
                                              "?" if kc is None
                                              else f"{kc * g / 100:.0f}"))
         self.recalc()

@@ -223,7 +223,8 @@ class GeneratorView:
             label="lock", value=self.db[n]["category"] == "binder",
             disabled=self.db[n]["category"] == "binder")
             for n, _ in self.recipe}
-        rows = [ft.Row([ft.Text(f"{n}", expand=True), ft.Text(f"{g:g} g"),
+        rows = [ft.Row([ft.Text(f"{n}", expand=True),
+                        ft.Text(f"{g:g} g{rc.egg_note(n, g)}"),
                         self.locks[n]]) for n, g in self.recipe]
         n_ex = len(rc.load_excluded(rc.opt_excluded_key()))
         return [ft.Text("Finds better versions of the current recipe. "
@@ -419,7 +420,8 @@ class GeneratorView:
         if change:
             lines.append(ft.Text(change, size=12))
         if list_foods:
-            lines += [ft.Text(f"{n} – {g:.0f} g", size=12)
+            lines += [ft.Text(f"{n} – {g:.0f} g{rc.egg_note(n, g)}",
+                              size=12)
                       for n, g in zip(names, grams) if g >= 0.5]
         lines.append(ft.Text(
             f"Score {score:.3f} · rating {rating:.0f} · {s['g']:.0f} g, "
