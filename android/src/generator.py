@@ -32,6 +32,7 @@ def context(stage, need, bw, extended, ignore_vitamins=False, max_g=None):
 def usable(db, n):
     it = db.get(n)
     return (it is not None and it["category"] != "binder"
+            and it["category"] not in rc.COMPOSITE_CATS   # saved recipes
             and it["per100g"]["kcal"] is not None)
 
 

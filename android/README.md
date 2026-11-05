@@ -68,6 +68,8 @@ build reports a missing Android SDK or Java.
 - [x] Food check (all apps): foods toxic to dogs (Kovalkovičová et al. 2009)
       are flagged in the Library, on the Recipe screen and in the assessment,
       and never used by the generator or optimiser
+- [x] Save the recipe as a library food (all apps): a meal (category
+      custom) or biscuits (category treat, counted in biscuits)
 - [x] Print recipe (bottom of the Recipe tab): the same A4 page as the other
       apps – opens in the browser on a computer, share sheet on a phone
 - [x] Ingredient library (Library tab): search, category filter, a food's

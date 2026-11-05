@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.05e"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.05f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -2731,6 +2731,10 @@ def _family(name):
 UNLIMITED_CAP = 20     # safety cap on items in an "unlimited" recipe
 
 
+# home-made recipes saved as one food: biscuits ('treat') and meals
+# ('custom'); never used as ingredients by the generators / optimiser
+COMPOSITE_CATS = ("treat", "custom")
+
 # ------------------------------------------------------------ toxic foods
 # Foods toxic to dogs, from Kovalkovičová N, Šutiaková I, Pistl J, Šutiak V.
 # "Some food toxic for pets". Interdiscip Toxicol 2009;2(3):169-176
@@ -2971,7 +2975,8 @@ def generate_recipes(db, pool, ctx, n_recipes=5, max_ing=6, fixed=(),
         veg_max = UNLIMITED_CAP
     fixed = merge_duplicates(fixed)     # a food is never listed twice
     pool = [n for n in pool if n in (forced or {}) or n in dict(fixed)
-            or not (baking_only(db[n]) or db[n]["category"] == "treat")]
+            or not (baking_only(db[n])
+                    or db[n]["category"] in COMPOSITE_CATS)]
     forced = {n: m for n, m in (forced or {}).items()
               if n in db and n not in [f for f, _ in fixed]}
     max_each = {n: m for n, m in (max_each or {}).items() if m is not None}
@@ -3299,7 +3304,7 @@ def generate_meal_plan(db, pool, ctx, n_plans=3, shares=(0.5, 0.5),
     # (1) varied single-meal bases from the normal generator (no extras)
     base_pool = [n for n in pool if not baking_only(db[n])
                  and ingredient_role(db[n]) != "complete"
-                 and db[n]["category"] != "treat"]
+                 and db[n]["category"] not in COMPOSITE_CATS]
     n_cand = max(6, 2 * n_plans * nm)
     sub = lambda t, i, k: prog("Finding meal bases – " + t, i, k)  # noqa
     cands = generate_recipes(db, base_pool, dict(ctx), n_cand, max_ing,
@@ -4204,11 +4209,21 @@ def biscuit_count_text(item, grams):
             f"{'' if abs(n - 1) < 1e-9 else 's'} ({grams:.0f} g dough)")
 
 
-def biscuit_to_ingredient(b, db, name, n_biscuits):
-    """Library item (category 'treat') for a generated biscuit recipe:
-    composition per 100 g of raw dough (nutrients unknown in any ingredient
-    stay unknown), piece_g = grams of dough per biscuit."""
-    names, grams = b[0], b[1]
+def recipe_to_ingredient(recipe, db, name, kind="custom", n_pieces=None):
+    """Library item for a home-made recipe [(name, grams), ...] saved as
+    one food: composition per 100 g of the mix (nutrients unknown in any
+    ingredient stay unknown). kind 'custom' = a meal (category 'custom');
+    'treat' = biscuits (category 'treat', piece_g = grams of dough per
+    biscuit, n_pieces biscuits per batch). Raises ValueError for an empty
+    recipe or one with a food toxic to dogs."""
+    rows = [(n, float(g)) for n, g in merge_duplicates(recipe)
+            if n in db and g and float(g) > 0]
+    if not rows:
+        raise ValueError("The recipe is empty.")
+    bad = [n for n, _ in rows if is_toxic(n)]
+    if bad:
+        raise ValueError("Contains food toxic for dogs: " + ", ".join(bad))
+    names, grams = [n for n, _ in rows], [g for _, g in rows]
     mass = sum(grams)
     vecs = [_vec(db[n]) for n in names]
     t = _totals(grams, vecs)
@@ -4217,13 +4232,27 @@ def biscuit_to_ingredient(b, db, name, n_biscuits):
            for k in KEYS}
     recipe_txt = ", ".join(f"{n} {g:.0f} g{units_note(n, g)}"
                            for n, g in zip(names, grams))
+    if kind == "treat":
+        nb = max(1, int(n_pieces or 1))
+        return normalise({
+            "name": name, "category": "treat", "per100g": per,
+            "piece_g": mass / nb, "role": "other",
+            "note": (f"Home-made renal biscuits (raw dough values). Batch: "
+                     f"{recipe_txt} → {nb} biscuits of {mass / nb:.1f} g "
+                     "dough each (lighter after baking).")})
     return normalise({
-        "name": name, "category": "treat", "per100g": per,
-        "piece_g": mass / max(1, n_biscuits), "role": "other",
-        "note": (f"Home-made renal biscuits (raw dough values). Batch: "
-                 f"{recipe_txt} → {n_biscuits} biscuits of "
-                 f"{mass / max(1, n_biscuits):.1f} g dough each (lighter "
-                 "after baking).")})
+        "name": name, "category": "custom", "per100g": per, "role": "other",
+        "note": (f"Home-made recipe saved as one food (values per 100 g of "
+                 f"the mix, as weighed). Batch of {mass:.0f} g: "
+                 f"{recipe_txt}.")})
+
+
+def biscuit_to_ingredient(b, db, name, n_biscuits):
+    """Library item (category 'treat') for a generated biscuit recipe:
+    composition per 100 g of raw dough (nutrients unknown in any ingredient
+    stay unknown), piece_g = grams of dough per biscuit."""
+    return recipe_to_ingredient(list(zip(b[0], b[1])), db, name, "treat",
+                                n_biscuits)
 
 
 def biscuit_report(results, db, ctx, need_kcal=None):
@@ -5457,7 +5486,7 @@ class IngredientDialog(tk.Toplevel):
         ttk.Label(frm, text="Category").grid(row=1, column=0, sticky="w")
         self.cat = ttk.Combobox(frm, values=["food", "supplement", "binder",
                                              "commercial food", "imported",
-                                             "treat"])
+                                             "treat", "custom"])
         self.cat.set(item["category"])
         self.cat.grid(row=1, column=1, sticky="we", pady=2)
         self.assume = tk.BooleanVar(value=bool(item.get("assume_aafco")))
@@ -5578,6 +5607,81 @@ class LabelDialog(tk.Toplevel):
         per = per100g_from_label(v)
         self.result = {"name": name, "category": "commercial food",
                        "note": "From label (as fed).", "per100g": per}
+        self.destroy()
+
+
+class SaveFoodDialog(tk.Toplevel):
+    """Save the recipe (or one meal of a meal plan) as one library food:
+    a meal ('custom') or biscuits ('treat', counted in biscuits)."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self.title("Save as a library food")
+        self.transient(app)
+        self.sources = {"Whole recipe": [tuple(r) for r in app.recipe]}
+        if app.plan:
+            for tg in plan_tags(app.plan):
+                if isinstance(tg, int):
+                    self.sources[MEAL_NAMES[tg]] = [
+                        (n, g) for t_, n, g in plan_items(app.plan)
+                        if t_ == tg]
+        frm = ttk.Frame(self, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, text="Name").grid(row=0, column=0, sticky="w")
+        self.name = ttk.Entry(frm, width=36)
+        self.name.grid(row=0, column=1, columnspan=2, sticky="we", pady=2)
+        ttk.Label(frm, text="What").grid(row=1, column=0, sticky="w")
+        self.src = ttk.Combobox(frm, values=list(self.sources),
+                                state="readonly")
+        self.src.set("Whole recipe")
+        self.src.grid(row=1, column=1, columnspan=2, sticky="we", pady=2)
+        self.kind = tk.StringVar(value="custom")
+        ttk.Radiobutton(frm, text="Meal (custom)", value="custom",
+                        variable=self.kind).grid(row=2, column=1,
+                                                 sticky="w")
+        ttk.Radiobutton(frm, text="Biscuits (treat)", value="treat",
+                        variable=self.kind).grid(row=2, column=2,
+                                                 sticky="w")
+        ttk.Label(frm, text="Biscuits in the batch").grid(row=3, column=0,
+                                                         sticky="w")
+        self.n = tk.StringVar(value="30")
+        ttk.Spinbox(frm, from_=1, to=500, textvariable=self.n,
+                    width=6).grid(row=3, column=1, sticky="w", pady=2)
+        ttk.Label(frm, foreground="#555", wraplength=380, justify="left",
+                  text="Saved as one food (values per 100 g of the mix). "
+                       "Saved foods can be added to recipes; the generator "
+                       "and optimiser do not use them.").grid(
+            row=4, column=0, columnspan=3, sticky="w", pady=(6, 4))
+        b = ttk.Frame(frm)
+        b.grid(row=5, column=0, columnspan=3, sticky="e")
+        ttk.Button(b, text="Save", command=self.save).pack(side="left",
+                                                           padx=2)
+        ttk.Button(b, text="Cancel", command=self.destroy).pack(side="left")
+        self.name.focus_set()
+
+    def save(self):
+        nm = self.name.get().strip()
+        if not nm:
+            messagebox.showerror("Save", "Enter a name.", parent=self)
+            return
+        if nm in self.app.db:
+            messagebox.showerror("Save", f"'{nm}' is already in the library"
+                                 " – choose another name.", parent=self)
+            return
+        kind = self.kind.get()
+        try:
+            n = max(1, int(float(self.n.get()))) if kind == "treat" else None
+            item = recipe_to_ingredient(self.sources[self.src.get()],
+                                        self.app.db, nm, kind, n)
+        except ValueError as e:
+            messagebox.showerror("Save", str(e), parent=self)
+            return
+        self.app.db[nm] = item
+        save_db(self.app.db)
+        self.app.refresh_list()
+        messagebox.showinfo("Save", f"Saved '{nm}' to the library "
+                            f"(category {kind}).", parent=self)
         self.destroy()
 
 
@@ -5851,7 +5955,7 @@ class GeneratorDialog(tk.Toplevel):
             (n for n in app.db
              if app.db[n]["per100g"]["kcal"] is not None
              and ingredient_role(app.db[n]) != "binder"
-             and app.db[n]["category"] != "treat"),
+             and app.db[n]["category"] not in COMPOSITE_CATS),
             key=lambda n: (ROLES.index(ingredient_role(app.db[n])),
                            n.lower()))
         self.lb = tk.Listbox(lf, selectmode="multiple", height=16,
@@ -6828,7 +6932,7 @@ class OptimiseDialog(tk.Toplevel):
         self._cand_text()
         self.cand_names = sorted(
             (n for n in app.db if n not in dict(app.recipe)
-             and app.db[n]["category"] not in ("binder", "treat")
+             and app.db[n]["category"] not in ("binder",) + COMPOSITE_CATS
              and app.db[n]["per100g"]["kcal"] is not None), key=str.lower)
         self.cand = tk.Listbox(sf, selectmode="multiple", height=9,
                                exportselection=False)
@@ -7594,6 +7698,8 @@ class App(tk.Tk):
                    command=self.open_scale).pack(fill="x", pady=(4, 0))
         ttk.Button(rec, text="⚙  Optimise amounts & suggest additions…",
                    command=self.open_optimiser).pack(fill="x", pady=(4, 0))
+        ttk.Button(rec, text="📚  Save recipe as a library food…",
+                   command=self.save_as_food).pack(fill="x", pady=(4, 0))
         for txt, cmd in [("Change g", self.edit_amount),
                          ("Remove", self.remove_item), ("Clear", self.clear),
                          ("Save recipe", self.save_recipe),
@@ -7915,6 +8021,12 @@ class App(tk.Tk):
         else:
             self.recipe.append([n, g])
         self.refresh_recipe()
+
+    def save_as_food(self):
+        if not self.recipe:
+            messagebox.showinfo("Save", "The recipe is empty.")
+            return
+        SaveFoodDialog(self)
 
     def print_recipe(self):
         """Write the printable page to a temporary file and open it in the

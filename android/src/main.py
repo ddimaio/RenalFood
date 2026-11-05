@@ -479,6 +479,63 @@ def main(page: ft.Page):
                                    on_click=lambda e: page.pop_dialog()),
                      ft.FilledButton("Save", on_click=do_save)]))
 
+    def open_save_food(e):
+        """Save the recipe as one library food: a meal ('custom') or
+        biscuits ('treat', counted in biscuits)."""
+        if not recipe:
+            toast("Add foods first.")
+            return
+        name_f = ft.TextField(label="Name", value=state["name"],
+                              autofocus=True)
+        kind = ft.RadioGroup(value="custom", content=ft.Column([
+            ft.Radio(value="custom", label="Meal (custom)"),
+            ft.Radio(value="treat", label="Biscuits (treat)")], spacing=0))
+        n_f = ft.TextField(label="Biscuits in the batch", value="30",
+                           keyboard_type=ft.KeyboardType.NUMBER,
+                           visible=False)
+
+        def kind_changed(e):
+            n_f.visible = kind.value == "treat"
+            page.update()
+        kind.on_change = kind_changed
+        err = ft.Text(color=ft.Colors.RED_700, size=12)
+
+        def do_save(e):
+            nm = (name_f.value or "").strip()
+            try:
+                if not nm:
+                    raise ValueError("Enter a name.")
+                if nm in db:
+                    raise ValueError(f"“{nm}” is already in the library – "
+                                     "choose another name.")
+                k = kind.value or "custom"
+                n = None
+                if k == "treat":
+                    try:
+                        n = max(1, int(float(n_f.value)))
+                    except (TypeError, ValueError):
+                        raise ValueError("Enter the number of biscuits.")
+                db[nm] = rc.recipe_to_ingredient(recipe, db, nm, k, n)
+                rc.save_db(db)
+            except ValueError as ex:
+                err.value = str(ex)
+                page.update()
+                return
+            page.pop_dialog()
+            library_changed()
+            toast(f"Saved “{nm}” to the library (category {k}).")
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Save as a library food"),
+            content=ft.Column([
+                name_f, kind, n_f,
+                ft.Text("Saved as one food (values per 100 g of the mix). "
+                        "It can be added to recipes; the generator and "
+                        "optimiser do not use it.", size=11),
+                err], tight=True),
+            actions=[ft.TextButton("Cancel",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Save", on_click=do_save)]))
+
     def open_list(e):
         saved = saved_recipes()
         if not saved:
@@ -580,6 +637,9 @@ def main(page: ft.Page):
                           on_click=open_list),
             ft.IconButton(icon=ft.Icons.SAVE, tooltip="Save",
                           on_click=open_save),
+            ft.IconButton(icon=ft.Icons.LIBRARY_ADD,
+                          tooltip="Save as a library food",
+                          on_click=open_save_food),
             ft.IconButton(icon=ft.Icons.CLEAR_ALL, tooltip="Clear",
                           on_click=clear)], spacing=0)],
                alignment=ft.MainAxisAlignment.SPACE_BETWEEN),

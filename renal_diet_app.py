@@ -27,7 +27,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.05e"
+ENGINE_VERSION = "2026.11.05f"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -825,6 +825,48 @@ with tab_rec:
                 st.caption("Meal plan active: the printout lists each meal "
                            "as its own recipe (one portion and a batch for "
                            f"{int(ss.get('p_days', 7) or 7)} days).")
+        with st.expander("📚 Save as a library food"):
+            st.caption("Saves the recipe as one food in the ingredient "
+                       "library (values per 100 g of the mix): a meal goes "
+                       "to the 'custom' category, biscuits to 'treat' "
+                       "(counted in biscuits). Saved foods can be added to "
+                       "recipes; the generator and optimiser do not use "
+                       "them.")
+            src_opts = {"Whole recipe": list(ss.recipe)}
+            if ss.plan:
+                for tg in rc.plan_tags(ss.plan):
+                    if isinstance(tg, int):
+                        src_opts[rc.MEAL_NAMES[tg]] = [
+                            (n, g) for t_, n, g in rc.plan_items(ss.plan)
+                            if t_ == tg]
+            sv = st.columns([3, 2])
+            lf_name = sv[0].text_input("Name", key="lf_name")
+            lf_src = sv[1].selectbox("What", list(src_opts), key="lf_src")
+            lf_kind = st.radio("Save as", ["Meal (custom)",
+                                           "Biscuits (treat)"],
+                               horizontal=True, key="lf_kind")
+            lf_n = (st.number_input("Biscuits in the batch", 1, 500, 30,
+                                    key="lf_n")
+                    if lf_kind.startswith("Biscuits") else None)
+            if st.button("Save to library", key="lf_go",
+                         disabled=not ss.recipe):
+                nm = (lf_name or "").strip()
+                if not nm:
+                    st.error("Enter a name.")
+                elif nm in db:
+                    st.error(f"'{nm}' is already in the library – choose "
+                             "another name.")
+                else:
+                    try:
+                        kind = "treat" if lf_n else "custom"
+                        db[nm] = rc.recipe_to_ingredient(
+                            src_opts[lf_src], db, nm, kind, lf_n)
+                        rc.save_db(db)
+                        ss.lib_ver += 1
+                        st.success(f"Saved '{nm}' to the library "
+                                   f"(category {kind}).")
+                    except ValueError as e:
+                        st.error(str(e))
         with st.expander("💾 Save / load recipe"):
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,
@@ -1248,7 +1290,8 @@ with tab_opt:
                  "nutrients on).")
         cand_names = [n for n in names_all
                       if n not in dict(ss.recipe)
-                      and db[n]["category"] not in ("binder", "treat")
+                      and db[n]["category"] not in ("binder",)
+                      + rc.COMPOSITE_CATS
                       and db[n]["per100g"]["kcal"] is not None]
         with st.expander(f"Foods it may suggest ({len(cand_names)} – untick "
                          "to exclude; remembered)"):
@@ -1670,7 +1713,7 @@ with tab_gen:
                            "towards egg yolk. Fat, Ca and Mg minimums still "
                            "apply.")
     gnames = sorted((n for n in db if db[n]["per100g"]["kcal"] is not None
-                     and db[n]["category"] != "treat"
+                     and db[n]["category"] not in rc.COMPOSITE_CATS
                      and rc.ingredient_role(db[n]) != "binder"),
                     key=lambda n: (rc.ROLES.index(rc.ingredient_role(db[n])),
                                    n.lower()))
@@ -2113,7 +2156,8 @@ with tab_lib:
                   + lib_keys]
     cfg = {"category": st.column_config.SelectboxColumn(
         "category", options=["food", "supplement", "binder",
-                             "commercial food", "imported", "treat"])}
+                             "commercial food", "imported", "treat",
+                             "custom"])}
     cfg.update({k: st.column_config.NumberColumn(
         f"{rc.LABEL[k]} ({rc.UNIT[k]})", format="%g") for k in lib_keys})
     cfg["max_dose"] = st.column_config.TextColumn(
@@ -2169,6 +2213,7 @@ with tab_lib:
                 "note": rw["note"] if pd.notna(rw["note"]) else "",
                 "per100g": per, "assume_aafco": flag,
                 "role": orig.get("role") if orig else None,
+                "piece_g": orig.get("piece_g") if orig else None,
                 "max_dose": rw["max_dose"] if pd.notna(rw["max_dose"])
                 else ""})
         ss.db = new_db
