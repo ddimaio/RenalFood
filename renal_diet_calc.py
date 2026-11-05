@@ -2863,7 +2863,7 @@ CUP_G = {
     "Haricot beans, boiled": 182, "Butter (lima) beans, boiled": 188,
     "Soya beans, boiled": 172, "Split peas, boiled": 196,
     "Edamame, boiled": 155, "Peas, green, boiled": 160, "Natto": 175,
-    "Broccoli, boiled": 156, "Carrot, boiled": 156,
+    "Broccoli, boiled": 156, "Carrot, boiled": 156, "Carrot, raw": 128,
     "Cauliflower, boiled": 124, "Green beans, boiled": 125,
     "Spinach, boiled": 180, "Cabbage, boiled": 150,
     "Courgette, boiled": 180, "Pumpkin, boiled": 245,
