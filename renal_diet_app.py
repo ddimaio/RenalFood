@@ -9,6 +9,7 @@ Needs: renal_diet_calc.py in the same folder (shared calculation engine and
 Approximate tool - not veterinary advice. Check any diet with your vet.
 """
 import csv
+import datetime
 import io
 import json
 import os
@@ -471,6 +472,125 @@ ss.setdefault("hist_pos", -1)
 
 ss.setdefault("plan", None)
 
+# ---- saved recipes (by name) and the recipe being worked on, remembered
+#      like My Dog: renal_prefs.json + this browser's localStorage (the
+#      browser copy wins). Opening a saved recipe does not change My Dog.
+REC_PREF, LS_REC = "web_recipes", "renalfood_recipes"
+CUR_PREF, LS_CUR = "web_current", "renalfood_current"
+
+
+def recipe_payload():
+    """The current recipe (with any meal plan) as stored."""
+    d = {"items": [[n, g] for n, g in ss.recipe],
+         "note": ss.get("recipe_note") or ""}
+    if ss.plan:
+        d["plan"] = rc.plan_to_json(ss.plan)
+    return d
+
+
+def open_payload(d):
+    """Make a stored recipe the current one; returns foods not in the
+    library (skipped)."""
+    items = d.get("items") or []
+    missing = [n for n, _ in items if n not in db]
+    set_recipe([(n, float(g)) for n, g in items if n in db])
+    try:
+        pl = rc.plan_from_json(d["plan"], db) if d.get("plan") else None
+    except (KeyError, TypeError, ValueError):
+        pl = None
+    if pl:
+        set_plan(pl)
+    ss.recipe_note = d.get("note") or ""
+    ss.applied = [list(r) for r in ss.recipe]
+    return missing
+
+
+def _clean_saved(d):
+    return {str(k): v for k, v in d.items()
+            if isinstance(v, dict) and isinstance(v.get("items"), list)} \
+        if isinstance(d, dict) else {}
+
+
+if "rec_file_loaded" not in ss:
+    ss.rec_file_loaded = True
+    _p = rc.load_prefs()
+    ss.saved_recipes = _clean_saved(_p.get(REC_PREF))
+    if not ss.recipe and isinstance(_p.get(CUR_PREF), dict):
+        open_payload(_p[CUR_PREF])
+    ss.rec_ls_loaded = streamlit_js_eval is None
+    ss.rec_saved_json = ss.cur_saved_json = None   # store once to sync
+if not ss.rec_ls_loaded:
+    raw_r = streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{LS_REC}') || 'null'",
+        key="ls_get_recipes")
+    raw_c = streamlit_js_eval(
+        js_expressions=f"localStorage.getItem('{LS_CUR}') || 'null'",
+        key="ls_get_current")
+    if raw_r is not None and raw_c is not None:
+        ss.rec_ls_loaded = True
+        try:
+            got_r, got_c = json.loads(raw_r), json.loads(raw_c)
+        except (TypeError, ValueError):
+            got_r = got_c = None
+        if isinstance(got_r, dict):       # browser copy wins
+            ss.saved_recipes = _clean_saved(got_r)
+        if isinstance(got_c, dict) and got_c.get("items") is not None:
+            open_payload(got_c)
+        ss.rec_saved_json = ss.cur_saved_json = None   # file follows
+
+
+def store_recipes():
+    """Remember the saved recipes and the current recipe when they changed
+    (end of every run)."""
+    for attr, pref, ls, val in (
+            ("rec_saved_json", REC_PREF, LS_REC, ss.saved_recipes),
+            ("cur_saved_json", CUR_PREF, LS_CUR, recipe_payload())):
+        cur = json.dumps(val, sort_keys=True, ensure_ascii=False,
+                         default=list)
+        if cur == ss.get(attr):
+            continue
+        ss[attr] = cur
+        p = rc.load_prefs()
+        p[pref] = json.loads(cur)
+        rc.save_prefs(p)
+        if streamlit_js_eval is not None and ss.rec_ls_loaded:
+            streamlit_js_eval(
+                js_expressions=f"localStorage.setItem('{ls}', "
+                               f"{json.dumps(cur)}) || 1",
+                key=f"ls_set_{pref}_{abs(hash(cur))}")
+
+
+def save_named_cb():
+    nm = (ss.get("sr_name") or "").strip()
+    if not nm:
+        ss.sr_msg = ("error", "Enter a name.")
+        return
+    d = recipe_payload()
+    d["saved"] = datetime.date.today().isoformat()
+    ss.saved_recipes = {**ss.saved_recipes, nm: d}
+    ss.sr_msg = ("success", f"Saved '{nm}'.")
+
+
+def open_named_cb():
+    nm = ss.get("sr_pick")
+    d = ss.saved_recipes.get(nm)
+    if not d:
+        return
+    missing = open_payload(d)
+    ss.recipe_note = f"Opened '{nm}'" + (f" – {d['note']}"
+                                         if d.get("note") else "")
+    ss.sr_msg = (("warning", "Not in the library (skipped): "
+                  + ", ".join(missing)) if missing
+                 else ("success", f"Opened '{nm}'."))
+
+
+def delete_named_cb():
+    nm = ss.get("sr_pick")
+    if nm in ss.saved_recipes:
+        ss.saved_recipes = {k: v for k, v in ss.saved_recipes.items()
+                            if k != nm}
+        ss.sr_msg = ("success", f"Deleted '{nm}'.")
+
 
 def _snap():
     return {"recipe": [list(r) for r in ss.recipe], "note": ss.recipe_note,
@@ -912,7 +1032,40 @@ with tab_rec:
                         st.error(str(e))
             if ss.get("lf_msg"):
                 st.success(ss.pop("lf_msg"))
-        with st.expander("💾 Save / load recipe"):
+        with st.expander("💾 Save / open recipe", expanded=bool(
+                ss.get("sr_msg"))):
+            st.caption("Saved recipes are remembered (on this computer and "
+                       "in this browser). Opening one does not change My "
+                       "Dog.")
+            sv = st.columns([3, 1])
+            sv[0].text_input("Name", key="sr_name",
+                             label_visibility="collapsed",
+                             placeholder="Recipe name")
+            sv[1].button("Save", key="sr_save", on_click=save_named_cb,
+                         disabled=not ss.recipe, **FULL)
+            if ss.saved_recipes:
+                names_sr = sorted(ss.saved_recipes, key=str.lower)
+                op = st.columns([3, 1, 1])
+                if ss.get("sr_pick") not in names_sr:
+                    ss.pop("sr_pick", None)
+                op[0].selectbox("Saved recipes", names_sr, key="sr_pick",
+                                label_visibility="collapsed")
+                op[1].button("Open", key="sr_open", on_click=open_named_cb,
+                             **FULL)
+                op[2].button("Delete", key="sr_del",
+                             on_click=delete_named_cb, **FULL)
+                _sel = ss.saved_recipes.get(ss.get("sr_pick")) or {}
+                st.caption(f"{len(_sel.get('items') or [])} foods"
+                           + (f" · saved {_sel['saved']}"
+                              if _sel.get("saved") else "")
+                           + (" · meal plan" if _sel.get("plan") else ""))
+            else:
+                st.caption("No saved recipes yet.")
+            if ss.get("sr_msg"):
+                kind_, txt_ = ss.pop("sr_msg")
+                getattr(st, kind_)(txt_)
+            st.divider()
+            st.caption("Or as a file (with the dog's settings):")
             payload = {"items": ss.recipe, "bw": str(ss.bw),
                        "max_g": str(ss.max_g), "meals": ss.meals,
                        "factor": str(ss.factor), "stage": ss.stage,
@@ -2496,3 +2649,4 @@ Sources: [UC Davis – Nutritional Management of Chronic Renal Disease]
 
 store_excluded_in_browser()
 store_dog()
+store_recipes()
