@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.05d"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.05e"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1022,19 +1022,28 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
     today = datetime.date.today().strftime("%d %b %Y")
     # ---- ingredients
     rows_i = []
+    # kitchen units (eggs, tsp, tbsp, cups...) get their own columns
+    has_u = any(household_units(n, g) for n, g in recipe if n in db)
+
+    def ucell(n, g):
+        return (f"<td class=u>{_esc(household_units(n, g))}</td>"
+                if has_u else "")
     for n, g in recipe:
         if n not in db or g <= 0:
             continue
         kc = db[n]["per100g"]["kcal"]
         rows_i.append(
-            "<tr><td>" + _esc(n) + "</td><td class=n>" + f"{g:.1f}" +
-            _esc(units_note(n, g)) + "</td>" +
-            (f"<td class=n>{g / meals:.1f}{_esc(units_note(n, g / meals))}"
-             "</td>" if meals > 1 else "") +
+            "<tr><td>" + _esc(n) + "</td><td class=n>" + f"{g:.1f}</td>" +
+            ucell(n, g) +
+            (f"<td class=n>{g / meals:.1f}</td>" + ucell(n, g / meals)
+             if meals > 1 else "") +
             f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
             "</td><td class=c>☐</td></tr>")
+    blank_u = "<td></td>" if has_u else ""
     tot_row = (f"<tr class=tot><td>Total</td><td class=n>{mass:.0f}</td>" +
-               (f"<td class=n>{mass / meals:.0f}</td>" if meals > 1 else "")
+               blank_u +
+               (f"<td class=n>{mass / meals:.0f}</td>" + blank_u
+                if meals > 1 else "")
                + f"<td class=n>{kcal:.0f}</td><td></td></tr>")
     plan_html = ""
     if plan:                       # meal by meal: portion + batch
@@ -1061,8 +1070,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                         f"{sum(g for _, g in its):.0f} g")
             batch = isinstance(tg, int)
             rows = "".join(
-                "<tr><td>" + _esc(n) + f"</td><td class=n>{g:.1f}"
-                f"{_esc(units_note(n, g))}</td>" +
+                "<tr><td>" + _esc(n) + f"</td><td class=n>{g:.1f}</td>"
+                f"<td class=u>{_esc(household_units(n, g))}</td>" +
                 (f"<td class=n>{g * days:.0f}{_esc(units_note(n, g * days))}"
                  "</td>" if batch else "<td class=n></td>") +
                 f"<td class=n>{(db[n]['per100g']['kcal'] or 0) * g / 100:.0f}"
@@ -1070,7 +1079,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
             parts.append(
                 f"<h3>{_esc(head)} · {kc_m:.0f} kcal · {p_m:.0f} mg P</h3>"
                 "<table class=\"ingredients big\"><tr><th>Ingredient</th>"
-                "<th class=n>g / day</th><th class=n>"
+                "<th class=n>g / day</th><th class=u>units</th>"
+                "<th class=n>"
                 + (f"batch for {days} days" if batch else "") +
                 "</th><th class=n>kcal</th><th>✓</th></tr>" + rows +
                 "</table>")
@@ -1155,6 +1165,7 @@ th { background: #e9eff5; font-size: 9pt; text-transform: uppercase;
 td.n, th.n { text-align: right; font-variant-numeric: tabular-nums;
   white-space: nowrap; }
 td.c { text-align: center; font-size: 12pt; color: #7a8896; }
+td.u, th.u { white-space: nowrap; color: #4a5d70; }
 tr.tot td { font-weight: 700; border-top: 1.2pt solid #12324a; }
 tr.ok td.s { color: #1b6e20; } tr.warn td.s { color: #9a5b00; }
 tr.bad td.s { color: #a3170b; font-weight: 600; }
@@ -1174,12 +1185,13 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
   .page { padding: 0; } h2 { break-after: avoid; }
   table, .box, ul { break-inside: avoid; } }
 """
-    meal_hdr = "<th class=n>g / meal</th>" if meals > 1 else ""
+    u_hdr = "<th class=u>units</th>" if has_u else ""
+    meal_hdr = f"<th class=n>g / meal</th>{u_hdr}" if meals > 1 else ""
     # built separately: a triple-quoted f-string nested in another needs
     # Python 3.12+ (PEP 701)
     ingredients_html = plan_html if plan else (
         '<table class="ingredients big"><tr><th>Ingredient</th>'
-        '<th class=n>g / day</th>\n'
+        f'<th class=n>g / day</th>{u_hdr}\n'
         f"{meal_hdr}<th class=n>kcal / day</th><th>✓</th></tr>\n"
         f"{''.join(rows_i)}{tot_row}</table>")
     html_ = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -1194,7 +1206,7 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 <h2>{'Meal plan – a recipe for each meal' if plan else 'Ingredients'}</h2>
 {ingredients_html}
 <div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}Weigh with kitchen scales. Amounts are for cooked foods
-where the name says so (e.g. "boiled"). {f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
+where the name says so (e.g. "boiled"). {f'Units ({_esc(UNITS_NOTE)}). ' if has_u else ''}{f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
 Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
 
 <h2>Key nutrients</h2>
