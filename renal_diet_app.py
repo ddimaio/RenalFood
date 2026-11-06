@@ -809,6 +809,12 @@ def _add_biscuit_cb(b, key_name, key_n, key_day):
              "optimise the plan to rebalance the meals")
 
 
+def clear_recipe():
+    set_recipe([])
+    ss.recipe_note = ""
+    ss.applied = None
+
+
 def _stop_plan():
     set_recipe(ss.recipe)
     st.toast("Meal plan ended – the recipe is now one list")
@@ -934,13 +940,17 @@ with tab_rec:
             st.caption("Units: " + "; ".join(_units) +
                        f" ({rc.UNITS_NOTE}).")
         record_history()
-        uc = st.columns(2)
+        uc = st.columns(3)
         uc[0].button("↶ Undo", key="undo", on_click=undo,
                      disabled=ss.hist_pos <= 0, **FULL,
                      help="Undo the last recipe change (applied results, "
                           "edits, scaling, loading).")
         uc[1].button("↷ Redo", key="redo", on_click=redo,
                      disabled=ss.hist_pos >= len(ss.hist) - 1, **FULL)
+        uc[2].button("🗑 Clear recipe", key="rec_clear",
+                     on_click=clear_recipe, disabled=not ss.recipe, **FULL,
+                     help="Removes all ingredients (and ends a meal plan). "
+                          "Undo brings it back.")
         st.caption("Add a row at the bottom of the table; select rows and "
                    "press Delete to remove them.")
         if ss.meals > 1 and ss.recipe and not ss.plan:

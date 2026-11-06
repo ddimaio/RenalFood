@@ -7701,7 +7701,8 @@ class App(tk.Tk):
         ttk.Button(rec, text="📚  Save recipe as a library food…",
                    command=self.save_as_food).pack(fill="x", pady=(4, 0))
         for txt, cmd in [("Change g", self.edit_amount),
-                         ("Remove", self.remove_item), ("Clear", self.clear),
+                         ("Remove", self.remove_item),
+                         ("Clear recipe", self.clear),
                          ("Save recipe", self.save_recipe),
                          ("Load recipe", self.load_recipe),
                          ("Print…", self.print_recipe)]:
@@ -8221,7 +8222,11 @@ class App(tk.Tk):
             self.refresh_recipe()
 
     def clear(self):
+        """Clear the recipe (and any meal plan); Undo restores it."""
         self.recipe = []
+        self.plan = None
+        self.recipe_note = ""
+        self.applied_recipe = None
         self.refresh_recipe()
 
     def save_recipe(self):
