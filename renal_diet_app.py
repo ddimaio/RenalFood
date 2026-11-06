@@ -655,19 +655,29 @@ def apply_bloods_cb():
     if not ev:
         return
     a, b = ev["adapt"], ev["bloods"]
+    # the MER change of an earlier Apply is replaced, not added again
+    prev = float((ss.score_ctx or {}).get("mer_applied") or 0.0)
+    new = float(a["mer_delta"] or 0.0) if ss.get("bl_mer", True) else 0.0
     ss.stage = a["stage"]
     ss.score_ctx = rc.blood_score_context(a, b)
-    if ss.get("bl_mer", True) and a["mer_delta"]:
-        ss.factor = round(min(3.0, max(0.8, ss.factor + a["mer_delta"])), 1)
+    ss.score_ctx["mer_applied"] = new
+    if new or prev:
+        ss.factor = round(min(3.0, max(0.8, ss.factor - prev + new)), 1)
     dog_changed()
     ss.tgt_ver += 1                      # refresh optimiser inputs
     ss.blood_msg = f"Applied: {a['stage']}. " + a["note"]
 
 
 def reset_targets_cb():
+    prev = float((ss.score_ctx or {}).get("mer_applied") or 0.0)
     ss.score_ctx = None
     ss.tgt_ver += 1
-    ss.blood_msg = "Targets reset to the defaults for the current stage."
+    if prev:                             # undo the MER change of Apply
+        ss.factor = round(min(3.0, max(0.8, ss.factor - prev)), 1)
+        dog_changed()
+    ss.blood_msg = ("Targets reset to the defaults for the current stage"
+                    + (f"; MER factor back to {ss.factor:g}" if prev else "")
+                    + ".")
 
 
 def load_recipe_cb():
@@ -1371,11 +1381,30 @@ with tab_dog:
         cols[i % 3].number_input(f"{lab}" + (f" ({unit})" if unit else ""),
                                  min_value=0.0, format="%g",
                                  key=f"bl_{k}", help=refr)
+    bv_now = blood_values()
+    entered = any(bv_now[k] is not None for k, *_ in rc.BLOOD_FIELDS)
+    applied = (ss.score_ctx or {}).get("bloods")
+    if applied:
+        same = all(applied.get(k) == bv_now.get(k)
+                   for k in [f[0] for f in rc.BLOOD_FIELDS]
+                   + ["weight_trend"])
+        if same:
+            st.success("✅ The targets in use are adapted from these results"
+                       + (f" ({bv_now['date']})" if bv_now["date"] else "")
+                       + ".")
+        else:
+            st.warning("The results above differ from the ones the targets "
+                       "were adapted from – press Evaluate, then Apply to "
+                       "targets.")
+    elif entered:
+        st.info("These results are not applied yet – the targets are the "
+                "defaults for the stage. Check the evaluation below, then "
+                "Apply to targets.")
     b = st.columns([1, 1, 2])
-    if b[0].button("Evaluate", type="primary", key="bl_eval"):
-        bv = blood_values()
-        ss.blood_eval = {"bloods": bv,
-                         "adapt": rc.adapt_from_bloods(bv, ss.stage)}
+    if b[0].button("Evaluate", type="primary", key="bl_eval") or (
+            ss.blood_eval is None and entered):  # remembered results
+        ss.blood_eval = {"bloods": bv_now,
+                         "adapt": rc.adapt_from_bloods(bv_now, ss.stage)}
     if ss.get("blood_msg"):
         st.success(ss.pop("blood_msg"))
     ev = ss.blood_eval
