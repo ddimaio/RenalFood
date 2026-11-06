@@ -47,6 +47,9 @@ FOODS = [
     ("F006194", "Okra, boiled", "", True),
     # starches
     ("F003235", "Couscous, boiled", "", True),
+    ("F000145", "Jerusalem artichoke, peeled, boiled",
+     "Rich in inulin (prebiotic fibre) - introduce slowly, can cause wind.",
+     True, "veg"),
     # flours (baking, e.g. dog biscuits)
     ("F003998", "Rice flour, white", "Baking flour; low phosphorus.", True,
      "starch"),
