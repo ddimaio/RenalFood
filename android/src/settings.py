@@ -116,6 +116,7 @@ class SettingsView:
             options=[ft.DropdownOption(key=s, text=s) for s in rc.STAGES])
         self.ext = ft.Switch(label="Extended nutrients")
         self.need = ft.Text(size=16, weight=ft.FontWeight.BOLD)
+        self.targets = ft.Column(spacing=2)
         self.sugg = ft.Text(size=12)
         self.sugg_btn = ft.OutlinedButton("Use suggested factor",
                                           icon=ft.Icons.CHECK,
@@ -147,6 +148,12 @@ class SettingsView:
             ft.Divider(),
             ft.Text("Kidney disease", weight=ft.FontWeight.BOLD),
             ft.Row([self.stage]), self.stage_note,
+            ft.Divider(),
+            ft.Text("Daily targets", weight=ft.FontWeight.BOLD),
+            self.targets,
+            small("The same targets the analysis and Generator use (per "
+                  "1000 kcal × energy ÷ 1000), for the whole day – kibble, "
+                  "treats and supplements included."),
             ft.Divider(),
             ft.Text("Analysis", weight=ft.FontWeight.BOLD),
             self.ext,
@@ -181,6 +188,16 @@ class SettingsView:
         if s:
             self.sugg_btn.content = f"Use suggested factor {s[0]:g}"
         self.stage_note.value = rc.STAGES[d.stage][1]
+        ctx = rc.build_score_context(None, d.stage, d.need(), d.bw,
+                                     d.extended, d.max_g or None)
+        rows = []
+        for nm, u, rg, aim, why in rc.daily_targets(ctx):
+            val = f"{rg} {u}".strip() + (f" (aim {aim})" if aim else "")
+            rows.append(ft.Row([ft.Text(nm, size=13, expand=True),
+                                ft.Text(val, size=13,
+                                        weight=ft.FontWeight.BOLD)]))
+            rows.append(ft.Text(why, size=10, italic=True))
+        self.targets.controls = rows
 
     def changed(self, e=None):
         vals = {"activity": self.activity.value, "stage": self.stage.value,

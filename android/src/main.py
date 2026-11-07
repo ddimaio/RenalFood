@@ -105,6 +105,11 @@ def assessment_markdown(a):
         lines.append(f"- **Rating {a['rating']:.0f}/100** (higher = better)"
                      + (f" – {extra['Rating']}" if extra.get("Rating")
                         else ""))
+    if a.get("energy_text"):
+        hint = {"ok": "", "warn": " – a little off: scale the recipe",
+                "bad": " – scale the recipe (the score counts this too)"}
+        lines.append(f"- **{a['energy_text']}**"
+                     + hint.get(a.get("energy_tag"), ""))
     ok, n, off = key_in_range(key_rows(a))
     if n:
         lines.append(f"- **Key nutrients within range: {ok} of {n}**"
@@ -121,6 +126,9 @@ def assessment_subtitle(a):
         parts.append(f"score {a['score']:.3f}")
     if a.get("rating") is not None:
         parts.append(f"rating {a['rating']:.0f}/100")
+    if a.get("energy_text"):
+        parts.append(a["energy_text"].split(" (")[0].replace(
+            "Energy", "energy").replace(" of target", ""))
     ok, n, _ = key_in_range(key_rows(a))
     if n:
         parts.append(f"{ok}/{n} key nutrients in range")
@@ -481,7 +489,7 @@ def main(page: ft.Page):
 
     def open_save_food(e):
         """Save the recipe as one library food: a meal ('custom') or
-        biscuits ('treat', counted in biscuits)."""
+        biscuits ('treat', per 100 g baked)."""
         if not recipe:
             toast("Add foods first.")
             return
@@ -490,7 +498,8 @@ def main(page: ft.Page):
         kind = ft.RadioGroup(value="custom", content=ft.Column([
             ft.Radio(value="custom", label="Meal (custom)"),
             ft.Radio(value="treat", label="Biscuits (treat)")], spacing=0))
-        n_f = ft.TextField(label="Biscuits in the batch", value="30",
+        n_f = ft.TextField(label="Batch weight after baking, g "
+                           "(blank = estimate)", value="",
                            keyboard_type=ft.KeyboardType.NUMBER,
                            visible=False)
 
@@ -510,11 +519,13 @@ def main(page: ft.Page):
                                      "choose another name.")
                 k = kind.value or "custom"
                 n = None
-                if k == "treat":
+                if k == "treat" and (n_f.value or "").strip():
                     try:
-                        n = max(1, int(float(n_f.value)))
+                        n = float(n_f.value)
                     except (TypeError, ValueError):
-                        raise ValueError("Enter the number of biscuits.")
+                        raise ValueError("Enter the baked weight in g, "
+                                         "or leave it blank.")
+                    n = n if n > 0 else None
                 db[nm] = rc.recipe_to_ingredient(recipe, db, nm, k, n)
                 rc.save_db(db)
             except ValueError as ex:
@@ -528,9 +539,11 @@ def main(page: ft.Page):
             title=ft.Text("Save as a library food"),
             content=ft.Column([
                 name_f, kind, n_f,
-                ft.Text("Saved as one food (values per 100 g of the mix). "
-                        "It can be added to recipes; the generator and "
-                        "optimiser do not use it.", size=11),
+                ft.Text("Saved as one food: a meal per 100 g of the mix, "
+                        "biscuits per 100 g baked (given by weight). It "
+                        "can be added to recipes. A saved meal is in the "
+                        "Generator's food choices and is used only when "
+                        "set to Always include.", size=11),
                 err], tight=True),
             actions=[ft.TextButton("Cancel",
                                    on_click=lambda e: page.pop_dialog()),

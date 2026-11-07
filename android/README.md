@@ -57,11 +57,13 @@ build reports a missing Android SDK or Java.
 
 - [x] Settings tab: body weight, age + activity (suggested MER factor),
       max food per day, meals per day, IRIS stage, extended nutrients;
-      remembered between launches and saved with each recipe
+      remembered between launches and saved with each recipe; Daily targets
+      (key nutrients per day at her energy need)
 - [x] Recipe, key nutrients vs stage targets (a food is listed once:
       adding it again changes its amount)
 - [x] Full nutrient table (grouped; extended nutrients switch) and assessment
-      (score, rating, key nutrients within range, then the notes)
+      (score, rating, energy % of target, key nutrients within range, then
+      the notes); energy % of target also on every Generator result
 - [x] Key nutrients, Other nutrients and Assessment can be shown or hidden
       (closed when a recipe is first shown; Key nutrients shows a count)
 - [x] Save / open / delete recipes (kept on the phone)
@@ -69,7 +71,10 @@ build reports a missing Android SDK or Java.
       are flagged in the Library, on the Recipe screen and in the assessment,
       and never used by the generator or optimiser
 - [x] Save the recipe as a library food (all apps): a meal (category
-      custom) or biscuits (category treat, counted in biscuits)
+      custom) or biscuits (category treat, per 100 g baked – enter the
+      baked batch weight or leave it blank to estimate; given by weight).
+      Saved meals are in the Generator's food choices and are used only
+      when set to Always include
 - [x] Print recipe (bottom of the Recipe tab): the same A4 page as the other
       apps – opens in the browser on a computer, share sheet on a phone
 - [x] Ingredient library (Library tab): search, category filter, a food's

@@ -29,10 +29,13 @@ def context(stage, need, bw, extended, ignore_vitamins=False, max_g=None):
     return ctx
 
 
-def usable(db, n):
+def usable(db, n, gen=False):
+    """gen=True: the generator's list, which includes saved meals (used
+    only when Always include is set); never saved biscuits."""
     it = db.get(n)
     return (it is not None and it["category"] != "binder"
-            and it["category"] not in rc.COMPOSITE_CATS   # saved recipes
+            and (it["category"] not in rc.COMPOSITE_CATS     # saved recipes
+                 or (gen and it["category"] == "custom"))
             and it["per100g"]["kcal"] is not None)
 
 
@@ -98,7 +101,7 @@ def gen_pool(db, extended=False, complete=False, keep=()):
     generator's remembered list); `keep` always kept."""
     ex = rc.load_excluded()
     pool = [n for n in sorted(db, key=str.lower)
-            if usable(db, n) and (n not in ex or n in keep)]
+            if usable(db, n, True) and (n not in ex or n in keep)]
     return rc.complete_only(pool, db, extended, True, keep=set(keep)) \
         if complete else pool
 
@@ -108,7 +111,8 @@ def gen_inputs(db, extended=False, complete=False, fixed=()):
     rc.generate_recipes from the stored settings, as the other apps do:
     forced foods are always in the pool."""
     gs = rc.load_gen_settings()
-    forced = {n: gs["min"].get(n) for n in gs["forced"] if usable(db, n)}
+    forced = {n: gs["min"].get(n) for n in gs["forced"]
+              if usable(db, n, True)}
     max_each = {n: g for n, g in gs["max"].items() if n in db}
     keep = set(forced) | {n for n, _ in fixed}
     return gen_pool(db, extended, complete, keep), forced, max_each
@@ -252,7 +256,7 @@ class GeneratorView:
                            expand=True, menu_height=350, dense=True,
                            options=[ft.DropdownOption(key=n, text=n)
                                     for n in sorted(self.db, key=str.lower)
-                                    if usable(self.db, n)])
+                                    if usable(self.db, n, True)])
 
         def open_pick(e):
             n = pick.value if pick.value in self.db else next(
@@ -425,7 +429,9 @@ class GeneratorView:
                               size=12)
                       for n, g in zip(names, grams) if g >= 0.5]
         lines.append(ft.Text(
-            f"Score {score:.3f} · rating {rating:.0f} · {s['g']:.0f} g, "
+            f"Score {score:.3f} · rating {rating:.0f} · "
+            + rc.energy_of_target(s["kcal"], ctx["kcal_target"], True)[0]
+            + f" · {s['g']:.0f} g, "
             f"{s['kcal']:.0f} kcal · P {s['p']:.0f} mg and protein "
             f"{s['protein']:.0f} g /1000 kcal", size=11))
         if why and why != "–":

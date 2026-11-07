@@ -225,10 +225,12 @@ class LibraryView:
             rows += [ft.Row([ft.Text(rc.LABEL[k], expand=True),
                              ft.Text(value_text(it, k))])
                      for k in keys]
-        use = ft.Text("Saved recipe – the generator and optimiser do not "
-                      "use it.", size=12) \
-            if it["category"] in rc.COMPOSITE_CATS else ft.Row([
-            ft.Text("Generator choices: " + choices.setting_text(
+        use = ft.Text("Saved biscuits – the generator and optimiser do not "
+                      "use them; give by weight.", size=12) \
+            if it["category"] == "treat" else ft.Row([
+            ft.Text(("Saved meal – used only when Always include is set. "
+                     if it["category"] == "custom" else "")
+                    + "Generator choices: " + choices.setting_text(
                 choices.food_setting(name)), size=12, expand=True),
             ft.OutlinedButton("Change…", icon=ft.Icons.TUNE,
                               on_click=lambda e: choices.open_dialog(
