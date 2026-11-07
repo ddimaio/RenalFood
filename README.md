@@ -254,6 +254,16 @@ and the optimiser suggests additions/substitutions that keep the score but
 raise the rating by at least 1 point. The rating is per 1000 kcal, so
 it never depends on the amount.
 
+## Taurine and L-carnitine check
+
+Plant foods contain practically none, and food tables don't list them, so
+they are not scored (dogs make both; there is no AAFCO/FEDIAF/NRC
+minimum). Instead the assessment adds one line when a recipe without meat
+or fish has no food that declares added taurine and/or L-carnitine
+(Bonza, Omni, V-Integra, VEGDOG, Just Be Kind do; read from the label
+note – write "adds taurine, L-carnitine" in a new product's note, or set
+its `adds` field).
+
 ## Energy of target
 
 Next to score and rating, every analysis, optimiser option, generated

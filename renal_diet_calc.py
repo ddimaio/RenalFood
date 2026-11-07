@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.07e"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.07f"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -592,6 +592,9 @@ def normalise(item):
     md = item.get("max_dose")
     if md is not None and md == md and str(md).strip():
         out["max_dose"] = str(md).strip()
+    ad = item.get("adds")
+    if ad is not None and ad == ad and str(ad).strip():
+        out["adds"] = str(ad).strip()
     try:
         if item.get("piece_g") and float(item["piece_g"]) > 0:
             out["piece_g"] = round(float(item["piece_g"]), 2)
@@ -4381,6 +4384,51 @@ def water_note(t, miss, need_kcal):
             "water to meals is commonly advised in CKD.")
 
 
+_MEAT_FISH = re.compile(
+    r"\b(chicken|beef|pork|lamb|mutton|turkey|duck|venison|rabbit|fish|"
+    r"salmon|tuna|sardines?|cod|mackerel|herring|trout|whitefish|liver|"
+    r"heart|kidneys?|tripe|meat|prawns?|shrimps?|mussels?|krill)\b", re.I)
+
+
+def adds_taurine_carnitine(item):
+    """{'taurine', 'carnitine'} the item declares as added: its 'adds'
+    field if set, else what its label note mentions (labels of kibbles /
+    balancers that add them)."""
+    if item.get("adds") is not None:
+        return {a for a in ("taurine", "carnitine")
+                if a in str(item["adds"]).lower()}
+    note = str(item.get("note", "")).lower()
+    return {a for a in ("taurine", "carnitine") if a in note and not
+            re.search(rf"\b(no|without|free of)\s+(l-)?{a}|{a}\s+(not|"
+                      rf"none|free)", note)}
+
+
+def taurine_carnitine_note(recipe, db):
+    """One assessment line when a meat- and fish-free recipe has no food
+    that declares added taurine and/or L-carnitine (plant foods contain
+    practically none), else ''."""
+    names = [n for n, g in recipe if n in db and g and g > 0]
+    if not names:
+        return ""
+    if any(_MEAT_FISH.search(n) and "oil" not in n.lower() for n in names):
+        return ""
+    have = set()
+    for n in names:
+        have |= adds_taurine_carnitine(db[n])
+    lack = [x for x in ("taurine", "carnitine") if x not in have]
+    if not lack:
+        return ""
+    what = " or ".join("L-carnitine" if x == "carnitine" else x
+                       for x in lack)
+    return (f"• No added {what}: no food here declares "
+            f"{'it' if len(lack) == 1 else 'them'}, and plant foods "
+            "contain practically none. Dogs normally make both and there is "
+            "no set requirement, but adding them to plant-based diets is a "
+            "common precaution (DCM reports) – a balancer or kibble that "
+            "adds them covers it. If unsure, ask the vet about a whole-blood "
+            "taurine test.")
+
+
 def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                   acid, k1000, renal_mode, stage_note, fat_frac, ranges=None,
                   blood_note="", extended=False, assumed=None):
@@ -4525,6 +4573,9 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
         w = water_note(t, miss, need or kcal)
         if w:
             out.append(w)
+    tc = taurine_carnitine_note(recipe, db)
+    if tc:
+        out.append(tc)
     missing = sorted({n for k in BASE_KEYS for n in miss[k]})
     if missing:
         out.append("• Incomplete data for: " + ", ".join(missing) +
