@@ -2131,6 +2131,75 @@ with tab_gen:
             ss.gen_result = {"ctx": ctx, "res": res, "forced": list(forced),
                              "n_fixed": len(ss.recipe) if fixed_base else 0}
 
+    gr = ss.gen_result
+    if gr and abs(gr["ctx"]["kcal_target"] - gk) > 1:
+        st.warning(f"These recipes were generated for "
+                   f"{gr['ctx']['kcal_target']:.0f} kcal/day; the target is "
+                   f"now {gk:.0f} – press Generate again.")
+    if gr:
+        ctx = gr["ctx"]
+        if not gr["res"]:
+            st.warning("No recipes found – select more ingredients.")
+        if ctx["weights"].get("vitamins", 1) == 0:
+            st.warning("Vitamin minimums were ignored – add a vitamin "
+                       "supplement (B-complex incl. B12; vitamin A only if "
+                       "your vet agrees).")
+        # the context the Recipe page will use once a result is applied
+        _pctx = rc.build_score_context(
+            rc.store_score_context(ss.score_ctx, ctx, ss.stage, need_now()),
+            ss.stage, need_now(), ss.bw, ss.ext, ss.max_g or None)
+        for i, (names, g, s, terms) in enumerate(gr["res"]):
+            vecs = [rc._vec(db[n]) for n in names]
+            kcal, per, _ = rc.per1000_from(g, vecs)
+            rt_, rparts = rc.recipe_rating(names, g, db, ctx)
+            s_now = rc.score_amounts([a for a in g], vecs, _pctx)[0]
+            title = (f"Recipe {i + 1} · score {s:.3f}"
+                     + (f" (now {s_now:.3f})" if abs(s_now - s) >= 5e-4
+                        else "") + f" · rating {rt_:.0f}/100 · "
+                     f"{sum(g):.0f} g/day · "
+                     + ", ".join(n.split(",")[0] for n, a in zip(names, g)
+                                 if rc.ingredient_role(db[n]) in
+                                 ("protein", "starch", "veg")))
+            with st.expander(title, expanded=(i == 0)):
+                if abs(s_now - s) >= 5e-4:
+                    st.caption(f"Scored {s:.3f} when generated; with the "
+                               f"current settings (weight, stage, blood "
+                               f"results, extended nutrients, max food) it "
+                               f"scores {s_now:.3f} – that is what the "
+                               "Recipe page will show. Generate again to "
+                               "optimise for the current settings.")
+                st.caption("Rating " + f"{rt_:.0f}/100 – " + " · ".join(
+                    f"{rc.RATING_LABELS[k]} {rparts[k] * 100:.0f}%"
+                    for k in rc.RATING_W))
+                cc = st.columns([3, 2])
+                show_df(cc[0], pd.DataFrame({
+                    "Ingredient": names,
+                    "Role": [rc.ingredient_role(db[n]) for n in names],
+                    "g/day": [round(x, 1) for x in g],
+                    **units_col(names, g),
+                    **({"g/meal": [round(x / ss.meals, 1) for x in g]}
+                       if ss.meals > 1 else {}),
+                    "kcal": [fmt_kcal(n, x) for n, x in zip(names, g)],
+                    "": ["fixed" if j < gr["n_fixed"] else
+                         "forced" if n in gr.get("forced", []) else ""
+                         for j, n in enumerate(names)]}),
+                    hide_index=True, **FULL)
+                capr = per["ca"] / per["p"] if per["p"] else 0
+                cc[1].markdown(
+                    f"Per 1000 kcal: protein **{per['protein']:.0f} g**, "
+                    f"P **{max(0, per['p'] - per['p_bind']):.0f} mg**, "
+                    f"Na {per['na']:.0f} mg, K {per['k']:.0f} mg, "
+                    f"Ca:P **{capr:.2f}**, EPA+DHA {per['epa_dha']:.0f} mg")
+                gaps_ = [f"{k} {v:.3f}" for k, v in
+                         sorted(terms.items(), key=lambda kv: -kv[1])[:4]
+                         if v > 1e-3]
+                cc[1].caption("Remaining gaps: " + (", ".join(gaps_)
+                                                    or "none"))
+                cc[1].button("Use this recipe", key=f"g_apply_{i}",
+                             type="primary", on_click=apply_recipe,
+                             args=(names, g, s, f"Generated recipe #{i + 1}",
+                                   ctx))
+
     # ---- meal plan: a different recipe per meal, balanced over the day
     with st.expander("🍱 Meal plan – a different recipe for each meal "
                      "(cook and freeze separately; balanced over the day)",
@@ -2357,74 +2426,6 @@ with tab_gen:
                         file_name=f"renal_biscuits_{i + 1}.html",
                         mime="text/html", key=f"b_print_{i}")
 
-    gr = ss.gen_result
-    if gr and abs(gr["ctx"]["kcal_target"] - gk) > 1:
-        st.warning(f"These recipes were generated for "
-                   f"{gr['ctx']['kcal_target']:.0f} kcal/day; the target is "
-                   f"now {gk:.0f} – press Generate again.")
-    if gr:
-        ctx = gr["ctx"]
-        if not gr["res"]:
-            st.warning("No recipes found – select more ingredients.")
-        if ctx["weights"].get("vitamins", 1) == 0:
-            st.warning("Vitamin minimums were ignored – add a vitamin "
-                       "supplement (B-complex incl. B12; vitamin A only if "
-                       "your vet agrees).")
-        # the context the Recipe page will use once a result is applied
-        _pctx = rc.build_score_context(
-            rc.store_score_context(ss.score_ctx, ctx, ss.stage, need_now()),
-            ss.stage, need_now(), ss.bw, ss.ext, ss.max_g or None)
-        for i, (names, g, s, terms) in enumerate(gr["res"]):
-            vecs = [rc._vec(db[n]) for n in names]
-            kcal, per, _ = rc.per1000_from(g, vecs)
-            rt_, rparts = rc.recipe_rating(names, g, db, ctx)
-            s_now = rc.score_amounts([a for a in g], vecs, _pctx)[0]
-            title = (f"Recipe {i + 1} · score {s:.3f}"
-                     + (f" (now {s_now:.3f})" if abs(s_now - s) >= 5e-4
-                        else "") + f" · rating {rt_:.0f}/100 · "
-                     f"{sum(g):.0f} g/day · "
-                     + ", ".join(n.split(",")[0] for n, a in zip(names, g)
-                                 if rc.ingredient_role(db[n]) in
-                                 ("protein", "starch", "veg")))
-            with st.expander(title, expanded=(i == 0)):
-                if abs(s_now - s) >= 5e-4:
-                    st.caption(f"Scored {s:.3f} when generated; with the "
-                               f"current settings (weight, stage, blood "
-                               f"results, extended nutrients, max food) it "
-                               f"scores {s_now:.3f} – that is what the "
-                               "Recipe page will show. Generate again to "
-                               "optimise for the current settings.")
-                st.caption("Rating " + f"{rt_:.0f}/100 – " + " · ".join(
-                    f"{rc.RATING_LABELS[k]} {rparts[k] * 100:.0f}%"
-                    for k in rc.RATING_W))
-                cc = st.columns([3, 2])
-                show_df(cc[0], pd.DataFrame({
-                    "Ingredient": names,
-                    "Role": [rc.ingredient_role(db[n]) for n in names],
-                    "g/day": [round(x, 1) for x in g],
-                    **units_col(names, g),
-                    **({"g/meal": [round(x / ss.meals, 1) for x in g]}
-                       if ss.meals > 1 else {}),
-                    "kcal": [fmt_kcal(n, x) for n, x in zip(names, g)],
-                    "": ["fixed" if j < gr["n_fixed"] else
-                         "forced" if n in gr.get("forced", []) else ""
-                         for j, n in enumerate(names)]}),
-                    hide_index=True, **FULL)
-                capr = per["ca"] / per["p"] if per["p"] else 0
-                cc[1].markdown(
-                    f"Per 1000 kcal: protein **{per['protein']:.0f} g**, "
-                    f"P **{max(0, per['p'] - per['p_bind']):.0f} mg**, "
-                    f"Na {per['na']:.0f} mg, K {per['k']:.0f} mg, "
-                    f"Ca:P **{capr:.2f}**, EPA+DHA {per['epa_dha']:.0f} mg")
-                gaps_ = [f"{k} {v:.3f}" for k, v in
-                         sorted(terms.items(), key=lambda kv: -kv[1])[:4]
-                         if v > 1e-3]
-                cc[1].caption("Remaining gaps: " + (", ".join(gaps_)
-                                                    or "none"))
-                cc[1].button("Use this recipe", key=f"g_apply_{i}",
-                             type="primary", on_click=apply_recipe,
-                             args=(names, g, s, f"Generated recipe #{i + 1}",
-                                   ctx))
 
 # ================================================================ LIBRARY
 with tab_lib:
