@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.07a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.07b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -2733,7 +2733,8 @@ UNLIMITED_CAP = 20     # safety cap on items in an "unlimited" recipe
 
 
 # home-made recipes saved as one food: biscuits ('treat') and meals
-# ('custom'); never used as ingredients by the generators / optimiser
+# ('custom'); never suggested by the generators / optimiser - used only
+# when forced (Always include) or in the fixed base
 COMPOSITE_CATS = ("treat", "custom")
 
 # ------------------------------------------------------------ toxic foods
@@ -5670,7 +5671,8 @@ class SaveFoodDialog(tk.Toplevel):
         ttk.Label(frm, foreground="#555", wraplength=380, justify="left",
                   text="Saved as one food (values per 100 g of the mix). "
                        "Saved foods can be added to recipes; the generator "
-                       "and optimiser do not use them.").grid(
+                       "uses a saved meal only when it is in Always include "
+                       "(it never suggests them).").grid(
             row=4, column=0, columnspan=3, sticky="w", pady=(6, 4))
         b = ttk.Frame(frm)
         b.grid(row=5, column=0, columnspan=3, sticky="e")
@@ -5979,7 +5981,7 @@ class GeneratorDialog(tk.Toplevel):
             (n for n in app.db
              if app.db[n]["per100g"]["kcal"] is not None
              and ingredient_role(app.db[n]) != "binder"
-             and app.db[n]["category"] not in COMPOSITE_CATS),
+             and app.db[n]["category"] != "treat"),
             key=lambda n: (ROLES.index(ingredient_role(app.db[n])),
                            n.lower()))
         self.lb = tk.Listbox(lf, selectmode="multiple", height=16,
@@ -5988,7 +5990,9 @@ class GeneratorDialog(tk.Toplevel):
         self.lb.configure(yscrollcommand=sb.set)
         excluded = load_excluded()
         for i, n in enumerate(self.names):
-            self.lb.insert("end", f"[{ingredient_role(app.db[n])}]  {n}")
+            self.lb.insert("end", "[saved meal – Always include only]  "
+                           + n if app.db[n]["category"] == "custom" else
+                           f"[{ingredient_role(app.db[n])}]  {n}")
             if n not in excluded:
                 self.lb.select_set(i)
         self.lb.bind("<<ListboxSelect>>", lambda e: self.save_excl())

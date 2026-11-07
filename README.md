@@ -195,6 +195,16 @@ biscuits included. Treats saved by older versions (per raw dough) still
 work. The same "Biscuits (treat)" option exists in *Save as a library
 food* for any recipe.
 
+### Saved meals (custom foods)
+
+*Save as a library food* (Recipe tab / desktop) stores the recipe, or one
+meal of a meal plan, as one food (category **custom**, per 100 g of the
+mix). Saved meals appear in the generator's ingredient list (role "saved
+meal"); they are never suggested, and are used only when **Always
+include** is ticked – e.g. a frozen lunch, with the generator building the
+rest of the day around it (amount optimised, never below Min g). To keep
+an exact amount instead, put it in the recipe and use the fixed base.
+
 ## Renal-friendly biscuits (treats)
 
 Generator → *Renal-friendly biscuits* (desktop: **Make: biscuits**;

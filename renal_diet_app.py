@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.07a"
+ENGINE_VERSION = "2026.11.07b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1008,9 +1008,10 @@ with tab_rec:
             st.caption("Saves the recipe as one food in the ingredient "
                        "library (values per 100 g of the mix): a meal goes "
                        "to the 'custom' category, biscuits to 'treat' "
-                       "(counted in biscuits). Saved foods can be added to "
-                       "recipes; the generator and optimiser do not use "
-                       "them.")
+                       "(per 100 g baked). Saved foods can be added to "
+                       "recipes. A saved meal appears in the generator's "
+                       "list and is used only when you tick Always include; "
+                       "the generator and optimiser never suggest them.")
             src_opts = {"Whole recipe": list(ss.recipe)}
             if ss.plan:
                 for tg in rc.plan_tags(ss.plan):
@@ -2018,7 +2019,7 @@ with tab_gen:
                            "towards egg yolk. Fat, Ca and Mg minimums still "
                            "apply.")
     gnames = sorted((n for n in db if db[n]["per100g"]["kcal"] is not None
-                     and db[n]["category"] not in rc.COMPOSITE_CATS
+                     and db[n]["category"] != "treat"
                      and rc.ingredient_role(db[n]) != "binder"),
                     key=lambda n: (rc.ROLES.index(rc.ingredient_role(db[n])),
                                    n.lower()))
@@ -2046,7 +2047,9 @@ with tab_gen:
                "**Min g** (blank = 5 g, 0.5 g for oils/supplements). **Max g** "
                "caps an ingredient whenever it is used. A forced "
                "protein, starch or vegetable fills that role. Roles are "
-               "assigned automatically.")
+               "assigned automatically. Saved meals (role *saved meal*) are "
+               "used only when **Always include** is ticked – e.g. a frozen "
+               "lunch, with the rest of the day built around it.")
     _gkey = (f"g_pool_{ss.lib_ver}_{ss.gen_ex_ver}_{int(ss.ext)}_"
              f"{int(g_full_ch)}")
     if ss.get("gen_key_last") != _gkey:      # fresh editor: current settings
@@ -2061,7 +2064,9 @@ with tab_gen:
                                           for n in gnames], dtype="float"),
                       "Max g": pd.Series([ss.gen_set_base["max"].get(n)
                                           for n in gnames], dtype="float"),
-                      "Role": [rc.ingredient_role(db[n]) for n in gnames],
+                      "Role": ["saved meal" if db[n]["category"] == "custom"
+                               else rc.ingredient_role(db[n])
+                               for n in gnames],
                       "Ingredient": gnames,
                       "Missing data": [", ".join(_miss[n][:6]) +
                                        ("…" if len(_miss[n]) > 6 else "")
