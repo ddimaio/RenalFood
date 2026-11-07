@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.07c"
+ENGINE_VERSION = "2026.11.07d"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1133,11 +1133,18 @@ with tab_rec:
                                  f"{rc.RATING_LABELS[k]} "
                                  f"{rparts[k] * 100:.0f}%"
                                  for k in rc.RATING_W if k in rparts))
-            _d = t["kcal"] - need_now()
-            m[2].metric("kcal/day", f"{t['kcal']:.0f}",
-                        f"{_d:+.0f} vs need" if abs(_d) >= 0.5 else
-                        "= need", delta_color="off" if abs(_d) < 0.5 else
-                        "normal")
+            _tg = score_context()["kcal_target"]
+            _pct = t["kcal"] / _tg * 100 if _tg else 0
+            _etag = rc.energy_of_target(t["kcal"], _tg)[1]
+            m[2].metric("Energy of target",
+                        f"{_pct:.0f}%" + {"ok": " ✓", "warn": " ⚠",
+                                          "bad": " ✗"}.get(_etag, ""),
+                        f"{t['kcal']:.0f} of {_tg:.0f} kcal",
+                        delta_color="off",
+                        help="Recipe energy against the daily target. "
+                             "Green/neutral within ±5 %; scale the recipe "
+                             "if it is further off (the score counts it). "
+                             "The rating never depends on the amount.")
             m[3].metric("Protein g", f"{t['protein'] * k1000:.0f}",
                         help="per 1000 kcal")
             m[4].metric("P mg (net)", f"{rc.net_p(t) * k1000:.0f}",
@@ -1792,10 +1799,13 @@ with tab_opt:
             meaning = ((f"0 = same as {rm_['name']} per 1000 kcal" +
                         ("" if rm_["only"] else " and every renal target met"))
                        if rm_ else "0 = every target met")
+            _en = lambda o: rc.energy_of_target(  # noqa: E731
+                rc.recipe_kcal(o["names"], o["grams"], db),
+                r["ctx"]["kcal_target"], True)[0]
             st.caption(f"Ranked by score ({meaning}), then rating. "
                        f"★ = recommended. Current recipe: score "
                        f"{current['score']:.3f} · rating "
-                       f"{current['rating']:.0f}/100.")
+                       f"{current['rating']:.0f}/100 · {_en(current)}.")
             if not options:
                 st.info("No options found.")
             else:
@@ -1806,6 +1816,7 @@ with tab_opt:
                     "Change": [o["change"] for o in options],
                     "Score": [f"{o['score']:.3f}" for o in options],
                     "Rating": [f"{o['rating']:.0f}/100" for o in options],
+                    "Energy": [_en(o).split()[-1] for o in options],
                     "Main improvements": [o["why"] for o in options]})
                 show_df(st, tbl, hide_index=True, **FULL,
                         column_config={"#": st.column_config.NumberColumn(
@@ -1822,7 +1833,7 @@ with tab_opt:
                                 f"score **{o['score']:.3f}** "
                                 f"{rc.score_change(o['score'], current['score'])}"
                                 f" · rating **{o['rating']:.0f}/100** (was "
-                                f"{current['rating']:.0f}/100)")
+                                f"{current['rating']:.0f}/100) · {_en(o)}")
                     oc1, oc2 = st.columns(2)
                     if o.get("plan"):          # meal by meal
                         was_ = {}
@@ -1968,6 +1979,9 @@ with tab_opt:
                         f"**With your changes** → score **{ms:.3f}** (was "
                         f"{ms0:.3f}) · rating "
                         f"{rc.recipe_rating(mn, mg, db, _c0)[0]:.0f}/100 · "
+                        + rc.energy_of_target(rc.recipe_kcal(mn, mg, db),
+                                              ctx["kcal_target"], True)[0]
+                        + " · "
                         + rc.describe_change(r["names"], r["x0"], mn, mg))
                     cc = st.columns(2)
                     show_df(cc[0], recipe_table(mn, mg,
@@ -2176,6 +2190,8 @@ with tab_gen:
             title = (f"Recipe {i + 1} · score {s:.3f}"
                      + (f" (now {s_now:.3f})" if abs(s_now - s) >= 5e-4
                         else "") + f" · rating {rt_:.0f}/100 · "
+                     + rc.energy_of_target(kcal, ctx["kcal_target"],
+                                           True)[0] + " · "
                      f"{sum(g):.0f} g/day · "
                      + ", ".join(n.split(",")[0] for n, a in zip(names, g)
                                  if rc.ingredient_role(db[n]) in
@@ -2296,7 +2312,11 @@ with tab_gen:
                                         pr["ctx"])[0]
                 with st.container(border=True):
                     st.markdown(f"**Plan {i + 1}** · day score "
-                                f"{p['score']:.3f} · rating {rt_p:.0f}/100")
+                                f"{p['score']:.3f} · rating {rt_p:.0f}/100 · "
+                                + rc.energy_of_target(
+                                    rc.recipe_kcal(p["names"], p["grams"],
+                                                   db),
+                                    pr["ctx"]["kcal_target"], True)[0])
                     if p["fixed"]:
                         st.caption("Fixed every day: " + ", ".join(
                             f"{n} {g:g} g{rc.units_note(n, g)}"

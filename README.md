@@ -251,7 +251,17 @@ vitamins and extended nutrients (25), data complete (15), oxalate low (15),
 protein near the aim (10), sodium/potassium/EPA+DHA/Ca:P away from the
 range edges (10). Generated recipes with the same score are ranked by it,
 and the optimiser suggests additions/substitutions that keep the score but
-raise the rating by at least 1 point.
+raise the rating by at least 1 point. The rating is per 1000 kcal, so
+it never depends on the amount.
+
+## Energy of target
+
+Next to score and rating, every analysis, optimiser option, generated
+recipe, meal plan and printout shows **Energy N% of target** (recipe kcal
+against the daily target; ✓ within ±5 %, ⚠ within ±15 %, ✗ beyond). The
+score includes an energy term, so a well-balanced recipe at the wrong
+amount scores badly; this line shows when that is the reason – scale the
+recipe. The rating is unaffected by amount.
 
 ## Printing a recipe
 

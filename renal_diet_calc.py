@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.07c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.07d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1208,7 +1208,7 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 {ingredients_html}
 <div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}Weigh with kitchen scales. Amounts are for cooked foods
 where the name says so (e.g. "boiled"). {f'Units ({_esc(UNITS_NOTE)}). ' if has_u else ''}{f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
-Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
+Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · ' + _esc(a['energy_text'])) if a.get('energy_text') else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
 
 <h2>Key nutrients</h2>
 <table><tr><th>Nutrient</th><th>Unit</th><th class=n>Per day</th>
@@ -3507,7 +3507,9 @@ def meal_plan_report(plans, db, ctx):
         rt = recipe_rating(p["names"], p["grams"], db, ctx)[0]
         L.append("")
         L.append(f"PLAN {i}   day score {p['score']:.3f}   rating "
-                 f"{rt:.0f}/100")
+                 f"{rt:.0f}/100   " + energy_of_target(
+                     recipe_kcal(p["names"], p["grams"], db),
+                     ctx.get("kcal_target"), True)[0])
         vecs_all = {n: _vec(db[n]) for n in p["names"]}
         if p["fixed"]:
             L.append("  Fixed: " + ", ".join(f"{n} {g:g} g{units_note(n, g)}"
@@ -3858,7 +3860,8 @@ solid #bbb; padding: 3pt 5pt; text-align: left; }} th {{ background: #eee; }}
 </style></head><body>
 <h1>{_esc(title)}{(' – ' + _esc(dog_name)) if dog_name else ''}</h1>
 <div class="small">{_esc(ctx.get('stage_name', ''))} · {kcal:.0f} kcal/day ·
-day score {plan['score']:.3f} (0 = every target met) · printed {today}</div>
+day score {plan['score']:.3f} (0 = every target met) ·
+{_esc(energy_of_target(kcal, ctx.get('kcal_target'))[0])} · printed {today}</div>
 <p class="small">Each meal is its own recipe: cook the batch, split into
 {days} portions and freeze. Feed one portion of each meal a day. Single
 meals are not complete on their own – only the day together is balanced.</p>
@@ -4877,6 +4880,8 @@ def analyse_recipe(recipe, db, need, stage_name, sctx=None, meals=1):
         res["score"], res["terms"] = sc, terms
         res["rating"], res["rating_parts"] = recipe_rating(
             names, [g for n, g in recipe if n in db], db, sctx)
+        res["energy_text"], res["energy_tag"] = energy_of_target(
+            kcal, sctx["kcal_target"])
         top = [k for k, v in sorted(terms.items(), key=lambda kv: -kv[1])
                if v > 1e-3][:3]
         summary.insert(0, ("Score (0 = all targets met)", "", f"{sc:.3f}",
@@ -4990,6 +4995,27 @@ def key_nutrients_in_range(res):
     return ok, n, off
 
 
+def recipe_kcal(names, grams, db):
+    """Total kcal of a recipe."""
+    return sum((db[n]["per100g"]["kcal"] or 0) * g / 100
+               for n, g in zip(names, grams) if n in db)
+
+
+def energy_of_target(kcal, target, short=False):
+    """(text, tag) for the energy against the target: 'Energy 100% of
+    target (430 of 430 kcal)' (short: 'energy 100%'); tag 'ok' within
+    ±5 %, 'warn' within ±15 %, else 'bad'."""
+    if not target or target <= 0:
+        return ("", "")
+    pct = kcal / target * 100
+    tag = ("ok" if abs(pct - 100) <= 5 else
+           "warn" if abs(pct - 100) <= 15 else "bad")
+    if short:
+        return f"energy {pct:.0f}%", tag
+    return (f"Energy {pct:.0f}% of target ({kcal:.0f} of {target:.0f} kcal)",
+            tag)
+
+
 def assessment_head(res):
     """Lines ('• ...') that open the assessment: score, rating and how many
     key nutrients are within range."""
@@ -5002,6 +5028,11 @@ def assessment_head(res):
     if res.get("rating") is not None:
         out.append(f"• Rating {res['rating']:.0f}/100 (higher = better)"
                    + (f" – {extra['Rating']}" if extra.get("Rating") else ""))
+    if res.get("energy_text"):
+        hint = {"ok": "", "warn": " – a little off: scale the recipe",
+                "bad": " – scale the recipe (the score counts this "
+                       "too)"}[res["energy_tag"]]
+        out.append(f"• {res['energy_text']}{hint}")
     ok, n, off = key_nutrients_in_range(res)
     if n:
         out.append(f"• Key nutrients within range: {ok} of {n}"
@@ -6462,18 +6493,21 @@ class PlanOptionsWindow(tk.Toplevel):
         txt.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         txt.pack(fill="both", expand=True)
+        en = lambda o: energy_of_target(recipe_kcal(  # noqa: E731
+            o["names"], o["grams"], app.db), ctx["kcal_target"], True)[0]
         L = [f"Current plan: day score {current['score']:.3f}, rating "
-             f"{current['rating']:.0f}/100. Ranked by score, then rating.",
+             f"{current['rating']:.0f}/100, {en(current)}. Ranked by score, "
+             "then rating.",
              "", "OPTIONS – best first (* = recommended)"]
         for i, o in enumerate(options, start=1):
             L.append(f" {'*' if o['best'] else ' '}{i:>2}. {o['kind']:<12} "
                      f"score {o['score']:.3f}  rating {o['rating']:.0f}/100  "
-                     f"{o['change']}")
+                     f"{en(o)}  {o['change']}")
         was = {(str(t), n): g for t, n, g in plan_items(plan)}
         for i, o in enumerate(options, start=1):
             L.append("\n" + "-" * 78)
             L.append(f"OPTION #{i} – {o['kind']}: score {o['score']:.3f}, "
-                     f"rating {o['rating']:.0f}/100")
+                     f"rating {o['rating']:.0f}/100, {en(o)}")
             p = o["plan"]
             tags = plan_tags(p)
             for t in tags:
@@ -6736,7 +6770,9 @@ class GenResultsWindow(tk.Toplevel):
             kcal, per, _ = per1000_from(g, vecs)
             rt, rp = recipe_rating(names, g, db, ctx)
             L.append(f"RECIPE {i}   score {s:.3f}   rating {rt:.0f}/100   "
-                     f"({sum(g):.0f} g/day, {kcal:.0f} kcal)")
+                     f"({sum(g):.0f} g/day, {kcal:.0f} kcal, " +
+                     energy_of_target(kcal, ctx["kcal_target"], True)[0]
+                     + ")")
             L.append("  rating: " + ", ".join(
                 f"{RATING_LABELS[k]} {rp[k] * 100:.0f}%" for k in RATING_W))
             w = max(len(n) for n in names) + 2
@@ -7428,13 +7464,16 @@ class ResultsWindow(tk.Toplevel):
         L.append(f"Score: 0 = {goal}. Ranked by score, then rating (0-100, "
                  "higher = better).")
         L.append(f"Energy target: {ctx['kcal_target']:.0f} kcal/day")
+        en = lambda o: energy_of_target(recipe_kcal(  # noqa: E731
+            o["names"], o["grams"], self.app.db), ctx["kcal_target"],
+            True)[0]
         L.append(f"Current recipe: score {cur['score']:.3f}, rating "
-                 f"{cur['rating']:.0f}/100\n")
+                 f"{cur['rating']:.0f}/100, {en(cur)}\n")
         L.append("OPTIONS – best first (* = recommended)")
         for i, o in enumerate(self.options, start=1):
             L.append(f" {'*' if o['best'] else ' '}{i:>2}. {o['kind']:<12} "
                      f"score {o['score']:.3f}  rating {o['rating']:.0f}/100  "
-                     f"{o['change']}")
+                     f"{en(o)}  {o['change']}")
             if o["why"] != "–":
                 L.append(f"       improves: {o['why']}")
         ref = next((r for r in load_references() if rm and
@@ -7447,7 +7486,7 @@ class ResultsWindow(tk.Toplevel):
             L.append(f"OPTION #{i}{' (recommended)' if o['best'] else ''} – "
                      f"{o['kind']}: score {o['score']:.3f} "
                      f"{score_change(o['score'], cur['score'])}, rating "
-                     f"{o['rating']:.0f}/100")
+                     f"{o['rating']:.0f}/100, {en(o)}")
             w = max(len(n) for n in list(names) + list(self.names)) + 2
             for n, b_ in zip(names, g):
                 a_ = was.get(n)
