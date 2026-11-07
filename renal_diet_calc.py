@@ -543,6 +543,7 @@ OXALATE_DEFAULTS = {
 }
 MAX_DOSE_DEFAULTS = {
     'Bonza vegan kibble': '30',
+    'Omni plant-based senior dry dog food': '30',
     'Dafy V-Integra Adult Dog homemade diet balancer': '10:7',
     'ThorneVet B ComplexVET soft chew (2 g)': '0.176/kg',
     'Dafy V-Integra Renal homemade diet balancer': '5:4, 10:8, 15:10, 25:15, 40:20, 60:28',

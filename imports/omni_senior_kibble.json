@@ -3,7 +3,7 @@
   "name": "Omni plant-based senior dry dog food",
   "category": "commercial food",
   "assume_aafco": true,
-  "note": "Omni Senior (plant-based dry), label as fed: protein 26%, fat 7.5%, fibre 3%, 'vitamins and minerals' (ash) 7%, 341 kcal/100 g. Moisture NOT declared (9% assumed). Sodium 0.4%, phosphorus 0.6% and calcium 0.9% as fed, from the manufacturer (Nov 2026, reported by the user). Potassium, magnesium and omega-3 still NOT declared. Vitamins = ADDED amounts per kg (A 25,000 IU, D3 1,800 IU, E 245 IU); ingredients add more. Also adds taurine 2,000 mg, L-carnitine 1,000 mg, methionine 2,500 mg (urine-acidifying), Zn 120 mg (sulphate 70 + glycine chelate 50), Mn 25 mg, Fe 30 mg, Cu 10 mg, I 1.56 mg, Se 0.2 mg per kg. Composition: potato, pea starch, potato protein, brown rice, Hi-Pro soya, dried yeasts, oats, peas, pea protein, minerals, carrot, hydrolysed vegetables, lentils, rapeseed oil, sunflower oil, micro algae, blueberries, prebiotic FOS, cranberries, pumpkin. Marked complete food: undeclared K/Mg and extended nutrients taken at the AAFCO minimum. Source: label values supplied by the user, Nov 2026.",
+  "note": "Omni Senior (plant-based dry), label as fed: protein 26%, fat 7.5%, fibre 3%, 'vitamins and minerals' (ash) 7%, 341 kcal/100 g. Moisture NOT declared (9% assumed). Sodium 0.4%, phosphorus 0.6% and calcium 0.9% as fed, from the manufacturer (Nov 2026, reported by the user). Potassium, magnesium and omega-3 still NOT declared. Vitamins = ADDED amounts per kg (A 25,000 IU, D3 1,800 IU, E 245 IU); ingredients add more. Also adds taurine 2,000 mg, L-carnitine 1,000 mg, methionine 2,500 mg (urine-acidifying), Zn 120 mg (sulphate 70 + glycine chelate 50), Mn 25 mg, Fe 30 mg, Cu 10 mg, I 1.56 mg, Se 0.2 mg per kg. Composition: potato, pea starch, potato protein, brown rice, Hi-Pro soya, dried yeasts, oats, peas, pea protein, minerals, carrot, hydrolysed vegetables, lentils, rapeseed oil, sunflower oil, micro algae, blueberries, prebiotic FOS, cranberries, pumpkin. Marked complete food: undeclared K/Mg and extended nutrients taken at the AAFCO minimum. Source: label values supplied by the user, Nov 2026. Daily max 30 g set by the user (phosphorus: ~180 mg at 30 g).",
   "per100g": {
    "kcal": 341.0,
    "water": 9.0,
@@ -51,6 +51,7 @@
    "zn": null,
    "i": null,
    "se": null
-  }
+  },
+  "max_dose": "30"
  }
 ]
