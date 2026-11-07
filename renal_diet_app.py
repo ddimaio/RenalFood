@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.05f"
+ENGINE_VERSION = "2026.11.07a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -783,10 +783,11 @@ def units_col(names, grams):
     return {"units": u} if any(u) else {}
 
 
-def _save_biscuit(b, name, n_b):
-    """Save a generated biscuit recipe as a library treat; returns name."""
+def _save_biscuit(b, name, baked_g):
+    """Save a generated biscuit recipe as a library treat (per 100 g
+    baked; baked_g = weighed batch, 0/None = estimate); returns name."""
     name = (name or "").strip() or "Renal biscuits"
-    item = rc.biscuit_to_ingredient(b, db, name, n_b)
+    item = rc.biscuit_to_ingredient(b, db, name, baked_g or None)
     db[name] = item
     rc.save_db(db)
     ss.lib_ver += 1
@@ -794,18 +795,17 @@ def _save_biscuit(b, name, n_b):
 
 
 def _save_biscuit_cb(b, key_name, key_n):
-    n = _save_biscuit(b, ss.get(key_name), int(ss.get(key_n) or 30))
+    n = _save_biscuit(b, ss.get(key_name), float(ss.get(key_n) or 0))
     st.toast(f"Saved '{n}' to the ingredient library (category treat)")
 
 
 def _add_biscuit_cb(b, key_name, key_n, key_day):
-    n = _save_biscuit(b, ss.get(key_name), int(ss.get(key_n) or 30))
-    per_day = float(ss.get(key_day) or 1)
-    g = per_day * db[n]["piece_g"]
+    n = _save_biscuit(b, ss.get(key_name), float(ss.get(key_n) or 0))
+    g = float(ss.get(key_day) or 10)
     items = [x for x in rc.plan_items(ss.plan)
              if not (x[0] == "treats" and x[1] == n)] + [("treats", n, g)]
     set_plan(rc.plan_from_items(items, ss.plan["shares"]))
-    st.toast(f"Added {per_day:g} × '{n}' a day to the meal plan – "
+    st.toast(f"Added {g:g} g of '{n}' a day to the meal plan – "
              "optimise the plan to rebalance the meals")
 
 
@@ -845,8 +845,7 @@ def plan_editor(cfg):
                  "energy" if isinstance(t, int) else
                  " · add to the meals, not before freezing"
                  if t == "serving" else
-                 " · " + ", ".join(rc.biscuit_count_text(db[n], g)
-                                   for n, g in now) + " a day (dough g)"
+                 " · given by weight, any biscuit size"
                  if t == "treats" else "")
         st.markdown(f"**{lab}** · {sum(g for _, g in now):.0f} g · "
                     f"{kc:.0f} kcal · {pp:.0f} mg P{extra}")
@@ -1025,9 +1024,13 @@ with tab_rec:
             lf_kind = st.radio("Save as", ["Meal (custom)",
                                            "Biscuits (treat)"],
                                horizontal=True, key="lf_kind")
-            lf_n = (st.number_input("Biscuits in the batch", 1, 500, 30,
-                                    key="lf_n")
-                    if lf_kind.startswith("Biscuits") else None)
+            is_b = lf_kind.startswith("Biscuits")
+            lf_n = (st.number_input(
+                "Batch weight after baking, g (0 = estimate)", 0.0, 10000.0,
+                0.0, step=5.0, key="lf_bw",
+                help="Values are saved per 100 g of baked biscuit. Weigh "
+                     "the batch once baked for exact values; 0 estimates "
+                     "it at ~8 % moisture.") if is_b else None)
             if st.button("Save to library", key="lf_go",
                          disabled=not ss.recipe):
                 nm = (lf_name or "").strip()
@@ -1038,9 +1041,9 @@ with tab_rec:
                              "another name.")
                 else:
                     try:
-                        kind = "treat" if lf_n else "custom"
+                        kind = "treat" if is_b else "custom"
                         db[nm] = rc.recipe_to_ingredient(
-                            src_opts[lf_src], db, nm, kind, lf_n)
+                            src_opts[lf_src], db, nm, kind, lf_n or None)
                         rc.save_db(db)
                         ss.lib_ver += 1
                         ss.lf_msg = (f"Saved '{nm}' to the library "
@@ -2225,8 +2228,8 @@ with tab_gen:
             help="Saved biscuit recipes (🍪 section → Save as ingredient). "
                  "Their energy and nutrients count towards the day; the "
                  "meals are balanced around them.")
-        p_treat_n = tc[1].number_input("Biscuits a day", 0.5, 20.0, 2.0,
-                                       step=0.5, key="p_treat_n",
+        p_treat_n = tc[1].number_input("Grams of biscuit a day", 1.0, 200.0,
+                                       15.0, step=1.0, key="p_treat_g",
                                        disabled=p_treat == "None")
         st.caption("Takes 1–4 minutes – leave the page alone until the "
                    "plans appear.")
@@ -2257,7 +2260,7 @@ with tab_gen:
                 [tuple(x) for x in ss.recipe] if fixed_base else (),
                 forced_p, max_p, prog_p,
                 treats=[] if p_treat == "None" else
-                [(p_treat, p_treat_n * (db[p_treat].get("piece_g") or 10))])
+                [(p_treat, float(p_treat_n))])
             bar.empty()
             ss.plan_result = {"ctx": ctx_p, "res": res_p}
         pr = ss.get("plan_result")
@@ -2374,10 +2377,11 @@ with tab_gen:
                     st.markdown(
                         f"**Biscuits {i + 1}** · score {d['score']:.3f} · "
                         f"{d['mass']:.0f} g dough · {d['kcal']:.0f} kcal · "
-                        f"~{d['n_biscuits']} biscuits of "
-                        f"~{d['per_biscuit_kcal']:.0f} kcal"
-                        + (f" · up to {d['per_day']} a day"
-                           if d["per_day"] is not None else ""))
+                        f"~{d['baked_g']:.0f} g baked · "
+                        f"**{d['kcal_g_baked']:.1f} kcal per g baked** "
+                        f"({d['kcal_g_dough']:.1f}/g dough)"
+                        + (f" · up to {d['g_day']:.0f} g a day"
+                           if d["g_day"] is not None else ""))
                     rows_b = [{"Ingredient": n, "g": g, "kcal": k}
                               for n, g, k in d["ingredients"]]
                     if d["water_ml"]:
@@ -2395,30 +2399,33 @@ with tab_gen:
                     sc_ = st.columns([3, 2, 2])
                     sc_[0].text_input("Name", f"Renal biscuits {i + 1}",
                                       key=f"b_name_{i}")
-                    sc_[1].number_input("Biscuits per batch", 1, 300,
-                                        int(d["n_biscuits"]),
-                                        key=f"b_nb_{i}")
-                    sc_[2].number_input("Biscuits a day (plan)", 0.5, 20.0,
-                                        float(d["per_day"] or 2), step=0.5,
-                                        key=f"b_day_{i}")
+                    sc_[1].number_input(
+                        "Baked weight, g (0 = estimate)", 0.0, 5000.0, 0.0,
+                        step=5.0, key=f"b_bw_{i}",
+                        help="Weigh the batch after baking for exact values "
+                             "per gram; 0 uses the estimate "
+                             f"(~{d['baked_g']:.0f} g).")
+                    sc_[2].number_input("Grams a day (plan)", 1.0, 500.0,
+                                        float(round(d["g_day"] or 10)),
+                                        step=1.0, key=f"b_day_{i}")
                     bb_ = st.columns(2)
                     bb_[0].button("💾 Save as ingredient", key=f"b_save_{i}",
                                   on_click=_save_biscuit_cb,
-                                  args=(b, f"b_name_{i}", f"b_nb_{i}"),
+                                  args=(b, f"b_name_{i}", f"b_bw_{i}"),
                                   help="Adds it to the library (category "
-                                       "'treat', per 100 g raw dough) so it "
+                                       "'treat', per 100 g baked biscuit) so it "
                                        "can be used in meal plans.")
                     bb_[1].button("➕ Add to active meal plan",
                                   key=f"b_add_{i}", disabled=not ss.plan,
                                   on_click=_add_biscuit_cb,
-                                  args=(b, f"b_name_{i}", f"b_nb_{i}",
+                                  args=(b, f"b_name_{i}", f"b_bw_{i}",
                                         f"b_day_{i}"),
-                                  help="Saves it and adds that many "
-                                       "biscuits a day to the meal plan on "
+                                  help="Saves it and adds those grams "
+                                       "a day to the meal plan on "
                                        "the Recipe tab (use a meal plan "
                                        "first)." if not ss.plan else
-                                  "Saves it and adds that many biscuits a "
-                                  "day to the meal plan; then optimise the "
+                                  "Saves it and adds those grams a day "
+                                  "to the meal plan; then optimise the "
                                   "plan to rebalance the meals.")
                     st.download_button(
                         "🖨️ Printable biscuit recipe",

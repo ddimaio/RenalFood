@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.05f"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.07a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -4125,20 +4125,25 @@ def generate_biscuits(db, pool, ctx, n_recipes=5, batch=300.0, forced=None,
     return out
 
 
-def biscuit_count(kcal_batch, need_kcal, per_day=4):
-    """Biscuits per batch so that per_day biscuits fill the daily treat
-    allowance (rounded to 5, 10-120)."""
-    if not need_kcal or kcal_batch <= 0:
-        return 30
-    n = kcal_batch / (TREAT_SHARE * need_kcal / per_day)
-    return int(min(120, max(10, round(n / 5) * 5)))
+BAKED_MOISTURE = 0.08   # biscuits dried in the oven: ~8 % water left
 
 
-def biscuit_details(b, db, ctx, need_kcal=None, n_biscuits=None):
+def baked_weight(mass, water):
+    """Estimated weight of a batch after baking: the dry matter plus ~8 %
+    water (or the raw weight if the dough is already that dry)."""
+    if mass <= 0:
+        return 0.0
+    if water / mass <= BAKED_MOISTURE:
+        return mass
+    return (mass - water) / (1 - BAKED_MOISTURE)
+
+
+def biscuit_details(b, db, ctx, need_kcal=None):
     """Tables and notes for one generated biscuit recipe b (from
     generate_biscuits). Returns dict: ingredients [(name, g, kcal)],
     water_ml, nutrients [(label, unit, per 1000 kcal, limit, status)],
-    per_biscuit_kcal, per_day (max biscuits a day), notes [str]."""
+    mass (g dough), baked_g (estimated g after baking), kcal_g_dough,
+    kcal_g_baked, g_day (max g of baked biscuit a day), notes [str]."""
     names, grams, sc, per, kcal = b
     R = get_ranges(ctx)
     aims = ctx.get("aims") or {}
@@ -4166,21 +4171,25 @@ def biscuit_details(b, db, ctx, need_kcal=None, n_biscuits=None):
     rows.append(("Fat share of energy", "%",
                  round(per["fat"] * 8.5 / 10, 0), "≤ 50",
                  "✓" if per["fat"] * 8.5 / 10 <= 50 else "! above"))
-    if not n_biscuits:
-        n_biscuits = biscuit_count(kcal, need_kcal)
-    pb = kcal / max(1, n_biscuits)
-    per_day = int((TREAT_SHARE * need_kcal) // pb) if need_kcal and pb \
+    baked = baked_weight(mass, water)
+    kg_dough = kcal / mass if mass else 0.0
+    kg_baked = kcal / baked if baked else 0.0
+    p_10 = t[KI["p"]] * 10 / baked if baked else 0.0
+    g_day = (TREAT_SHARE * need_kcal / kg_baked) if need_kcal and kg_baked \
         else None
     unk = sorted({LABEL[k] for k in _unknown(grams, vecs)
                   if k in ("p", "na", "k", "protein", "oxalate")})
     notes = [
-        f"Batch: {mass:.0f} g dough ({kcal:.0f} kcal) → about {n_biscuits} "
-        f"biscuits of ~{pb:.0f} kcal and ~{pb / kcal * t[KI['p']] if kcal else 0:.0f} "
-        "mg phosphorus each.",
-        (f"Up to {per_day} biscuit{'s' if per_day != 1 else ''} a day "
-         f"(treats ≤ {TREAT_SHARE * 100:.0f}% of the {need_kcal:.0f} kcal "
-         "daily need). Treats are not balanced food: if you give more, "
-         "reduce the meals by the same energy.") if per_day is not None
+        f"Energy: {kg_baked:.1f} kcal per g of baked biscuit "
+        f"({kg_dough:.1f} kcal/g raw dough); 10 g baked ≈ {kg_baked * 10:.0f} "
+        f"kcal and {p_10:.0f} mg phosphorus. Biscuit size doesn't matter – weigh what you give.",
+        f"Batch: {mass:.0f} g dough ({kcal:.0f} kcal) → about {baked:.0f} g "
+        "after baking. For an exact figure, weigh the batch once baked and "
+        f"divide: {kcal:.0f} kcal ÷ baked weight = kcal per g.",
+        (f"Up to {g_day:.0f} g of baked biscuit a day (treats ≤ "
+         f"{TREAT_SHARE * 100:.0f}% of the {need_kcal:.0f} kcal daily "
+         "need). Treats are not balanced food: if you give more, reduce the "
+         "meals by the same energy.") if g_day is not None
         else "Keep treats to ≤ 10% of daily energy.",
         f"Water: add about {water_ml:.0f} ml, a little at a time, until the "
         "dough holds together (none if it is already soft)." if water_ml
@@ -4195,28 +4204,24 @@ def biscuit_details(b, db, ctx, need_kcal=None, n_biscuits=None):
         notes.append("Unknown values for: " + ", ".join(unk) + " in at "
                      "least one ingredient (treated as 0).")
     return {"ingredients": ing, "water_ml": water_ml, "nutrients": rows,
-            "n_biscuits": n_biscuits,
-            "per_biscuit_kcal": pb, "per_day": per_day, "notes": notes,
+            "baked_g": baked, "kcal_g_dough": kg_dough,
+            "kcal_g_baked": kg_baked, "g_day": g_day, "notes": notes,
             "score": sc, "kcal": kcal, "mass": mass}
 
 
 def biscuit_count_text(item, grams):
-    """'4 biscuits (12 g dough)' for a saved biscuit treat."""
-    pg = item.get("piece_g")
-    if not pg:
-        return f"{grams:.0f} g"
-    n = grams / pg
-    return (f"{n:.1f}".rstrip("0").rstrip(".") + f" biscuit"
-            f"{'' if abs(n - 1) < 1e-9 else 's'} ({grams:.0f} g dough)")
+    """'12 g' for a treat (biscuits are given by weight, any size)."""
+    return f"{grams:.0f} g"
 
 
-def recipe_to_ingredient(recipe, db, name, kind="custom", n_pieces=None):
+def recipe_to_ingredient(recipe, db, name, kind="custom", baked_g=None):
     """Library item for a home-made recipe [(name, grams), ...] saved as
-    one food: composition per 100 g of the mix (nutrients unknown in any
-    ingredient stay unknown). kind 'custom' = a meal (category 'custom');
-    'treat' = biscuits (category 'treat', piece_g = grams of dough per
-    biscuit, n_pieces biscuits per batch). Raises ValueError for an empty
-    recipe or one with a food toxic to dogs."""
+    one food: composition per 100 g (nutrients unknown in any ingredient
+    stay unknown). kind 'custom' = a meal (category 'custom', per 100 g of
+    the mix as weighed); 'treat' = biscuits (category 'treat', per 100 g
+    of BAKED biscuit: baked_g = the batch weighed after baking, or None to
+    estimate it at ~8 % moisture). Raises ValueError for an empty recipe or
+    one with a food toxic to dogs."""
     rows = [(n, float(g)) for n, g in merge_duplicates(recipe)
             if n in db and g and float(g) > 0]
     if not rows:
@@ -4229,18 +4234,27 @@ def recipe_to_ingredient(recipe, db, name, kind="custom", n_pieces=None):
     vecs = [_vec(db[n]) for n in names]
     t = _totals(grams, vecs)
     unk = _unknown(grams, vecs)
-    per = {k: (None if k in unk else round(t[KI[k]] * 100 / mass, 4))
-           for k in KEYS}
     recipe_txt = ", ".join(f"{n} {g:.0f} g{units_note(n, g)}"
                            for n, g in zip(names, grams))
     if kind == "treat":
-        nb = max(1, int(n_pieces or 1))
+        water = t[KI["water"]]
+        est = not (baked_g and float(baked_g) > 0)
+        bw = baked_weight(mass, water) if est else float(baked_g)
+        bw = max(bw, mass - water)          # can't lose more than the water
+        per = {k: (None if k in unk else round(t[KI[k]] * 100 / bw, 4))
+               for k in KEYS}
+        per["water"] = round(max(0.0, water - (mass - bw)) * 100 / bw, 4)
+        how = ("estimated at ~8 % moisture – weigh after baking for an "
+               "exact value" if est else "weighed")
         return normalise({
             "name": name, "category": "treat", "per100g": per,
-            "piece_g": mass / nb, "role": "other",
-            "note": (f"Home-made renal biscuits (raw dough values). Batch: "
-                     f"{recipe_txt} → {nb} biscuits of {mass / nb:.1f} g "
-                     "dough each (lighter after baking).")})
+            "role": "other",
+            "note": (f"Home-made renal biscuits; values per 100 g of baked "
+                     f"biscuit ({per['kcal'] / 100:.1f} kcal/g). Batch: "
+                     f"{recipe_txt} = {mass:.0f} g dough → {bw:.0f} g baked "
+                     f"({how}). Give by weight.")})
+    per = {k: (None if k in unk else round(t[KI[k]] * 100 / mass, 4))
+           for k in KEYS}
     return normalise({
         "name": name, "category": "custom", "per100g": per, "role": "other",
         "note": (f"Home-made recipe saved as one food (values per 100 g of "
@@ -4248,12 +4262,11 @@ def recipe_to_ingredient(recipe, db, name, kind="custom", n_pieces=None):
                  f"{recipe_txt}.")})
 
 
-def biscuit_to_ingredient(b, db, name, n_biscuits):
+def biscuit_to_ingredient(b, db, name, baked_g=None):
     """Library item (category 'treat') for a generated biscuit recipe:
-    composition per 100 g of raw dough (nutrients unknown in any ingredient
-    stay unknown), piece_g = grams of dough per biscuit."""
+    composition per 100 g of baked biscuit (see recipe_to_ingredient)."""
     return recipe_to_ingredient(list(zip(b[0], b[1])), db, name, "treat",
-                                n_biscuits)
+                                baked_g)
 
 
 def biscuit_report(results, db, ctx, need_kcal=None):
@@ -4266,7 +4279,8 @@ def biscuit_report(results, db, ctx, need_kcal=None):
         d = biscuit_details(b, db, ctx, need_kcal)
         L.append("")
         L.append(f"BISCUITS {i}   score {d['score']:.3f}   ({d['mass']:.0f} g "
-                 f"dough, {d['kcal']:.0f} kcal, ~{d['n_biscuits']} biscuits)")
+                 f"dough → ~{d['baked_g']:.0f} g baked, {d['kcal']:.0f} kcal, "
+                 f"{d['kcal_g_baked']:.1f} kcal/g baked)")
         w = max(len(n) for n, *_ in d["ingredients"]) + 2
         for n, g, k in d["ingredients"]:
             L.append(f"  {n:<{w}} {g:>6.0f} g  {k:>5} kcal"
@@ -4310,7 +4324,8 @@ solid #bbb; padding: 3pt 5pt; text-align: left; }} th {{ background: #eee; }}
 </style></head><body>
 <h1>{_esc(title)}{(' – ' + _esc(dog_name)) if dog_name else ''}</h1>
 <div class="small">{_esc(ctx.get('stage_name', ''))} · batch {d['mass']:.0f} g dough ·
-{d['kcal']:.0f} kcal · about {d['n_biscuits']} biscuits of ~{d['per_biscuit_kcal']:.0f} kcal ·
+{d['kcal']:.0f} kcal · ~{d['baked_g']:.0f} g baked · <b>{d['kcal_g_baked']:.1f} kcal per g of baked biscuit</b>
+({d['kcal_g_dough']:.1f} kcal/g dough) ·
 printed {today}</div>
 <h2>Ingredients</h2><table><tr><th>Ingredient</th><th class=n>Amount</th>
 <th class=n>kcal</th><th>✓</th></tr>{rows}</table>
@@ -5613,7 +5628,7 @@ class LabelDialog(tk.Toplevel):
 
 class SaveFoodDialog(tk.Toplevel):
     """Save the recipe (or one meal of a meal plan) as one library food:
-    a meal ('custom') or biscuits ('treat', counted in biscuits)."""
+    a meal ('custom') or biscuits ('treat', per 100 g baked)."""
 
     def __init__(self, app):
         super().__init__(app)
@@ -5644,11 +5659,14 @@ class SaveFoodDialog(tk.Toplevel):
         ttk.Radiobutton(frm, text="Biscuits (treat)", value="treat",
                         variable=self.kind).grid(row=2, column=2,
                                                  sticky="w")
-        ttk.Label(frm, text="Biscuits in the batch").grid(row=3, column=0,
-                                                         sticky="w")
-        self.n = tk.StringVar(value="30")
-        ttk.Spinbox(frm, from_=1, to=500, textvariable=self.n,
-                    width=6).grid(row=3, column=1, sticky="w", pady=2)
+        ttk.Label(frm, text="Baked weight (g)").grid(row=3, column=0,
+                                                     sticky="w")
+        self.n = tk.StringVar(value="")
+        ttk.Entry(frm, textvariable=self.n, width=8).grid(
+            row=3, column=1, sticky="w", pady=2)
+        ttk.Label(frm, foreground="#555",
+                  text="biscuits: batch weighed after baking (blank = "
+                       "estimate)").grid(row=3, column=2, sticky="w")
         ttk.Label(frm, foreground="#555", wraplength=380, justify="left",
                   text="Saved as one food (values per 100 g of the mix). "
                        "Saved foods can be added to recipes; the generator "
@@ -5672,7 +5690,8 @@ class SaveFoodDialog(tk.Toplevel):
             return
         kind = self.kind.get()
         try:
-            n = max(1, int(float(self.n.get()))) if kind == "treat" else None
+            txt = self.n.get().strip()
+            n = float(txt) if kind == "treat" and txt else None
             item = recipe_to_ingredient(self.sources[self.src.get()],
                                         self.app.db, nm, kind, n)
         except ValueError as e:
@@ -5856,15 +5875,15 @@ class GeneratorDialog(tk.Toplevel):
         self.plan_split = tk.StringVar(value="50/50")
         ttk.Entry(rp, textvariable=self.plan_split, width=10).pack(
             side="left", padx=4)
-        ttk.Label(rp, text="  biscuits/day").pack(side="left")
+        ttk.Label(rp, text="  treat g/day").pack(side="left")
         self.plan_treat = tk.StringVar(value="None")
         ttk.Combobox(rp, textvariable=self.plan_treat, state="readonly",
                      width=22, values=["None"] + sorted(
                          n for n in app.db
                          if app.db[n]["category"] == "treat")).pack(
             side="left", padx=2)
-        self.plan_treat_n = tk.StringVar(value="2")
-        ttk.Spinbox(rp, from_=0.5, to=20, increment=0.5, width=4,
+        self.plan_treat_n = tk.StringVar(value="15")
+        ttk.Spinbox(rp, from_=1, to=200, increment=1, width=4,
                     textvariable=self.plan_treat_n).pack(side="left",
                                                           padx=2)
         ttk.Label(rp, foreground="#555",
@@ -6299,8 +6318,8 @@ class GeneratorDialog(tk.Toplevel):
                 try:
                     k = float(self.plan_treat_n.get())
                 except ValueError:
-                    k = 2.0
-                treats = [(tr, k * (app.db[tr].get("piece_g") or 10))]
+                    k = 15.0
+                treats = [(tr, k)] if k > 0 else []
             res = generate_meal_plan(app.db, pool, ctx, n, parts, fixed,
                                      dict(self.forced), dict(self.max_each),
                                      progress, lambda: self._cancel,
@@ -6511,19 +6530,19 @@ class BiscuitResultsWindow(tk.Toplevel):
             b = self.results[i]
         except (ValueError, IndexError):
             return None
-        d = biscuit_details(b, self.app.db, self.ctx, self.need)
         name = simpledialog.askstring("Save biscuits", "Name:",
                                       initialvalue=f"Renal biscuits {i + 1}",
                                       parent=self)
         if not name or not name.strip():
             return None
-        nb = simpledialog.askinteger("Save biscuits", "Biscuits per batch:",
-                                     initialvalue=d["n_biscuits"],
-                                     minvalue=1, maxvalue=500, parent=self)
-        if not nb:
+        bw = simpledialog.askfloat(
+            "Save biscuits", "Batch weight after baking, g (0 = estimate "
+            "at ~8 % moisture):", initialvalue=0, minvalue=0, parent=self)
+        if bw is None:
             return None
         name = name.strip()
-        self.app.db[name] = biscuit_to_ingredient(b, self.app.db, name, nb)
+        self.app.db[name] = biscuit_to_ingredient(b, self.app.db, name,
+                                                  bw or None)
         save_db(self.app.db)
         self.app.refresh_list()
         return name
@@ -6538,19 +6557,20 @@ class BiscuitResultsWindow(tk.Toplevel):
         name = self.save_one()
         if not name:
             return
-        d = biscuit_details(self.results[int(self.pick.get()) - 1], app.db,
-                            self.ctx, self.need)
-        k = simpledialog.askfloat("Meal plan", "Biscuits a day:",
-                                  initialvalue=float(d["per_day"] or 2),
-                                  minvalue=0.5, maxvalue=20, parent=self)
+        kg = app.db[name]["per100g"]["kcal"] / 100
+        g0 = round(TREAT_SHARE * self.need / kg) if self.need and kg else 15
+        k = simpledialog.askfloat("Meal plan", "Grams of baked biscuit a "
+                                  f"day ({kg:.1f} kcal/g):",
+                                  initialvalue=float(g0),
+                                  minvalue=1, maxvalue=500, parent=self)
         if not k:
             return
         items = [x for x in plan_items(app.plan)
                  if not (x[0] == "treats" and x[1] == name)]
-        items.append(("treats", name, k * app.db[name]["piece_g"]))
+        items.append(("treats", name, k))
         app._set_plan(plan_from_items(items, app.plan["shares"]))
         app.refresh_recipe()
-        messagebox.showinfo("Meal plan", f"Added {k:g} × {name} a day. "
+        messagebox.showinfo("Meal plan", f"Added {k:g} g of {name} a day. "
                             "Optimise the plan to rebalance the meals.",
                             parent=self)
 

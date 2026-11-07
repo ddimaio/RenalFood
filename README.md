@@ -183,14 +183,17 @@ for N days, default 7) followed by the day's nutrients and assessment.
 ### Biscuits in a meal plan
 
 Each generated biscuit recipe can be saved as a library ingredient
-(*Save as ingredient*: category **treat**, values per 100 g raw dough,
-plus grams of dough per biscuit). Treats are never suggested as foods.
-*Add to meal plan* puts N biscuits a day into the active plan (section
+(*Save as ingredient*: category **treat**, values per 100 g of **baked**
+biscuit – enter the batch weight after baking for exact values, or leave 0
+to estimate it at ~8 % moisture). Biscuits are any size, so everything is
+in grams. Treats are never suggested as foods.
+*Add to meal plan* puts N grams of baked biscuit a day into the active plan (section
 "Biscuits (treats)", amount locked); optimise the plan to rebalance the
 meals around them. The meal-plan generator also has *Biscuits every day*
-(a saved treat and how many a day), so new plans are balanced with the
-biscuits included. Recipe view, optimiser, printout and save/load show
-them as "N biscuits (g dough)".
+(a saved treat and grams a day), so new plans are balanced with the
+biscuits included. Treats saved by older versions (per raw dough) still
+work. The same "Biscuits (treat)" option exists in *Save as a library
+food* for any recipe.
 
 ## Renal-friendly biscuits (treats)
 
@@ -204,9 +207,9 @@ and something that binds (egg, or wheat, gluten-free, oat or chickpea
 flour); delicate omega-3 oils are not baked. Recipes are scored only on the
 renal limits per 1000 kcal (phosphorus at or below the stage aim, sodium,
 potassium, protein, oxalate, fat share) – treats are not complete food.
-Each recipe gives the batch amounts, water to add, biscuits per batch
-(sized so ~4 a day fit the 10 % treat allowance), the daily maximum,
-method and a printable page. Flours (rice, plain wheat, cornflour,
+Each recipe gives the batch amounts, water to add, the estimated baked
+weight, the energy per gram (baked and raw dough), the daily maximum in
+grams (10 % treat allowance), method and a printable page. Flours (rice, plain wheat, cornflour,
 arrowroot, gluten-free plain, chickpea) were added from AFCD Release 3
 with `afcd_add.py`.
 
