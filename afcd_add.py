@@ -47,9 +47,6 @@ FOODS = [
     ("F006194", "Okra, boiled", "", True),
     # starches
     ("F003235", "Couscous, boiled", "", True),
-    ("F003201", "Sweetcorn kernels, boiled",
-     "Kernels only - never give the cob (choking / gut blockage). Plain "
-     "frozen or fresh; canned sweetcorn is salted.", True),
     ("F000145", "Jerusalem artichoke, peeled, boiled",
      "Rich in inulin (prebiotic fibre) - introduce slowly, can cause wind.",
      True, "veg"),
