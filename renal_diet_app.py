@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.07b"
+ENGINE_VERSION = "2026.11.07c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1365,6 +1365,18 @@ with tab_dog:
     st.metric("Daily energy need (MER)", f"{need_now():.0f} kcal",
               help=f"{ss.bw:g} kg × factor {ss.factor:g} (applied values)")
     st.caption(rc.STAGES[ss.stage][1])
+    _dctx = score_context()
+    st.markdown(f"**Daily targets** at {_dctx['kcal_target']:.0f} kcal/day")
+    _dt = rc.daily_targets(_dctx)
+    show_df(st, pd.DataFrame(_dt, columns=["Nutrient", "Unit",
+                                           "Range per day", "Aim per day",
+                                           "Basis"]),
+            hide_index=True, height=(len(_dt) + 1) * ROW_H + 3, **FULL)
+    st.caption("The same targets the analysis, optimiser and generator use "
+               "(per 1000 kcal × energy ÷ 1000), for the whole day – "
+               "kibble, treats and supplements included. They follow the "
+               "weight, factor and stage above and any blood adaptation "
+               "below.")
     st.toggle("Extended nutrients", key="ext",
               help="Also show and check essential amino acids, linoleic "
                    "acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) against "

@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.07b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.07c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -5407,6 +5407,70 @@ def build_score_context(sc, stage, need, bw=None, extended=False,
     return ctx
 
 
+def daily_targets(ctx):
+    """Daily amounts for the key nutrients at the energy target: the same
+    per-1000 kcal ranges, aims and limits the scoring uses, times
+    kcal_target / 1000. Returns rows (nutrient, unit, range per day,
+    aim per day or '', basis)."""
+    kcal = ctx.get("kcal_target") or 0
+    f = kcal / 1000.0
+    R = get_ranges(ctx)
+    aims = ctx.get("aims") or {}
+    renal = ctx.get("renal", True)
+
+    def n(v):
+        v = v * f
+        return f"{v:,.0f}" if v >= 100 else f"{v:.1f}"
+
+    def rng(lo, hi):
+        if lo is None:
+            return f"≤ {n(hi)}"
+        if hi is None:
+            return f"≥ {n(lo)}"
+        return f"{n(lo)} – {n(hi)}"
+    rows = [("Energy", "kcal", f"{kcal:,.0f}", "", "MER (My dog)")]
+    if renal:
+        for k, why in (("protein", "ACVN renal range"),
+                       ("p", "ACVN renal range; aim by IRIS stage"),
+                       ("na", "ACVN renal range"),
+                       ("k", "ACVN renal range")):
+            lo, hi = R[k]
+            rows.append((LABEL[k], UNIT[k], rng(lo, hi),
+                         n(aims[k]) if aims.get(k) else "",
+                         why + (" (adapted from bloods)"
+                                if (ctx.get("ranges") or {}).get(k) else "")))
+    else:
+        for k in ("protein", "p", "na", "k"):
+            rows.append((LABEL[k], UNIT[k], rng(AAFCO[k], None), "",
+                         "AAFCO adult minimum"))
+    p_ref = aims.get("p") if renal and aims.get("p") else (
+        sum(R["p"]) / 2 if renal else AAFCO["p"])
+    lo_r, hi_r = R["ca_p"]
+    ca_lo = max(AAFCO["ca"], lo_r * p_ref)
+    ca_hi = min(R["ca_max"], hi_r * p_ref)
+    rows.append((LABEL["ca"], UNIT["ca"], rng(ca_lo, max(ca_lo, ca_hi)), "",
+                 f"AAFCO minimum, and Ca:P {lo_r:g}–{hi_r:g} at "
+                 f"{n(p_ref)} mg phosphorus"))
+    rows.append(("Ca:P ratio", "", f"{lo_r:g} – {hi_r:g}", "", "ratio"))
+    rows.append((LABEL["mg"], UNIT["mg"], rng(AAFCO["mg"], None), "",
+                 "AAFCO adult minimum"))
+    rows.append((LABEL["fat"], UNIT["fat"], rng(AAFCO["fat"], None), "",
+                 "AAFCO minimum; ≤ 55 % of energy from fat"))
+    if renal:
+        lo, hi = R["epa_dha"]
+        rows.append((LABEL["epa_dha"], UNIT["epa_dha"], rng(lo, hi), "",
+                     f"Bauer 2011: {OMEGA3_DOSE_MG_PER_KG075} mg/kg^0.75 "
+                     "dose to NRC safe upper limit" if ctx.get("bw")
+                     else "renal diets to NRC safe upper limit"))
+    rows.append((LABEL["oxalate"], UNIT["oxalate"],
+                 rng(None, R.get("ox_max", OXALATE_MAX)), "",
+                 "this app's limit"))
+    rows.append(("Fibre", "g", rng(None, FIBRE_MAX), "", "bulk limit"))
+    rows.append(("Treats", "kcal", f"≤ {TREAT_SHARE * kcal:,.0f}", "",
+                 f"≤ {TREAT_SHARE * 100:.0f} % of energy"))
+    return rows
+
+
 def store_score_context(old, ctx, stage, need):
     """Settings to keep after an optimiser/generator result is applied
     (keeps any blood adaptation for the same stage)."""
@@ -5625,6 +5689,45 @@ class LabelDialog(tk.Toplevel):
         self.result = {"name": name, "category": "commercial food",
                        "note": "From label (as fed).", "per100g": per}
         self.destroy()
+
+
+class DailyTargetsWindow(tk.Toplevel):
+    """Key nutrients per day at the dog's energy target."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.title("Daily targets")
+        self.transient(app)
+        try:
+            ctx = app.score_context()
+        except Exception as e:                       # noqa: BLE001
+            messagebox.showerror("Daily targets", str(e), parent=app)
+            self.destroy()
+            return
+        frm = ttk.Frame(self, padding=10)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, font=("TkDefaultFont", 10, "bold"),
+                  text=f"{app.stage.get()} · {ctx['kcal_target']:.0f} "
+                       f"kcal/day · {app.bw.get()} kg").pack(anchor="w")
+        cols = ("Unit", "Range per day", "Aim per day", "Basis")
+        tv = ttk.Treeview(frm, columns=cols, height=14)
+        tv.heading("#0", text="Nutrient")
+        tv.column("#0", width=120)
+        for c, w in zip(cols, (50, 120, 90, 360)):
+            tv.heading(c, text=c)
+            tv.column(c, width=w, anchor="w")
+        for nm, u, r_, aim, why in daily_targets(ctx):
+            tv.insert("", "end", text=nm, values=(u, r_, aim, why))
+        tv.pack(fill="both", expand=True, pady=4)
+        ttk.Label(frm, foreground="#555", wraplength=720, justify="left",
+                  text="The same targets the analysis, optimiser and "
+                       "generator use (per 1000 kcal × energy ÷ 1000), for "
+                       "the whole day including kibble, treats and "
+                       "supplements. Change weight, factor or stage, or "
+                       "adapt them from blood results, and reopen.").pack(
+            anchor="w")
+        ttk.Button(frm, text="Close", command=self.destroy).pack(
+            anchor="e", pady=(6, 0))
 
 
 class SaveFoodDialog(tk.Toplevel):
@@ -7655,6 +7758,9 @@ class App(tk.Tk):
         self.meals.trace_add("write", lambda *a: self.refresh_recipe())
         ttk.Button(top, text="Export results CSV",
                    command=self.export_results).pack(side="right")
+        ttk.Button(top, text="Daily targets",
+                   command=lambda: DailyTargetsWindow(self)).pack(
+            side="right", padx=6)
         ttk.Button(top, text="Compare with reference…",
                    command=lambda: RefCompareWindow(self)).pack(
             side="right", padx=6)

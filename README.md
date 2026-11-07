@@ -195,6 +195,16 @@ biscuits included. Treats saved by older versions (per raw dough) still
 work. The same "Biscuits (treat)" option exists in *Save as a library
 food* for any recipe.
 
+### Daily targets
+
+My Dog (desktop: **Daily targets** button) lists the key nutrients per day
+at the energy target – protein, phosphorus (with the stage aim), sodium,
+potassium, calcium (AAFCO minimum and Ca:P 1–2 at the phosphorus aim),
+magnesium, fat, EPA+DHA (therapeutic dose for her weight to the NRC upper
+limit), oxalate, fibre and the treat allowance. They are the per-1000 kcal
+targets the scoring uses, times the day's energy, so they follow weight,
+factor, stage and any blood adaptation.
+
 ### Saved meals (custom foods)
 
 *Save as a library food* (Recipe tab / desktop) stores the recipe, or one
