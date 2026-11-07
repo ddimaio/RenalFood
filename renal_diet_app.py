@@ -2002,10 +2002,11 @@ with tab_gen:
     gmin = v3.number_input("Min. g per vegetable", 0.0, 500.0,
                            float(round(0.04 * gk)), key="g_min")
     fixed_base = st.checkbox(
-        "Keep the current recipe items as a fixed base (e.g. breakfast "
-        "kibble): " + (", ".join(f"{n} {g:g} g" for n, g in ss.recipe)
-                       or "recipe is empty"),
-        False, key="g_fixed", disabled=not ss.recipe)
+        "Keep current recipe as fixed base", False, key="g_fixed",
+        disabled=not ss.recipe,
+        help="Uses what is on the recipe page now, at its current amounts, as a fixed part of every generated recipe (e.g. 30 g breakfast kibble). The generator never changes or removes these items and builds the rest of the day around them so the day total meets the targets. Unticked: the current recipe is ignored and recipes start from scratch. In a meal plan the fixed items are a separate 'Fixed' section every day. Fixed amounts are not checked against Max g – set the amount you want before generating." + (" Now: " + ", ".join(f"{n} {g:g} g"
+                                               for n, g in ss.recipe)
+                         if ss.recipe else " The recipe is empty."))
     ign = st.checkbox("Ignore vitamin minimums (A, B vitamins, folate, "
                       "choline, D, E) – I will add a vitamin supplement",
                       True, key="g_ign",

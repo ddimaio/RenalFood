@@ -5922,11 +5922,15 @@ class GeneratorDialog(tk.Toplevel):
 
         self.use_fixed = tk.BooleanVar(value=False)
         fixed_txt = ", ".join(f"{n} {g:g} g" for n, g in app.recipe) or \
-            "recipe is empty"
-        ttk.Checkbutton(frm, variable=self.use_fixed,
-                        text="Keep the current recipe items as a fixed base "
-                             f"(e.g. breakfast kibble): {fixed_txt}").pack(
-            anchor="w", pady=(8, 2))
+            "The recipe is empty."
+        fxr = ttk.Frame(frm)
+        fxr.pack(anchor="w", pady=(8, 2))
+        ttk.Checkbutton(fxr, variable=self.use_fixed,
+                        text="Keep current recipe as fixed base").pack(
+            side="left")
+        ttk.Button(fxr, text="?", width=2, command=lambda: messagebox.showinfo(
+            "Fixed base", "Uses what is on the recipe page now, at its current amounts, as a fixed part of every generated recipe (e.g. 30 g breakfast kibble). The generator never changes or removes these items and builds the rest of the day around them so the day total meets the targets. Unticked: the current recipe is ignored and recipes start from scratch. In a meal plan the fixed items are a separate 'Fixed' section every day. Fixed amounts are not checked against Max g – set the amount you want before generating." + "\n\nNow: " + fixed_txt,
+            parent=self)).pack(side="left", padx=4)
         if not app.recipe:
             self.use_fixed.set(False)
         self.ignore_vit = tk.BooleanVar(value=True)
