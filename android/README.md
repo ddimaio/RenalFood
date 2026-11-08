@@ -59,7 +59,8 @@ build reports a missing Android SDK or Java.
       max food per day, meals per day, IRIS stage, extended nutrients;
       remembered between launches and saved with each recipe; Daily targets
       (key nutrients per day at her energy need); Batch cooking (amounts ×
-      number of meals, also on the printout)
+      number of meals, a printable batch sheet, and a batch column on the
+      recipe printout)
 - [x] Recipe, key nutrients vs stage targets (a food is listed once:
       adding it again changes its amount)
 - [x] Full nutrient table (grouped; extended nutrients switch) and assessment

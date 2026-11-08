@@ -463,13 +463,17 @@ def main(page: ft.Page):
 
         async def do_print(e):
             page.pop_dialog()
-            await print_recipe(e)
+            await send_page(rc.batch_print_html(
+                recipe, db, state.get("batch", 1),
+                title=state["name"] or "Batch cooking"),
+                "batch_cooking.html", state["name"] or "Batch cooking")
         page.show_dialog(ft.AlertDialog(
             title=ft.Text("Batch cooking"),
             content=ft.Column([n_f, table], tight=True, width=420),
             actions=[ft.TextButton("Close",
                                    on_click=lambda e: page.pop_dialog()),
-                     ft.FilledButton("Print", on_click=do_print)]))
+                     ft.FilledButton("Print batch sheet",
+                                     on_click=do_print)]))
 
     async def print_recipe(e):
         if not recipe:
@@ -477,7 +481,10 @@ def main(page: ft.Page):
             return
         html_ = print_html(recipe, db, dog, state["name"],
                            state.get("batch", 1))
-        name = print_file_name(state["name"])
+        await send_page(html_, print_file_name(state["name"]),
+                        state["name"] or "Renal diet recipe")
+
+    async def send_page(html_, name, subject):
         data = html_.encode("utf-8")
         try:
             if page.web:
@@ -488,7 +495,7 @@ def main(page: ft.Page):
                 await share.share_files(
                     [ft.ShareFile.from_bytes(data, mime_type="text/html",
                                              name=name)],
-                    subject=state["name"] or "Renal diet recipe",
+                    subject=subject,
                     text="Open in a web browser to print.")
             else:
                 import pathlib

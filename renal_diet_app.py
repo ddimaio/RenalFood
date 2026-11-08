@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.08b"
+ENGINE_VERSION = "2026.11.08c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1015,7 +1015,16 @@ with tab_rec:
                     _m = sum(g for _, g in ss.recipe)
                     st.caption(f"Cook {_m * bn:.0f} g in total and split "
                                f"into {bn} equal portions of {_m:.0f} g. "
-                               "The printout gets a batch column.")
+                               "The full recipe printout also gets a batch "
+                               "column.")
+                st.download_button(
+                    "🖨️ Print batch sheet", rc.batch_print_html(
+                        ss.recipe, db, bn, note=ss.recipe_note),
+                    file_name="batch_cooking.html", mime="text/html",
+                    key="print_batch", **FULL,
+                    help="A4 kitchen sheet: batch amounts with tick boxes, "
+                         "total, portion size and kcal, steps and portion "
+                         "labels. Open it and press Print.")
 
         with st.expander("⚖️ Scale amounts to body weight"):
             st.write(f"Daily need {need_now():.0f} kcal "

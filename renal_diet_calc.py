@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.08b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.08c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -4375,6 +4375,67 @@ printed {today}</div>
 balanced food; check with your vet.</p></body></html>"""
 
 
+def batch_print_html(recipe, db, n, title="Batch cooking", dog_name="",
+                     note=""):
+    """A4 kitchen sheet for cooking a recipe n times at once: batch
+    amounts with kitchen units and tick boxes, total, portion size and
+    energy per portion, steps, and portion labels to cut out."""
+    import datetime
+    n = max(1, int(n or 1))
+    rows = [(nm, float(g)) for nm, g in recipe if nm in db and g and g > 0]
+    m = sum(g for _, g in rows)
+    kcal = recipe_kcal([r[0] for r in rows], [r[1] for r in rows], db)
+    today = datetime.date.today().strftime("%d %b %Y")
+    has_u = any(household_units(nm, g * n) for nm, g in rows)
+    body = "".join(
+        f"<tr><td>{_esc(nm)}</td><td class=n>{g:g}</td>"
+        f"<td class=n><b>{g * n:.0f}</b></td>"
+        + (f"<td>{_esc(household_units(nm, g * n))}</td>" if has_u else "")
+        + "<td class=c>☐</td></tr>" for nm, g in rows)
+    label = (f"<div class=lab><b>{_esc(note or title)}</b><br>{m:.0f} g · "
+             f"{kcal:.0f} kcal<br>Cooked: ____ / ____ / ______</div>")
+    labels = "".join(label for _ in range(min(n, 24)))
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{_esc(title)}</title><style>
+@page {{ size: A4; margin: 15mm; }}
+body {{ font-family: Arial, sans-serif; font-size: 11pt; color: #111; }}
+h1 {{ font-size: 17pt; margin: 0 0 4pt; }} h2 {{ font-size: 12.5pt;
+margin: 14pt 0 4pt; border-bottom: 1px solid #999; }}
+table {{ border-collapse: collapse; width: 100%; }} td, th {{ border: 1px
+solid #bbb; padding: 4pt 6pt; text-align: left; }} th {{ background: #eee; }}
+.n {{ text-align: right; }} .c {{ text-align: center; font-size: 14pt; }}
+.small {{ font-size: 9pt; color: #444; }} .big {{ font-size: 13pt; }}
+.labs {{ display: flex; flex-wrap: wrap; gap: 6pt; }}
+.lab {{ border: 1px dashed #777; padding: 5pt 7pt; width: 30%;
+font-size: 9.5pt; box-sizing: border-box; }}
+@media print {{ .noprint {{ display: none; }} .labs {{ break-inside: avoid; }} }}
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">🖨 Print</button></div>
+<h1>{_esc(title)}{(' – ' + _esc(dog_name)) if dog_name else ''}</h1>
+<div class="small">Batch for {n} meal{'s' if n > 1 else ''} · printed {today}</div>
+{f'<p><b>{_esc(note)}</b></p>' if note else ''}
+<p class="big">Cook <b>{m * n:.0f} g</b> in total → <b>{n} portion{'s' if n > 1 else ''} of
+{m:.0f} g</b> ({kcal:.0f} kcal each).</p>
+<h2>Ingredients</h2><table><tr><th>Ingredient</th><th class=n>One meal g</th>
+<th class=n>Batch g</th>{'<th>Units</th>' if has_u else ''}<th>✓</th></tr>
+{body}<tr><th>Total</th><th class=n>{m:.0f}</th><th class=n>{m * n:.0f}</th>
+{'<th></th>' if has_u else ''}<th></th></tr></table>
+<div class="small">Amounts are for cooked foods where the name says so (e.g.
+"boiled"). {f'Units: {_esc(UNITS_NOTE)}.' if has_u else ''}</div>
+<h2>Steps</h2><ol>
+<li>Weigh each ingredient and tick it off.</li>
+<li>Cook as usual, then mix everything thoroughly so each portion is the
+same.</li>
+<li>Weigh the whole batch and divide by {n} for the portion weight (about
+{m:.0f} g; cooking can change the weight).</li>
+<li>Cool quickly, portion into containers, label and freeze. Thaw in the
+fridge.</li></ol>
+<h2>Portion labels</h2><div class="labs">{labels}</div>
+<p class="small">Approximate tool – not veterinary advice.</p>
+</body></html>"""
+
+
 def improvement_reasons(before, after, n=3):
     diffs = sorted(((before.get(k, 0) - after.get(k, 0), k)
                     for k in set(before) | set(after)), reverse=True)
@@ -5845,7 +5906,10 @@ class BatchWindow(tk.Toplevel):
         self.lbl.pack(anchor="w")
         bb = ttk.Frame(frm)
         bb.pack(fill="x", pady=(6, 0))
-        ttk.Button(bb, text="Print…", command=self.print_).pack(side="left")
+        ttk.Button(bb, text="Print batch sheet…",
+                   command=self.print_sheet).pack(side="left")
+        ttk.Button(bb, text="Print recipe with batch column…",
+                   command=self.print_).pack(side="left", padx=6)
         ttk.Button(bb, text="Close", command=self.destroy).pack(
             side="right")
         self.fill()
@@ -5866,12 +5930,25 @@ class BatchWindow(tk.Toplevel):
         m = sum(g for _, g in self.app.recipe)
         self.lbl.config(text=f"Cook {m * n:.0f} g in total and split into "
                              f"{n} equal portions of {m:.0f} g. The "
-                             "recipe is unchanged; Print adds the batch "
-                             "column.")
+                             "recipe is unchanged. The batch sheet is a "
+                             "kitchen page with tick boxes and portion "
+                             "labels.")
 
     def print_(self):
         self.fill()
         self.app.print_recipe()
+
+    def print_sheet(self):
+        import pathlib
+        import tempfile
+        import webbrowser
+        n = self.count()
+        self.fill()
+        fd, path = tempfile.mkstemp(suffix=".html", prefix="batch_print_")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(batch_print_html(self.app.recipe, self.app.db, n,
+                                     note=self.app.recipe_note))
+        webbrowser.open(pathlib.Path(path).resolve().as_uri())
 
 
 class DailyTargetsWindow(tk.Toplevel):

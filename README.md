@@ -279,7 +279,10 @@ Recipe tab → **Batch cooking** (desktop: *Batch cooking (several meals)…*;
 phone: button next to Print): enter the number of meals to prepare and
 every amount is shown × that number, with kitchen units, the total to cook
 and the portion size. The recipe itself is not changed; the printout gets
-a batch column. (A meal plan's printout already has a batch per meal.)
+a batch column. **Print batch sheet** gives a one-page kitchen sheet:
+batch amounts with tick boxes, total and portion size with kcal, steps,
+and portion labels to cut out. (A meal plan's printout already has a batch
+per meal.)
 
 ## Printing a recipe
 
