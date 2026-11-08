@@ -273,6 +273,14 @@ score includes an energy term, so a well-balanced recipe at the wrong
 amount scores badly; this line shows when that is the reason – scale the
 recipe. The rating is unaffected by amount.
 
+## Batch cooking
+
+Recipe tab → **Batch cooking** (desktop: *Batch cooking (several meals)…*;
+phone: button next to Print): enter the number of meals to prepare and
+every amount is shown × that number, with kitchen units, the total to cook
+and the portion size. The recipe itself is not changed; the printout gets
+a batch column. (A meal plan's printout already has a batch per meal.)
+
 ## Printing a recipe
 
 **🖨️ Printable recipe** (Streamlit, Recipe tab) downloads an A4 page;

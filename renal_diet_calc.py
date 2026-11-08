@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.08a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.08b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1005,12 +1005,14 @@ def _esc(x):
 
 def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                       note="", bw=None, factor=None, title="Renal diet recipe",
-                      dog_name="", plan=None, days=7):
+                      dog_name="", plan=None, days=7, batch=1):
     """A self-contained, A4-formatted HTML page for printing a recipe:
     dog & settings, ingredients (g/day, g/meal, kcal), key nutrients vs
     targets, assessment, feeding notes and space for the vet. With an
     active meal plan, the ingredients are printed meal by meal (one
-    portion and a batch for `days` days); the rest is the day total."""
+    portion and a batch for `days` days); the rest is the day total.
+    batch > 1 (no meal plan): adds a column with every amount × batch, to
+    cook several meals at once."""
     import datetime
     if plan:
         recipe = meal_plan_day(plan)
@@ -1028,6 +1030,7 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
     rows_i = []
     # kitchen units (eggs, tsp, tbsp, cups...) get their own columns
     has_u = any(household_units(n, g) for n, g in recipe if n in db)
+    batch = max(1, int(batch or 1)) if not plan else 1
 
     def ucell(n, g):
         return (f"<td class=u>{_esc(household_units(n, g))}</td>"
@@ -1041,13 +1044,17 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
             ucell(n, g) +
             (f"<td class=n>{g / meals:.1f}</td>" + ucell(n, g / meals)
              if meals > 1 else "") +
+            (f"<td class=n><b>{g * batch:.0f}</b></td>" + ucell(n, g * batch)
+             if batch > 1 else "") +
             f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
             "</td><td class=c>☐</td></tr>")
     blank_u = "<td></td>" if has_u else ""
     tot_row = (f"<tr class=tot><td>Total</td><td class=n>{mass:.0f}</td>" +
                blank_u +
                (f"<td class=n>{mass / meals:.0f}</td>" + blank_u
-                if meals > 1 else "")
+                if meals > 1 else "") +
+               (f"<td class=n><b>{mass * batch:.0f}</b></td>" + blank_u
+                if batch > 1 else "")
                + f"<td class=n>{kcal:.0f}</td><td></td></tr>")
     plan_html = ""
     if plan:                       # meal by meal: portion + batch
@@ -1191,6 +1198,8 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 """
     u_hdr = "<th class=u>units</th>" if has_u else ""
     meal_hdr = f"<th class=n>g / meal</th>{u_hdr}" if meals > 1 else ""
+    if batch > 1:
+        meal_hdr += f"<th class=n>batch × {batch}</th>{u_hdr}"
     # built separately: a triple-quoted f-string nested in another needs
     # Python 3.12+ (PEP 701)
     ingredients_html = plan_html if plan else (
@@ -1209,7 +1218,7 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 
 <h2>{'Meal plan – a recipe for each meal' if plan else 'Ingredients'}</h2>
 {ingredients_html}
-<div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}Weigh with kitchen scales. Amounts are for cooked foods
+<div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}{f'<b>Batch: every amount × {batch} ({mass * batch:.0f} g in total) – cook together, split into {batch} equal portions of {mass:.0f} g and freeze. </b>' if batch > 1 else ''}Weigh with kitchen scales. Amounts are for cooked foods
 where the name says so (e.g. "boiled"). {f'Units ({_esc(UNITS_NOTE)}). ' if has_u else ''}{f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
 Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · ' + _esc(a['energy_text'])) if a.get('energy_text') else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
 
@@ -5796,6 +5805,75 @@ class LabelDialog(tk.Toplevel):
         self.destroy()
 
 
+class BatchWindow(tk.Toplevel):
+    """Every recipe amount × the number of meals to prepare (the recipe
+    is not changed); the printout gets a batch column."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.app = app
+        self.title("Batch cooking")
+        self.transient(app)
+        if not app.recipe or app.plan:
+            messagebox.showinfo(
+                "Batch cooking", "The recipe is empty." if not app.recipe
+                else "A meal plan is active: its printout already has a "
+                     "batch for each meal.", parent=app)
+            self.destroy()
+            return
+        frm = ttk.Frame(self, padding=10)
+        frm.pack(fill="both", expand=True)
+        top = ttk.Frame(frm)
+        top.pack(fill="x")
+        ttk.Label(top, text="Number of meals to prepare").pack(side="left")
+        self.n = tk.StringVar(value=str(getattr(app, "batch_n", 1) or 1))
+        sp = ttk.Spinbox(top, from_=1, to=60, textvariable=self.n, width=5,
+                         command=self.fill)
+        sp.pack(side="left", padx=6)
+        sp.bind("<KeyRelease>", lambda e: self.fill())
+        cols = ("one", "batch", "units")
+        self.tv = ttk.Treeview(frm, columns=cols, height=12)
+        self.tv.heading("#0", text="Ingredient")
+        self.tv.column("#0", width=260)
+        for c, t_, w in zip(cols, ("One meal g", "Batch g", "Batch units"),
+                            (80, 80, 160)):
+            self.tv.heading(c, text=t_)
+            self.tv.column(c, width=w, anchor="e" if c != "units" else "w")
+        self.tv.pack(fill="both", expand=True, pady=4)
+        self.lbl = ttk.Label(frm, foreground="#555", wraplength=560,
+                             justify="left")
+        self.lbl.pack(anchor="w")
+        bb = ttk.Frame(frm)
+        bb.pack(fill="x", pady=(6, 0))
+        ttk.Button(bb, text="Print…", command=self.print_).pack(side="left")
+        ttk.Button(bb, text="Close", command=self.destroy).pack(
+            side="right")
+        self.fill()
+
+    def count(self):
+        try:
+            return max(1, min(60, int(float(self.n.get()))))
+        except ValueError:
+            return 1
+
+    def fill(self):
+        n = self.count()
+        self.app.batch_n = n
+        self.tv.delete(*self.tv.get_children())
+        for nm, g in self.app.recipe:
+            self.tv.insert("", "end", text=nm, values=(
+                f"{g:.1f}", f"{g * n:.0f}", household_units(nm, g * n)))
+        m = sum(g for _, g in self.app.recipe)
+        self.lbl.config(text=f"Cook {m * n:.0f} g in total and split into "
+                             f"{n} equal portions of {m:.0f} g. The "
+                             "recipe is unchanged; Print adds the batch "
+                             "column.")
+
+    def print_(self):
+        self.fill()
+        self.app.print_recipe()
+
+
 class DailyTargetsWindow(tk.Toplevel):
     """Key nutrients per day at the dog's energy target."""
 
@@ -7949,6 +8027,9 @@ class App(tk.Tk):
                    command=self.open_optimiser).pack(fill="x", pady=(4, 0))
         ttk.Button(rec, text="📚  Save recipe as a library food…",
                    command=self.save_as_food).pack(fill="x", pady=(4, 0))
+        ttk.Button(rec, text="🍲  Batch cooking (several meals)…",
+                   command=lambda: BatchWindow(self)).pack(fill="x",
+                                                          pady=(4, 0))
         for txt, cmd in [("Change g", self.edit_amount),
                          ("Remove", self.remove_item),
                          ("Clear recipe", self.clear),
@@ -8298,7 +8379,8 @@ class App(tk.Tk):
                                   self.current_mer(), self.stage.get(),
                                   self.score_context(), self.meals_n(),
                                   self.recipe_note, bw, factor,
-                                  plan=self.plan)
+                                  plan=self.plan,
+                                  batch=getattr(self, "batch_n", 1))
         fd, path = tempfile.mkstemp(suffix=".html", prefix="recipe_print_")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(html_)

@@ -191,14 +191,15 @@ def resolve_food(value, text, names):
 
 
 # ---- saved recipes (same item format as the desktop/Streamlit files)
-def print_html(recipe, db, dog, title=""):
-    """The printable page (A4, same as the desktop and web apps)."""
+def print_html(recipe, db, dog, title="", batch=1):
+    """The printable page (A4, same as the desktop and web apps); batch > 1
+    adds a column with every amount × batch."""
     need = dog.need()
     ctx = rc.build_score_context(None, dog.stage, need, dog.bw, dog.extended,
                                  dog.max_g or None)
     return rc.recipe_print_html(
         recipe, db, need, dog.stage, ctx, dog.meals, bw=dog.bw,
-        factor=dog.factor, title=title or "Renal diet recipe")
+        factor=dog.factor, title=title or "Renal diet recipe", batch=batch)
 
 
 def print_file_name(title):
@@ -427,11 +428,55 @@ def main(page: ft.Page):
     file_picker = ft.FilePicker()
     share = ft.Share()
 
+    def open_batch(e):
+        """Every amount × the number of meals to prepare (the recipe is
+        not changed); Print then adds the batch column."""
+        if not recipe:
+            toast("Add foods first.")
+            return
+        n_f = ft.TextField(label="Number of meals to prepare",
+                           value=str(state.get("batch", 1)), width=220,
+                           keyboard_type=ft.KeyboardType.NUMBER)
+        table = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, height=300)
+
+        def fill(_=None):
+            try:
+                n = max(1, min(60, int(float(n_f.value))))
+            except (TypeError, ValueError):
+                n = 1
+            state["batch"] = n
+            m = sum(g for _, g in recipe)
+            rows = [ft.Text(f"Cook {m * n:.0f} g in total, split into {n} "
+                            f"portions of {m:.0f} g.", size=12,
+                            weight=ft.FontWeight.BOLD)]
+            for nm, g in recipe:
+                u = rc.household_units(nm, g * n)
+                rows.append(ft.Row([
+                    ft.Text(nm, size=12, expand=True),
+                    ft.Text(f"{g:g} → {g * n:.0f} g" + (f" ({u})" if u
+                                                        else ""),
+                            size=12, weight=ft.FontWeight.BOLD)]))
+            table.controls = rows
+            page.update()
+        n_f.on_change = fill
+        fill()
+
+        async def do_print(e):
+            page.pop_dialog()
+            await print_recipe(e)
+        page.show_dialog(ft.AlertDialog(
+            title=ft.Text("Batch cooking"),
+            content=ft.Column([n_f, table], tight=True, width=420),
+            actions=[ft.TextButton("Close",
+                                   on_click=lambda e: page.pop_dialog()),
+                     ft.FilledButton("Print", on_click=do_print)]))
+
     async def print_recipe(e):
         if not recipe:
             toast("Add foods first.")
             return
-        html_ = print_html(recipe, db, dog, state["name"])
+        html_ = print_html(recipe, db, dog, state["name"],
+                           state.get("batch", 1))
         name = print_file_name(state["name"])
         data = html_.encode("utf-8")
         try:
@@ -658,8 +703,10 @@ def main(page: ft.Page):
                alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         ft.Row([food, grams, ft.FilledButton("Add", on_click=add)]),
         msg, items, ft.Divider(), results,
-        ft.OutlinedButton("Print recipe", icon=ft.Icons.PRINT,
-                          on_click=print_recipe),
+        ft.Row([ft.OutlinedButton("Print recipe", icon=ft.Icons.PRINT,
+                                  on_click=print_recipe),
+                ft.OutlinedButton("Batch cooking", icon=ft.Icons.KITCHEN,
+                                  on_click=open_batch)], wrap=True),
         ft.Text("Approximate tool – not veterinary advice.", size=11,
                 italic=True),
     ])

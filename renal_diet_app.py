@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.08a"
+ENGINE_VERSION = "2026.11.08b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -991,6 +991,32 @@ with tab_rec:
                            "(e.g. kibble at breakfast), split by hand – the "
                            "daily totals are what count.")
 
+        if ss.recipe and not ss.plan:
+            with st.expander("🍲 Batch cooking", expanded=ss.get(
+                    "batch_n", 1) > 1):
+                bn = int(st.number_input(
+                    "Number of meals to prepare", 1, 60, step=1,
+                    key="batch_n",
+                    help="Every amount in the recipe × this number, to cook "
+                         "several meals at once and freeze portions. The "
+                         "recipe itself is not changed; the printout gets a "
+                         "batch column."))
+                if bn > 1:
+                    bt = pd.DataFrame({
+                        "Ingredient": [n for n, _ in ss.recipe],
+                        "One meal g": [round(g, 1) for _, g in ss.recipe],
+                        f"Batch × {bn} g": [round(g * bn) for _, g in
+                                             ss.recipe],
+                        "Batch units": [rc.household_units(n, g * bn)
+                                        for n, g in ss.recipe]})
+                    if not bt["Batch units"].astype(bool).any():
+                        bt = bt.drop(columns="Batch units")
+                    show_df(st, bt, hide_index=True, **FULL)
+                    _m = sum(g for _, g in ss.recipe)
+                    st.caption(f"Cook {_m * bn:.0f} g in total and split "
+                               f"into {bn} equal portions of {_m:.0f} g. "
+                               "The printout gets a batch column.")
+
         with st.expander("⚖️ Scale amounts to body weight"):
             st.write(f"Daily need {need_now():.0f} kcal "
                      f"({ss.bw:g} kg × {ss.factor:g}).")
@@ -1019,7 +1045,8 @@ with tab_rec:
                 "🖨️ Printable recipe", rc.recipe_print_html(
                     ss.recipe, db, need_now(), ss.stage, score_context(),
                     ss.meals, ss.recipe_note, ss.bw, ss.factor,
-                    plan=ss.plan, days=int(ss.get("p_days", 7) or 7)),
+                    plan=ss.plan, days=int(ss.get("p_days", 7) or 7),
+                    batch=int(ss.get("batch_n", 1) or 1)),
                 file_name="recipe_print.html", mime="text/html",
                 key="print_recipe", **FULL,
                 help="Downloads an A4 page with ingredients (per day and per "
