@@ -330,7 +330,7 @@ towards that objective, and the results show the recipe vs the reference.
 ## Remembered exclusions
 
 Foods you untick in the generator's list or the optimiser's suggested
-additions are remembered and left out of both. Each list has a **Select
+additions are remembered and left out of both. Each list has a **Select/Deselect
 all** tick (phone: in Food choices) to use or leave out every food at
 once, e.g. untick all and then tick the few you want. The generator's Always
 include ticks and Min g / Max g values are remembered too. The Streamlit app keeps them

@@ -283,7 +283,7 @@ class GeneratorView:
                              else (ex | names))
             self.choices_open = True
             self.show()
-        all_box = ft.Checkbox(label="Select all (use every food)",
+        all_box = ft.Checkbox(label="Select/Deselect all",
                               value=all_on, on_change=select_all)
 
         def toggled(e):

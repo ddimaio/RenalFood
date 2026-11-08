@@ -1412,7 +1412,7 @@ def select_all_tick(parent, lb, on_change):
         else:
             lb.select_clear(0, "end")
         on_change()
-    ttk.Checkbutton(parent, text="Select all", variable=var,
+    ttk.Checkbutton(parent, text="Select/Deselect all", variable=var,
                     command=toggled).pack(side="left")
     lb.bind("<<ListboxSelect>>", refresh, add="+")
     refresh()

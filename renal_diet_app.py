@@ -395,7 +395,7 @@ def _select_all(names, key, which):
     ss.gen_ex_ver += 1
 
 
-def select_all_box(where, names, ex, which, label="Select all"):
+def select_all_box(where, names, ex, which, label="Select/Deselect all"):
     """Render the 'Select all' tick in `where` (a container above the
     list), ticked when no food shown is excluded."""
     on = bool(names) and not (set(names) & set(ex))
@@ -2139,7 +2139,7 @@ with tab_gen:
     set_excluded(rc.merge_excluded(ss.excluded, gnames,
                                    gdf.loc[~gdf["Use"], "Ingredient"]), "gen")
     select_all_box(_g_all, gnames, ss.excluded, "gen",
-                   "Select all (Use)")
+                   "Select/Deselect all (Use)")
     _shown = set(gnames)
     _old = ss.gen_set
     set_gen_settings({
