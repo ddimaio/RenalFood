@@ -243,7 +243,7 @@ if "dog_file_loaded" not in ss:
     ss.dog_file_loaded = True
     apply_dog_state(rc.load_prefs().get(DOG_PREF))
     ss.dog_ls_loaded = streamlit_js_eval is None
-    ss.dog_saved = dog_state_json()
+    ss.dog_saved = ss.dog_start = dog_state_json()
 if not ss.dog_ls_loaded:
     raw = streamlit_js_eval(
         js_expressions=f"localStorage.getItem('{LS_DOG}') || 'null'",
@@ -254,7 +254,9 @@ if not ss.dog_ls_loaded:
             got = json.loads(raw)
         except (TypeError, ValueError):
             got = None
-        if isinstance(got, dict):      # browser copy wins over the file
+        # browser copy wins over the file, unless My Dog was already
+        # changed in this session (a late answer must not undo that)
+        if isinstance(got, dict) and dog_state_json() == ss.dog_start:
             apply_dog_state(got)
             ss.dog_saved = dog_state_json()
 
@@ -293,7 +295,10 @@ if not ss.ex_loaded:
             got = json.loads(raw)
         except (TypeError, ValueError):
             got = None
-        if isinstance(got, list):      # browser copy wins over the file
+        # browser copy wins over the file - unless the lists were already
+        # changed in this session (the browser can answer late; it must not
+        # undo those changes - they are written to the browser instead)
+        if isinstance(got, list) and not ss.get("ex_touched"):
             ss.excluded = set(got)
             ss.gen_ex_base = ss.opt_ex_base = set(got)
             if "gen_set" in ss:
@@ -320,7 +325,7 @@ if not ss.opt_loaded:
             got = json.loads(raw)
         except (TypeError, ValueError):
             got = None
-        if isinstance(got, dict):
+        if isinstance(got, dict) and not ss.get("opt_touched"):
             ss.opt_share = bool(got.get("share", True))
             ss.opt_own = set(got.get("excluded", []))
             ss.opt_own_base = set(ss.opt_own)
@@ -332,6 +337,7 @@ def set_opt_own(new):
     new = set(new)
     if new != ss.opt_own:
         ss.opt_own = new
+        ss.opt_touched = True
         rc.save_excluded(new, "opt_excluded")
 
 
@@ -365,7 +371,7 @@ if not ss.gen_loaded:
             got = json.loads(raw)
         except (TypeError, ValueError):
             got = None
-        if isinstance(got, dict):
+        if isinstance(got, dict) and not ss.get("gen_touched"):
             ss.gen_set = ss.gen_set_base = rc.clean_gen_settings(got)
             ss.gen_ex_base = set(ss.excluded)
             ss.gen_ex_ver += 1
@@ -375,6 +381,7 @@ def set_gen_settings(new):
     new = rc.clean_gen_settings(new)
     if new != ss.gen_set:
         ss.gen_set = new
+        ss.gen_touched = True
         rc.save_gen_settings(new)
 
 
@@ -410,6 +417,7 @@ def set_excluded(new, source):
     if new == ss.excluded:
         return
     ss.excluded = set(new)
+    ss.ex_touched = True
     rc.save_excluded(ss.excluded)
     if source == "gen":
         ss.opt_ex_base = set(new)
@@ -545,6 +553,7 @@ if "rec_file_loaded" not in ss:
         open_payload(_p[CUR_PREF])
     ss.rec_ls_loaded = streamlit_js_eval is None
     ss.rec_saved_json = ss.cur_saved_json = None   # store once to sync
+    ss.rec_start = [list(r) for r in ss.recipe]
 if not ss.rec_ls_loaded:
     raw_r = streamlit_js_eval(
         js_expressions=f"localStorage.getItem('{LS_REC}') || 'null'",
@@ -560,7 +569,10 @@ if not ss.rec_ls_loaded:
             got_r = got_c = None
         if isinstance(got_r, dict):       # browser copy wins
             ss.saved_recipes = _clean_saved(got_r)
-        if isinstance(got_c, dict) and got_c.get("items") is not None:
+        if (isinstance(got_c, dict) and got_c.get("items") is not None
+                and ss.recipe == ss.rec_start      # not changed meanwhile
+                and [list(r) for r in got_c["items"]]
+                != [list(r) for r in ss.recipe]):
             open_payload(got_c)
         ss.rec_saved_json = ss.cur_saved_json = None   # file follows
 
@@ -1687,6 +1699,11 @@ with tab_opt:
                         help="Untick to give the optimiser its own list of "
                              "excluded foods; the generator's list is then "
                              "left as it is.")
+            _okey = f"o_cand_{ss.rec_ver}_{ss.opt_ex_ver}"
+            if ss.get("opt_key_last") != _okey:  # fresh editor: current state
+                ss.opt_key_last = _okey
+                ss.opt_ex_base = set(ss.excluded)
+                ss.opt_own_base = set(ss.opt_own)
             _base = ss.opt_ex_base if ss.opt_share else ss.opt_own_base
             _o_all = st.container()
             cdf = st.data_editor(
@@ -1697,7 +1714,7 @@ with tab_opt:
                               "Ingredient": cand_names}),
                 hide_index=True, **FULL, height=250,
                 disabled=["Role", "Ingredient"],
-                key=f"o_cand_{ss.rec_ver}_{ss.opt_ex_ver}")
+                key=_okey)
             st.caption("Unticked foods are remembered in this browser"
                        + (" and also left out of the recipe generator."
                           if ss.opt_share else
