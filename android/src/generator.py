@@ -274,6 +274,18 @@ class GeneratorView:
             ft.IconButton(icon=ft.Icons.RESTART_ALT, tooltip="Reset",
                           data=n, on_click=self._reset_food)])
             for n in set_foods(self.db)]
+        names = {n for n in self.db if usable(self.db, n, True)}
+        all_on = not (names & set(rc.load_excluded()))
+
+        def select_all(e):
+            ex = set(rc.load_excluded())
+            rc.save_excluded((ex - names) if e.control.value
+                             else (ex | names))
+            self.choices_open = True
+            self.show()
+        all_box = ft.Checkbox(label="Select all (use every food)",
+                              value=all_on, on_change=select_all)
+
         def toggled(e):
             self.choices_open = bool(e.data) if isinstance(e.data, bool) \
                 else str(e.data).lower() == "true"
@@ -287,6 +299,7 @@ class GeneratorView:
                 ft.Text("Pick a food to leave it out, always include it "
                         "(with a minimum) or cap it (maximum). Also used "
                         "by the other apps' generator.", size=11),
+                all_box,
                 ft.Row([pick, ft.FilledButton("Set…", on_click=open_pick)]),
             ] + (rows or [ft.Text("No food choices yet.", italic=True,
                                   size=12)]))])

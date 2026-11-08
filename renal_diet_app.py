@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.07f"
+ENGINE_VERSION = "2026.11.08a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -376,6 +376,32 @@ def set_gen_settings(new):
     if new != ss.gen_set:
         ss.gen_set = new
         rc.save_gen_settings(new)
+
+
+def _select_all(names, key, which):
+    """'Select all' tick callback for a food list: tick = use every food
+    shown, untick = leave them all out. Rebuilds both list editors."""
+    on, names = ss[key], set(names)
+    if which == "opt" and not ss.opt_share:
+        new = (ss.opt_own - names) if on else (ss.opt_own | names)
+        set_opt_own(new)
+        ss.opt_own_base = set(new)
+    else:
+        new = (ss.excluded - names) if on else (ss.excluded | names)
+        set_excluded(new, which)
+        ss.opt_ex_base = ss.gen_ex_base = set(new)
+        ss.gen_set_base = ss.gen_set
+    ss.opt_ex_ver += 1
+    ss.gen_ex_ver += 1
+
+
+def select_all_box(where, names, ex, which, label="Select all"):
+    """Render the 'Select all' tick in `where` (a container above the
+    list), ticked when no food shown is excluded."""
+    on = bool(names) and not (set(names) & set(ex))
+    key = f"{which}_all_{ss.gen_ex_ver}_{ss.opt_ex_ver}_{int(on)}"
+    where.checkbox(label, value=on, key=key, on_change=_select_all,
+                   args=(list(names), key, which))
 
 
 def set_excluded(new, source):
@@ -1626,6 +1652,7 @@ with tab_opt:
                              "excluded foods; the generator's list is then "
                              "left as it is.")
             _base = ss.opt_ex_base if ss.opt_share else ss.opt_own_base
+            _o_all = st.container()
             cdf = st.data_editor(
                 pd.DataFrame({"Use": [n not in _base
                                       for n in cand_names],
@@ -1646,6 +1673,8 @@ with tab_opt:
                          "opt")
         else:
             set_opt_own(rc.merge_excluded(ss.opt_own, cand_names, _unt))
+        select_all_box(_o_all, cand_names,
+                       ss.excluded if ss.opt_share else ss.opt_own, "opt")
 
         st.caption("With everything allowed this can take up to a minute or "
                    "two on the hosted app – leave the page alone until the "
@@ -2082,6 +2111,7 @@ with tab_gen:
         ss.gen_key_last = _gkey
         ss.gen_set_base = ss.gen_set
         ss.gen_ex_base = set(ss.excluded)
+    _g_all = st.container()
     gdf = st.data_editor(
         pd.DataFrame({"Use": [n not in ss.gen_ex_base for n in gnames],
                       "Always include": [n in ss.gen_set_base["forced"]
@@ -2108,6 +2138,8 @@ with tab_gen:
                  "blank = no limit")})
     set_excluded(rc.merge_excluded(ss.excluded, gnames,
                                    gdf.loc[~gdf["Use"], "Ingredient"]), "gen")
+    select_all_box(_g_all, gnames, ss.excluded, "gen",
+                   "Select all (Use)")
     _shown = set(gnames)
     _old = ss.gen_set
     set_gen_settings({

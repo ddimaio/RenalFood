@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.07f"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.08a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1394,6 +1394,29 @@ def save_excluded(excluded, key="excluded"):
     p = load_prefs()
     p[key] = sorted(excluded, key=str.lower)
     save_prefs(p)
+
+
+def select_all_tick(parent, lb, on_change):
+    """A 'Select all' tick for a multiple-selection food Listbox: ticking
+    selects every food, unticking clears them; it follows the list
+    (refresh with the returned function after the selection changes)."""
+    var = tk.BooleanVar()
+
+    def refresh(*_):
+        n = lb.size()
+        var.set(n > 0 and len(lb.curselection()) == n)
+
+    def toggled():
+        if var.get():
+            lb.select_set(0, "end")
+        else:
+            lb.select_clear(0, "end")
+        on_change()
+    ttk.Checkbutton(parent, text="Select all", variable=var,
+                    command=toggled).pack(side="left")
+    lb.bind("<<ListboxSelect>>", refresh, add="+")
+    refresh()
+    return refresh
 
 
 def sync_excluded_list(win, event, lb, names, key="excluded"):
@@ -6197,10 +6220,7 @@ class GeneratorDialog(tk.Toplevel):
             side="left", padx=8)
         bb = ttk.Frame(frm)
         bb.pack(fill="x", pady=2)
-        ttk.Button(bb, text="All", command=lambda: (self.lb.select_set(
-            0, "end"), self.save_excl())).pack(side="left")
-        ttk.Button(bb, text="None", command=lambda: (self.lb.select_clear(
-            0, "end"), self.save_excl())).pack(side="left", padx=4)
+        self._all_ref = select_all_tick(bb, self.lb, self.save_excl)
         ttk.Label(bb, foreground="#555",
                   text="Unticked foods are remembered (also for the "
                        "optimiser's additions).").pack(side="left", padx=8)
@@ -6271,6 +6291,8 @@ class GeneratorDialog(tk.Toplevel):
 
     def _sync_excl(self, e, lb, names):
         sync_excluded_list(self, e, lb, names)
+        if hasattr(self, "_all_ref"):
+            self._all_ref()
 
     def save_excl(self):
         sel = set(self.lb.curselection())
@@ -7138,10 +7160,7 @@ class OptimiseDialog(tk.Toplevel):
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
                     width=4).pack(side="left", padx=4)
-        ttk.Button(row, text="All", command=lambda: (self.cand.select_set(
-            0, "end"), self.save_excl())).pack(side="right")
-        ttk.Button(row, text="None", command=lambda: (self.cand.select_clear(
-            0, "end"), self.save_excl())).pack(side="right", padx=4)
+        self._all_row = row
         self.share_ex = tk.BooleanVar(value=opt_shares_exclusions())
         ttk.Checkbutton(sf, variable=self.share_ex, command=self._share_changed,
                         text="Use the recipe generator's exclusions (one "
@@ -7161,9 +7180,13 @@ class OptimiseDialog(tk.Toplevel):
             if n not in excluded:
                 self.cand.select_set(i)
         self.cand.bind("<<ListboxSelect>>", lambda e: self.save_excl())
-        self.bind("<FocusIn>", lambda e: sync_excluded_list(
-            self, e, self.cand, self.cand_names, opt_excluded_key))
+        self.bind("<FocusIn>", lambda e: (sync_excluded_list(
+            self, e, self.cand, self.cand_names, opt_excluded_key),
+            self._all_ref()))
         self.cand.pack(fill="both", expand=True)
+        af = ttk.Frame(self._all_row)
+        af.pack(side="right")
+        self._all_ref = select_all_tick(af, self.cand, self.save_excl)
 
         bot = ttk.Frame(frm)
         bot.pack(fill="x", pady=(8, 0))
@@ -7227,6 +7250,7 @@ class OptimiseDialog(tk.Toplevel):
         self._cand_text()
         sync_excluded_list(self, None, self.cand, self.cand_names,
                            opt_excluded_key())
+        self._all_ref()
 
     def run(self):
         app = self.app

@@ -330,7 +330,9 @@ towards that objective, and the results show the recipe vs the reference.
 ## Remembered exclusions
 
 Foods you untick in the generator's list or the optimiser's suggested
-additions are remembered and left out of both. The generator's Always
+additions are remembered and left out of both. Each list has a **Select
+all** tick (phone: in Food choices) to use or leave out every food at
+once, e.g. untick all and then tick the few you want. The generator's Always
 include ticks and Min g / Max g values are remembered too. The Streamlit app keeps them
 in your browser (so they survive app restarts; per browser/device); the
 desktop app keeps them in `renal_prefs.json` in a fixed per-user folder (Windows: `%APPDATA%\RenalFood`, otherwise `~/.renalfood`), so they survive unzipping a new version into another folder; an older `renal_prefs.json` next to the program is carried over once.
