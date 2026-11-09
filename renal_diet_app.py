@@ -28,7 +28,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.08c"
+ENGINE_VERSION = "2026.11.09a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -385,10 +385,10 @@ def set_gen_settings(new):
         rc.save_gen_settings(new)
 
 
-def _select_all(names, key, which):
-    """'Select all' tick callback for a food list: tick = use every food
-    shown, untick = leave them all out. Rebuilds both list editors."""
-    on, names = ss[key], set(names)
+def _select_all(names, on, which):
+    """'Select/Deselect all' button callback for a food list: on = use
+    every food shown, else leave them all out. Rebuilds both editors."""
+    names = set(names)
     if which == "opt" and not ss.opt_share:
         new = (ss.opt_own - names) if on else (ss.opt_own | names)
         set_opt_own(new)
@@ -403,12 +403,17 @@ def _select_all(names, key, which):
 
 
 def select_all_box(where, names, ex, which, label="Select/Deselect all"):
-    """Render the 'Select all' tick in `where` (a container above the
-    list), ticked when no food shown is excluded."""
-    on = bool(names) and not (set(names) & set(ex))
-    key = f"{which}_all_{ss.gen_ex_ver}_{ss.opt_ex_ver}_{int(on)}"
-    where.checkbox(label, value=on, key=key, on_change=_select_all,
-                   args=(list(names), key, which))
+    """Render the 'Select/Deselect all' button in `where` (a container
+    above the list): deselects all when every food shown is in use, else
+    selects all. A button, not a checkbox: a checkbox re-created on each
+    edit could fire by itself while the list was being edited quickly and
+    untick everything."""
+    all_on = bool(names) and not (set(names) & set(ex))
+    where.button(("☑ " if all_on else "☐ ") + label, key=f"{which}_all",
+                 on_click=_select_all,
+                 args=(list(names), not all_on, which),
+                 help="Deselect all foods" if all_on else
+                      "Select all foods")
 
 
 def set_excluded(new, source):
