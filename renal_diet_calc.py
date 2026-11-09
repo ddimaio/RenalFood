@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.09a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.09b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -4308,6 +4308,56 @@ def biscuit_to_ingredient(b, db, name, baked_g=None):
                                 baked_g)
 
 
+BISCUIT_JSON_FORMAT = "renalfood-biscuits"
+
+
+def biscuits_to_json(results, names=None):
+    """Biscuit recipes (generate_biscuits results) as JSON-ready data:
+    {"format", "version", "recipes": [{"name", "items": [[food, g], ...]}]}.
+    names: optional list of names (default 'Renal biscuits N')."""
+    out = []
+    for i, b in enumerate(results):
+        nm = (names[i] if names and i < len(names) and names[i]
+              else f"Renal biscuits {i + 1}")
+        out.append({"name": nm, "items": [[n, round(float(g), 2)]
+                                          for n, g in zip(b[0], b[1])]})
+    return {"format": BISCUIT_JSON_FORMAT, "version": 1, "recipes": out}
+
+
+def biscuits_from_json(d, db, ctx):
+    """Inverse of biscuits_to_json, re-scored with the current settings
+    (a single recipe {"name", "items"} or a bare [[food, g], ...] list is
+    accepted too). Returns (results, names, skipped foods); raises
+    ValueError if nothing usable is found."""
+    if isinstance(d, dict) and "recipes" in d:
+        recs = d["recipes"]
+    elif isinstance(d, dict) and "items" in d:
+        recs = [d]
+    elif isinstance(d, list):
+        recs = [{"items": d}]
+    else:
+        raise ValueError("Not a biscuit recipe file.")
+    res, names, skipped = [], [], set()
+    for r in recs:
+        try:
+            items = [(str(n), float(g)) for n, g in r.get("items", [])]
+        except (TypeError, ValueError):
+            continue
+        skipped |= {n for n, g in items if n not in db}
+        items = [(n, g) for n, g in merge_duplicates(items)
+                 if n in db and g > 0]
+        if not items:
+            continue
+        nm = [n for n, _ in items]
+        gg = [g for _, g in items]
+        sc, per, kcal = treat_score(nm, gg, [_vec(db[n]) for n in nm], ctx)
+        res.append((nm, gg, sc, per, kcal))
+        names.append(str(r.get("name") or f"Renal biscuits {len(res)}"))
+    if not res:
+        raise ValueError("No biscuit recipe with known foods in the file.")
+    return res, names, sorted(skipped)
+
+
 def biscuit_report(results, db, ctx, need_kcal=None):
     """Plain-text report of generated biscuit recipes."""
     L = [f"{len(results)} renal-friendly biscuit recipes, best first. "
@@ -6438,6 +6488,9 @@ class GeneratorDialog(tk.Toplevel):
         ttk.Button(bot, text="Stop", command=self.stop).pack(side="left",
                                                              padx=4)
         ttk.Button(bot, text="Close", command=self.close).pack(side="left")
+        ttk.Button(bot, text="Load biscuits (JSON)…",
+                   command=lambda: load_biscuits_dialog(app, self)).pack(
+            side="left", padx=(12, 0))
         self.pb = ttk.Progressbar(bot, length=220, mode="determinate")
         self.pb.pack(side="left", padx=10)
         self.status = ttk.Label(bot, foreground="#555")
@@ -6858,10 +6911,36 @@ class PlanResultsWindow(tk.Toplevel):
         webbrowser.open("file://" + f.name)
 
 
+def load_biscuits_dialog(app, parent=None):
+    """Ask for a biscuit JSON file and show its recipes (re-checked with
+    the current settings) in a BiscuitResultsWindow."""
+    parent = parent or app
+    path = filedialog.askopenfilename(
+        parent=parent, title="Load biscuit recipes",
+        filetypes=[("Biscuit recipes", "*.json"), ("All files", "*.*")])
+    if not path:
+        return
+    ctx = dict(app.score_context(), stage_name=app.stage.get())
+    try:
+        with open(path, encoding="utf-8") as f:
+            res, names, skipped = biscuits_from_json(json.load(f), app.db,
+                                                     ctx)
+    except (OSError, ValueError) as e:
+        messagebox.showerror("Load biscuits", f"Could not load the file:\n"
+                             f"{e}", parent=parent)
+        return
+    if skipped:
+        messagebox.showwarning("Load biscuits", "Left out foods not in the "
+                               "library: " + ", ".join(skipped),
+                               parent=parent)
+    BiscuitResultsWindow(app, ctx, res, ctx["kcal_target"], names)
+
+
 class BiscuitResultsWindow(tk.Toplevel):
-    def __init__(self, app, ctx, results, need):
+    def __init__(self, app, ctx, results, need, names=None):
         super().__init__(app)
         self.app, self.ctx, self.results, self.need = app, ctx, results, need
+        self.names = list(names or [])
         self.title("Renal-friendly biscuits")
         self.geometry("860x720")
         frm = ttk.Frame(self, padding=8)
@@ -6887,9 +6966,37 @@ class BiscuitResultsWindow(tk.Toplevel):
                    command=self.save_one).pack(side="left", padx=4)
         ttk.Button(b, text="Add to meal plan",
                    command=self.add_to_plan).pack(side="left")
+        ttk.Button(b, text="Save JSON…",
+                   command=self.save_json).pack(side="left", padx=4)
+        ttk.Button(b, text="Load JSON…", command=lambda: load_biscuits_dialog(
+            app, self)).pack(side="left")
         ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
         ttk.Button(b, text="Copy all", command=lambda: to_clipboard(
             self, self.txt.get("1.0", "end-1c"))).pack(side="right", padx=6)
+
+    def name_of(self, i):
+        return (self.names[i] if i < len(self.names) and self.names[i]
+                else f"Renal biscuits {i + 1}")
+
+    def save_json(self):
+        """Save all these biscuit recipes to a JSON file."""
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Save biscuit recipes",
+            defaultextension=".json", initialfile="renal_biscuits.json",
+            filetypes=[("Biscuit recipes", "*.json")])
+        if not path:
+            return
+        data = biscuits_to_json(self.results, [
+            self.name_of(i) for i in range(len(self.results))])
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=1, ensure_ascii=False)
+        except OSError as e:
+            messagebox.showerror("Save biscuits", str(e), parent=self)
+            return
+        messagebox.showinfo("Save biscuits", f"Saved {len(self.results)} "
+                            f"recipe(s) to {os.path.basename(path)}.",
+                            parent=self)
 
     def save_one(self):
         """Save the picked biscuit recipe as a library treat; returns its
@@ -6900,7 +7007,7 @@ class BiscuitResultsWindow(tk.Toplevel):
         except (ValueError, IndexError):
             return None
         name = simpledialog.askstring("Save biscuits", "Name:",
-                                      initialvalue=f"Renal biscuits {i + 1}",
+                                      initialvalue=self.name_of(i),
                                       parent=self)
         if not name or not name.strip():
             return None

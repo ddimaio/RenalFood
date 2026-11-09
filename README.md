@@ -229,7 +229,7 @@ renal limits per 1000 kcal (phosphorus at or below the stage aim, sodium,
 potassium, protein, oxalate, fat share) – treats are not complete food.
 Each recipe gives the batch amounts, water to add, the estimated baked
 weight, the energy per gram (baked and raw dough), the daily maximum in
-grams (10 % treat allowance), method and a printable page. Flours (rice, plain wheat, cornflour,
+grams (10 % treat allowance), method and a printable page. Biscuit recipes can be saved as JSON files (*Save as JSON* / *Save all as JSON*; desktop: *Save JSON…*) and loaded again (*Load biscuit recipes*; desktop: *Load biscuits (JSON)…* in the generator or *Load JSON…* in the results), re-checked with the current settings. Flours (rice, plain wheat, cornflour,
 arrowroot, gluten-free plain, chickpea) were added from AFCD Release 3
 with `afcd_add.py`.
 

@@ -12,6 +12,7 @@ import csv
 import datetime
 import io
 import json
+import re
 import os
 
 import pandas as pd
@@ -28,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.09a"
+ENGINE_VERSION = "2026.11.09b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -824,6 +825,29 @@ def units_col(names, grams):
     food has a kitchen unit (rc.household_units), else {}."""
     u = [rc.household_units(n, g) for n, g in zip(names, grams)]
     return {"units": u} if any(u) else {}
+
+
+def _load_biscuits_cb(key, need):
+    """Load biscuit recipes from an uploaded JSON file into the results."""
+    f = ss.get(key)
+    if f is None:
+        return
+    try:
+        ctx_b = dict(score_context(need), stage_name=ss.stage)
+        res, names, skipped = rc.biscuits_from_json(
+            json.loads(f.getvalue().decode("utf-8")), db, ctx_b)
+    except (ValueError, UnicodeDecodeError) as e:
+        ss.bis_load_msg = ("error", f"Could not load {f.name}: {e}")
+    else:
+        ss.bis_result = {"ctx": ctx_b, "res": res, "need": need,
+                         "names": dict(enumerate(names))}
+        ss.bis_ver = ss.get("bis_ver", 0) + 1
+        ss.bis_load_msg = (
+            ("warning", f"Loaded {len(res)} recipe(s); left out foods not in "
+                        "the library: " + ", ".join(skipped))
+            if skipped else ("success", f"Loaded {len(res)} recipe(s) from "
+                                        f"{f.name}."))
+    ss.bis_load_ver = ss.get("bis_load_ver", 0) + 1
 
 
 def _save_biscuit(b, name, baked_g):
@@ -2493,7 +2517,31 @@ with tab_gen:
                                          forced_b, None, prog_b)
             bar.empty()
             ss.bis_result = {"ctx": ctx_b, "res": res_b, "need": gk}
+            ss.bis_ver = ss.get("bis_ver", 0) + 1
+            ss.bis_load_msg = None
+        st.file_uploader(
+            "📂 Load biscuit recipes (JSON)", type=["json"],
+            key=f"b_load_{ss.get('bis_load_ver', 0)}",
+            on_change=_load_biscuits_cb,
+            args=(f"b_load_{ss.get('bis_load_ver', 0)}", gk),
+            help="A file saved with 'Save as JSON' here or in the desktop "
+                 "app. The recipes are re-checked with the current "
+                 "settings.")
+        if ss.get("bis_load_msg"):
+            getattr(st, ss.bis_load_msg[0])(ss.bis_load_msg[1])
         br = ss.get("bis_result")
+        bv = ss.get("bis_ver", 0)
+        if br and br["res"]:
+            st.download_button(
+                "💾 Save all as JSON", json.dumps(rc.biscuits_to_json(
+                    br["res"], [ss.get(f"b_name_{bv}_{i}")
+                                or (br.get("names") or {}).get(i)
+                                for i in range(len(br["res"]))]),
+                    indent=1, ensure_ascii=False),
+                file_name="renal_biscuits.json", mime="application/json",
+                key="b_json_all",
+                help="Save these biscuit recipes to a file; reload them "
+                     "later with 'Load biscuit recipes'.")
         if br:
             if not br["res"]:
                 st.warning("No biscuit recipes – tick at least one flour "
@@ -2524,29 +2572,31 @@ with tab_gen:
                             hide_index=True, **FULL)
                     st.markdown("\n".join("- " + nt for nt in d["notes"]))
                     sc_ = st.columns([3, 2, 2])
-                    sc_[0].text_input("Name", f"Renal biscuits {i + 1}",
-                                      key=f"b_name_{i}")
+                    sc_[0].text_input("Name", (br.get("names") or {}).get(
+                        i, f"Renal biscuits {i + 1}"),
+                                      key=f"b_name_{bv}_{i}")
                     sc_[1].number_input(
                         "Baked weight, g (0 = estimate)", 0.0, 5000.0, 0.0,
-                        step=5.0, key=f"b_bw_{i}",
+                        step=5.0, key=f"b_bw_{bv}_{i}",
                         help="Weigh the batch after baking for exact values "
                              "per gram; 0 uses the estimate "
                              f"(~{d['baked_g']:.0f} g).")
                     sc_[2].number_input("Grams a day (plan)", 1.0, 500.0,
                                         float(round(d["g_day"] or 10)),
-                                        step=1.0, key=f"b_day_{i}")
+                                        step=1.0, key=f"b_day_{bv}_{i}")
                     bb_ = st.columns(2)
                     bb_[0].button("💾 Save as ingredient", key=f"b_save_{i}",
                                   on_click=_save_biscuit_cb,
-                                  args=(b, f"b_name_{i}", f"b_bw_{i}"),
+                                  args=(b, f"b_name_{bv}_{i}", f"b_bw_{bv}_{i}"),
                                   help="Adds it to the library (category "
                                        "'treat', per 100 g baked biscuit) so it "
                                        "can be used in meal plans.")
                     bb_[1].button("➕ Add to active meal plan",
                                   key=f"b_add_{i}", disabled=not ss.plan,
                                   on_click=_add_biscuit_cb,
-                                  args=(b, f"b_name_{i}", f"b_bw_{i}",
-                                        f"b_day_{i}"),
+                                  args=(b, f"b_name_{bv}_{i}",
+                                        f"b_bw_{bv}_{i}",
+                                        f"b_day_{bv}_{i}"),
                                   help="Saves it and adds those grams "
                                        "a day to the meal plan on "
                                        "the Recipe tab (use a meal plan "
@@ -2559,6 +2609,13 @@ with tab_gen:
                         rc.biscuit_print_html(b, db, br["ctx"], br["need"]),
                         file_name=f"renal_biscuits_{i + 1}.html",
                         mime="text/html", key=f"b_print_{i}")
+                    _bn = ss.get(f"b_name_{bv}_{i}") or f"Renal biscuits {i + 1}"
+                    st.download_button(
+                        "💾 Save as JSON", json.dumps(rc.biscuits_to_json(
+                            [b], [_bn]), indent=1, ensure_ascii=False),
+                        file_name=re.sub(r"[^\w\-]+", "_", _bn).strip("_")
+                        + ".json", mime="application/json",
+                        key=f"b_json_{i}")
 
 
 # ================================================================ LIBRARY
