@@ -193,7 +193,7 @@ def resolve_food(value, text, names):
 # ---- saved recipes (same item format as the desktop/Streamlit files)
 def print_html(recipe, db, dog, title="", batch=1):
     """The printable page (A4, same as the desktop and web apps); batch > 1
-    adds a column with every amount × batch."""
+    adds a column for cooking that many meals (amount ÷ meals/day × batch)."""
     need = dog.need()
     ctx = rc.build_score_context(None, dog.stage, need, dog.bw, dog.extended,
                                  dog.max_g or None)
@@ -445,15 +445,19 @@ def main(page: ft.Page):
             except (TypeError, ValueError):
                 n = 1
             state["batch"] = n
-            m = sum(g for _, g in recipe)
-            rows = [ft.Text(f"Cook {m * n:.0f} g in total, split into {n} "
+            mpd = max(1, int(dog.meals or 1))
+            m = sum(g for _, g in recipe) / mpd
+            rows = [ft.Text((f"One meal = the day recipe ÷ {mpd} meals a "
+                             "day. " if mpd > 1 else "")
+                            + f"Cook {m * n:.0f} g in total, split into {n} "
                             f"portions of {m:.0f} g.", size=12,
                             weight=ft.FontWeight.BOLD)]
             for nm, g in recipe:
+                g = g / mpd
                 u = rc.household_units(nm, g * n)
                 rows.append(ft.Row([
                     ft.Text(nm, size=12, expand=True),
-                    ft.Text(f"{g:g} → {g * n:.0f} g" + (f" ({u})" if u
+                    ft.Text(f"{g:.0f} → {g * n:.0f} g" + (f" ({u})" if u
                                                         else ""),
                             size=12, weight=ft.FontWeight.BOLD)]))
             table.controls = rows
@@ -464,7 +468,7 @@ def main(page: ft.Page):
         async def do_print(e):
             page.pop_dialog()
             await send_page(rc.batch_print_html(
-                recipe, db, state.get("batch", 1),
+                recipe, db, state.get("batch", 1), meals=dog.meals,
                 title=state["name"] or "Batch cooking"),
                 "batch_cooking.html", state["name"] or "Batch cooking")
         page.show_dialog(ft.AlertDialog(

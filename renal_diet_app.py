@@ -29,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.10a"
+ENGINE_VERSION = "2026.11.10b"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1038,29 +1038,39 @@ with tab_rec:
                 bn = int(st.number_input(
                     "Number of meals to prepare", 1, 60, step=1,
                     key="batch_n",
-                    help="Every amount in the recipe × this number, to cook "
-                         "several meals at once and freeze portions. The "
-                         "recipe itself is not changed; the printout gets a "
-                         "batch column."))
+                    help="One meal = the recipe (per day) ÷ meals per day; "
+                         "the batch is that × this number, to cook several "
+                         "meals at once and freeze portions. The recipe "
+                         "itself is not changed; the printout gets a batch "
+                         "column."))
+                _mpd = max(1, int(ss.meals))
+                if _mpd > 1:
+                    st.caption(f"One meal = the day recipe ÷ {_mpd} meals a "
+                               "day (My dog).")
                 if bn > 1:
                     bt = pd.DataFrame({
                         "Ingredient": [n for n, _ in ss.recipe],
-                        "One meal g": [round(g, 1) for _, g in ss.recipe],
-                        f"Batch × {bn} g": [round(g * bn) for _, g in
-                                             ss.recipe],
-                        "Batch units": [rc.household_units(n, g * bn)
+                        "Per day g": [round(g, 1) for _, g in ss.recipe],
+                        "One meal g": [round(g / _mpd, 1)
+                                       for _, g in ss.recipe],
+                        f"Batch {bn} meals g": [round(g / _mpd * bn)
+                                                for _, g in ss.recipe],
+                        "Batch units": [rc.household_units(n, g / _mpd * bn)
                                         for n, g in ss.recipe]})
+                    if _mpd == 1:
+                        bt = bt.drop(columns="Per day g")
                     if not bt["Batch units"].astype(bool).any():
                         bt = bt.drop(columns="Batch units")
                     show_df(st, bt, hide_index=True, **FULL)
-                    _m = sum(g for _, g in ss.recipe)
+                    _m = sum(g for _, g in ss.recipe) / _mpd
                     st.caption(f"Cook {_m * bn:.0f} g in total and split "
-                               f"into {bn} equal portions of {_m:.0f} g. "
-                               "The full recipe printout also gets a batch "
-                               "column.")
+                               f"into {bn} equal portions of {_m:.0f} g "
+                               "(one meal each). The full recipe printout "
+                               "also gets a batch column.")
                 st.download_button(
                     "🖨️ Print batch sheet", rc.batch_print_html(
-                        ss.recipe, db, bn, note=ss.recipe_note),
+                        ss.recipe, db, bn, note=ss.recipe_note,
+                        meals=ss.meals),
                     file_name="batch_cooking.html", mime="text/html",
                     key="print_batch", **FULL,
                     help="A4 kitchen sheet: batch amounts with tick boxes, "

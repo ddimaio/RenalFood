@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.10a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.10b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1011,8 +1011,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
     targets, assessment, feeding notes and space for the vet. With an
     active meal plan, the ingredients are printed meal by meal (one
     portion and a batch for `days` days); the rest is the day total.
-    batch > 1 (no meal plan): adds a column with every amount × batch, to
-    cook several meals at once."""
+    batch > 1 (no meal plan): adds a column for cooking `batch` meals at
+    once (each amount ÷ meals per day × batch)."""
     import datetime
     if plan:
         recipe = meal_plan_day(plan)
@@ -1044,8 +1044,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
             ucell(n, g) +
             (f"<td class=n>{g / meals:.1f}</td>" + ucell(n, g / meals)
              if meals > 1 else "") +
-            (f"<td class=n><b>{g * batch:.0f}</b></td>" + ucell(n, g * batch)
-             if batch > 1 else "") +
+            (f"<td class=n><b>{g / meals * batch:.0f}</b></td>"
+             + ucell(n, g / meals * batch) if batch > 1 else "") +
             f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
             "</td><td class=c>☐</td></tr>")
     blank_u = "<td></td>" if has_u else ""
@@ -1053,8 +1053,8 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
                blank_u +
                (f"<td class=n>{mass / meals:.0f}</td>" + blank_u
                 if meals > 1 else "") +
-               (f"<td class=n><b>{mass * batch:.0f}</b></td>" + blank_u
-                if batch > 1 else "")
+               (f"<td class=n><b>{mass / meals * batch:.0f}</b></td>"
+                + blank_u if batch > 1 else "")
                + f"<td class=n>{kcal:.0f}</td><td></td></tr>")
     plan_html = ""
     if plan:                       # meal by meal: portion + batch
@@ -1199,7 +1199,8 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
     u_hdr = "<th class=u>units</th>" if has_u else ""
     meal_hdr = f"<th class=n>g / meal</th>{u_hdr}" if meals > 1 else ""
     if batch > 1:
-        meal_hdr += f"<th class=n>batch × {batch}</th>{u_hdr}"
+        meal_hdr += (f"<th class=n>batch {batch} meal"
+                     f"{'s' if batch > 1 else ''}</th>{u_hdr}")
     # built separately: a triple-quoted f-string nested in another needs
     # Python 3.12+ (PEP 701)
     ingredients_html = plan_html if plan else (
@@ -1218,7 +1219,7 @@ ul { margin: 3pt 0 0 14pt; padding: 0; } li { margin: 2pt 0; }
 
 <h2>{'Meal plan – a recipe for each meal' if plan else 'Ingredients'}</h2>
 {ingredients_html}
-<div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}{f'<b>Batch: every amount × {batch} ({mass * batch:.0f} g in total) – cook together, split into {batch} equal portions of {mass:.0f} g and freeze. </b>' if batch > 1 else ''}Weigh with kitchen scales. Amounts are for cooked foods
+<div class="small">{'Each meal is its own recipe: cook the batch, split into ' + str(days) + ' portions and freeze; feed one portion of each meal a day. Single meals are not complete – only the whole day is balanced (nutrients below are for the day). ' if plan else ''}{f'<b>Batch for {batch} meals: one meal ({mass / meals:.0f} g{" = the day ÷ " + str(meals) if meals > 1 else ""}) × {batch} = {mass / meals * batch:.0f} g in total – cook together, split into {batch} equal portions and freeze. </b>' if batch > 1 else ''}Weigh with kitchen scales. Amounts are for cooked foods
 where the name says so (e.g. "boiled"). {f'Units ({_esc(UNITS_NOTE)}). ' if has_u else ''}{f'Each meal ≈ {per_meal_kcal:.0f} kcal.' if meals > 1 and not plan else ''}
 Score {('%.3f' % score) if score is not None else '–'} (0 = every target met){(' · rating %.0f/100' % a['rating']) if a.get('rating') is not None else ''}{(' · ' + _esc(a['energy_text'])) if a.get('energy_text') else ''}{(' · gaps: ' + ', '.join(_esc(g) for g in gaps)) if gaps else ''}.</div>
 
@@ -4426,13 +4427,16 @@ balanced food; check with your vet.</p></body></html>"""
 
 
 def batch_print_html(recipe, db, n, title="Batch cooking", dog_name="",
-                     note=""):
-    """A4 kitchen sheet for cooking a recipe n times at once: batch
-    amounts with kitchen units and tick boxes, total, portion size and
-    energy per portion, steps, and portion labels to cut out."""
+                     note="", meals=1):
+    """A4 kitchen sheet for cooking n meals at once: recipe (per day) ÷
+    meals per day = one meal, × n = the batch. Batch amounts with kitchen
+    units and tick boxes, total, portion size and energy per portion,
+    steps, and portion labels to cut out."""
     import datetime
     n = max(1, int(n or 1))
-    rows = [(nm, float(g)) for nm, g in recipe if nm in db and g and g > 0]
+    meals = max(1, int(meals or 1))
+    rows = [(nm, float(g) / meals) for nm, g in recipe
+            if nm in db and g and g > 0]
     m = sum(g for _, g in rows)
     kcal = recipe_kcal([r[0] for r in rows], [r[1] for r in rows], db)
     today = datetime.date.today().strftime("%d %b %Y")
@@ -4463,7 +4467,7 @@ font-size: 9.5pt; box-sizing: border-box; }}
 </style></head><body>
 <div class="noprint"><button onclick="window.print()">🖨 Print</button></div>
 <h1>{_esc(title)}{(' – ' + _esc(dog_name)) if dog_name else ''}</h1>
-<div class="small">Batch for {n} meal{'s' if n > 1 else ''} · printed {today}</div>
+<div class="small">Batch for {n} meal{'s' if n > 1 else ''}{f' · one meal = the day recipe ÷ {meals} meals a day' if meals > 1 else ''} · printed {today}</div>
 {f'<p><b>{_esc(note)}</b></p>' if note else ''}
 <p class="big">Cook <b>{m * n:.0f} g</b> in total → <b>{n} portion{'s' if n > 1 else ''} of
 {m:.0f} g</b> ({kcal:.0f} kcal each).</p>
@@ -5994,11 +5998,15 @@ class BatchWindow(tk.Toplevel):
         n = self.count()
         self.app.batch_n = n
         self.tv.delete(*self.tv.get_children())
+        mpd = self.app.meals_n()
         for nm, g in self.app.recipe:
+            g = g / mpd
             self.tv.insert("", "end", text=nm, values=(
                 f"{g:.1f}", f"{g * n:.0f}", household_units(nm, g * n)))
-        m = sum(g for _, g in self.app.recipe)
-        self.lbl.config(text=f"Cook {m * n:.0f} g in total and split into "
+        m = sum(g for _, g in self.app.recipe) / mpd
+        self.lbl.config(text=(f"One meal = the day recipe ÷ {mpd} meals a "
+                              "day. " if mpd > 1 else "")
+                        + f"Cook {m * n:.0f} g in total and split into "
                              f"{n} equal portions of {m:.0f} g. The "
                              "recipe is unchanged. The batch sheet is a "
                              "kitchen page with tick boxes and portion "
@@ -6017,6 +6025,7 @@ class BatchWindow(tk.Toplevel):
         fd, path = tempfile.mkstemp(suffix=".html", prefix="batch_print_")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(batch_print_html(self.app.recipe, self.app.db, n,
+                                     meals=self.app.meals_n(),
                                      note=self.app.recipe_note))
         webbrowser.open(pathlib.Path(path).resolve().as_uri())
 
