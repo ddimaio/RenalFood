@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.09b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.10a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -5307,6 +5307,26 @@ BLOOD_FIELDS = [
     ("mcs", "Muscle condition (vet's score)", "0–3",
      "0 normal, 1 mild, 2 moderate, 3 severe muscle loss"),
 ]
+DOG_PREF = "web_dog"     # My Dog + bloods, shared by the web and desktop apps
+
+
+def blood_summary(bloods, score_ctx=None):
+    """One line for My Dog: the remembered results and whether the targets
+    in use are adapted from them ('' if nothing entered)."""
+    bl = bloods or {}
+    vals = [f"{lab.split(' (')[0].split(' / ')[0]} {bl[k]:g}"
+            + (f" {u}" if u and u not in ("1–9", "0–3") else "")
+            for k, lab, u, _ in BLOOD_FIELDS
+            if isinstance(bl.get(k), (int, float))]
+    if not vals:
+        return ""
+    ap = (score_ctx or {}).get("bloods") or {}
+    same = ap and all(ap.get(k) == bl.get(k) for k, *_ in BLOOD_FIELDS)
+    return ((f"{bl['date']}: " if bl.get("date") else "") + ", ".join(vals)
+            + (" · targets adapted from these ✓" if same else
+               " · not applied to the targets"))
+
+
 STAGE_NAMES = {1: "Stage 1 – non-proteinuric", 2: "Stage 2", 3: "Stage 3",
                4: "Stage 4"}
 PHOS_TARGET = {1: (0.9, 1.5), 2: (0.9, 1.5), 3: (0.9, 1.6), 4: (0.9, 1.9)}
@@ -6129,7 +6149,7 @@ class BloodDialog(tk.Toplevel):
         self.title("Blood results → adapted targets")
         self.transient(app)
         self.adapt = None
-        prev = (app.score_ctx or {}).get("bloods") or app.bloods or {}
+        prev = app.bloods or (app.score_ctx or {}).get("bloods") or {}
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
         top = ttk.Frame(frm)
@@ -6202,6 +6222,8 @@ class BloodDialog(tk.Toplevel):
             return
         self.adapt = a = adapt_from_bloods(b, self.app.stage.get())
         self.bvals = b
+        self.app.bloods = dict(b)           # remembered, even if not applied
+        self.app.remember_dog()
         L = [f"Suggested stage: {a['stage']}"
              + ("  (renal ranges applied because of high phosphate)"
                 if a["renal_force"] else ""), ""]
@@ -8073,7 +8095,9 @@ class App(tk.Tk):
         self.applied_recipe = None  # snapshot of the applied recipe
         self.hist, self.hist_pos = [], -1   # undo / redo of recipe changes
         self.bloods = {}            # last blood results entered
+        self._dog_saved, self._dog_job = None, None
         self._build()
+        self._load_dog()
         self.refresh_list()
         self.recalc()
 
@@ -8143,6 +8167,19 @@ class App(tk.Tk):
         ttk.Button(top, text="Copy results",
                    command=lambda: self.copy_table(False, notes=True)).pack(
             side="right", padx=6)
+
+        bl = ttk.Frame(self, padding=(8, 0, 8, 2))
+        bl.pack(fill="x")
+        ttk.Label(bl, text="🩸 Blood results:",
+                  font=("TkDefaultFont", 9, "bold")).pack(side="left")
+        self.blood_line = ttk.Label(bl, text="", foreground="#444")
+        self.blood_line.pack(side="left", padx=4)
+        ttk.Button(bl, text="Enter / view…",
+                   command=lambda: BloodDialog(self)).pack(side="left",
+                                                           padx=6)
+        for var in (self.age, self.activity, self.meals, self.stage,
+                    self.ext, self.max_g):
+            var.trace_add("write", lambda *a: self.remember_dog())
 
         pw = ttk.PanedWindow(self, orient="horizontal")
         pw.pack(fill="both", expand=True, padx=6, pady=4)
@@ -8832,6 +8869,99 @@ class App(tk.Tk):
             return None
         return v if v and v > 0 else None
 
+    def dog_state(self):
+        """My Dog as stored in renal_prefs.json (same shape as the web
+        app's, so both apps share it)."""
+        def num(v, lo=0.0):
+            try:
+                x = float(str(v).replace(",", "."))
+                return x if x >= lo else None
+            except ValueError:
+                return None
+        dog = {"bw": num(self.bw.get()), "age": num(self.age.get()) or 0.0,
+               "activity": self.activity.get(),
+               "factor": num(self.factor.get()),
+               "max_g": num(self.max_g.get()) or 0.0,
+               "meals": self.meals_n(), "stage": self.stage.get(),
+               "ext": bool(self.ext.get())}
+        bl = {"date": "", "weight_trend": "stable"}
+        bl.update({k: None for k, *_ in BLOOD_FIELDS})
+        bl.update(self.bloods or {})
+        return {"dog": dog, "bloods": bl, "score_ctx": self.score_ctx}
+
+    def remember_dog(self):
+        """Save My Dog and the blood results shortly after a change."""
+        if self._dog_job:
+            try:
+                self.after_cancel(self._dog_job)
+            except tk.TclError:
+                pass
+        self._dog_job = self.after(800, self._save_dog)
+        self.show_bloods()
+
+    def _save_dog(self):
+        self._dog_job = None
+        try:
+            cur = json.dumps(self.dog_state(), sort_keys=True,
+                             ensure_ascii=False, default=list)
+        except (TypeError, ValueError, tk.TclError):
+            return
+        if cur == self._dog_saved:
+            return
+        p = load_prefs()
+        p[DOG_PREF] = json.loads(cur)
+        if save_prefs(p) is not False:
+            self._dog_saved = cur
+
+    def _load_dog(self):
+        """Restore My Dog, blood results and adapted targets from the last
+        session (desktop or web app on this computer)."""
+        d = load_prefs().get(DOG_PREF)
+        if isinstance(d, dict):
+            dog = d.get("dog") or {}
+
+            def put(var, v, blank0=False):
+                try:
+                    x = float(v)
+                except (TypeError, ValueError):
+                    return
+                if x > 0:
+                    var.set(f"{x:g}")
+                elif blank0 and x == 0:
+                    var.set("")
+            put(self.bw, dog.get("bw"))
+            put(self.factor, dog.get("factor"))
+            put(self.age, dog.get("age"), True)
+            put(self.max_g, dog.get("max_g"), True)
+            try:
+                self.meals.set(str(max(1, min(6, int(dog["meals"])))))
+            except (KeyError, TypeError, ValueError):
+                pass
+            if dog.get("activity") in ACTIVITY:
+                self.activity.set(dog["activity"])
+            if dog.get("stage") in STAGES:
+                self.stage.set(dog["stage"])
+            if "ext" in dog:
+                self.ext.set(bool(dog["ext"]))
+            bl = d.get("bloods") or {}
+            if isinstance(bl, dict) and any(
+                    isinstance(bl.get(k), (int, float))
+                    for k, *_ in BLOOD_FIELDS):
+                self.bloods = dict(bl)
+            sc = d.get("score_ctx")
+            self.score_ctx = sc if isinstance(sc, dict) else None
+        if self._dog_job:
+            self.after_cancel(self._dog_job)
+            self._dog_job = None
+        self._dog_saved = json.dumps(self.dog_state(), sort_keys=True,
+                                     ensure_ascii=False, default=list)
+        self.show_bloods()
+
+    def show_bloods(self):
+        if hasattr(self, "blood_line"):
+            self.blood_line.config(text=blood_summary(
+                self.bloods, self.score_ctx) or "none entered")
+
     def _dog_changed(self):
         """Weight or MER factor changed: the energy target follows the new
         need (drop a target kept from an applied optimised recipe)."""
@@ -8920,6 +9050,8 @@ class App(tk.Tk):
     def recalc(self):
         if not hasattr(self, "res"):
             return
+        if self._dog_saved is not None:
+            self.remember_dog()
         self.res.delete(*self.res.get_children())
         self.brk.delete(*self.brk.get_children())
         self.notes.delete("1.0", "end")

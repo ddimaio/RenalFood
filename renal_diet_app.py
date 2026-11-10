@@ -29,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.09b"
+ENGINE_VERSION = "2026.11.10a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1421,6 +1421,9 @@ with tab_dog:
     st.caption("Used on every tab (recipe analysis, generator, optimiser, "
                "scaling, printouts). Remembered – on this computer and in "
                "this browser.")
+    _bls = rc.blood_summary(blood_values(), ss.score_ctx)
+    st.markdown("🩸 **Blood results:** " + (_bls or "none entered – see "
+                                           "*Blood results* below"))
     _v = ss.dog_ver
     with st.form("dog_form", border=False):
         r1 = st.columns(3)

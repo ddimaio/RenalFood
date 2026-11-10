@@ -195,6 +195,15 @@ biscuits included. Treats saved by older versions (per raw dough) still
 work. The same "Biscuits (treat)" option exists in *Save as a library
 food* for any recipe.
 
+### Blood results remembered
+
+The blood results you enter (and the targets adapted from them) are
+remembered with My Dog – weight, age, activity, factor, food limit,
+meals, stage – and shown at the top of My Dog (desktop: the 🩸 line under
+the top bar, with *Enter / view…*), marked "targets adapted from these ✓"
+or "not applied". On one computer the desktop and web apps share them
+(renal_prefs.json); the web app also keeps them in the browser.
+
 ### Daily targets
 
 My Dog (desktop: **Daily targets** button) lists the key nutrients per day
