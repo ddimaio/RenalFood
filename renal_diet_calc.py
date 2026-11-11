@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.11a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.11b"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1044,7 +1044,7 @@ def recipe_print_html(recipe, db, need, stage_name, sctx=None, meals=1,
             ucell(n, g) +
             (f"<td class=n>{g / meals:.1f}</td>" + ucell(n, g / meals)
              if meals > 1 else "") +
-            (f"<td class=n><b>{g / meals * batch:.0f}</b></td>"
+            (f"<td class=n><b>{fmt_g(g / meals * batch)}</b></td>"
              + ucell(n, g / meals * batch) if batch > 1 else "") +
             f"<td class=n>{'?' if kc is None else f'{kc * g / 100:.0f}'}"
             "</td><td class=c>☐</td></tr>")
@@ -4426,6 +4426,16 @@ printed {today}</div>
 balanced food; check with your vet.</p></body></html>"""
 
 
+def fmt_g(g):
+    """Grams for weighing: 2 decimals below 2 g, 1 below 10 g (oils,
+    supplements), whole grams above – so 2.5 g stays 2.5, not 2."""
+    g = float(g or 0)
+    if g < 10:
+        t = f"{g:.2f}" if g < 2 else f"{g:.1f}"
+        return t.rstrip("0").rstrip(".") if "." in t else t
+    return f"{g:.0f}"
+
+
 def batch_meals_text(meals, n):
     """'Meals per day: 2 (set in My dog) – one meal = the day's recipe ÷ 2;
     6 meals = 3 days.'"""
@@ -4455,8 +4465,8 @@ def batch_print_html(recipe, db, n, title="Batch cooking", dog_name="",
     today = datetime.date.today().strftime("%d %b %Y")
     has_u = any(household_units(nm, g * n) for nm, g in rows)
     body = "".join(
-        f"<tr><td>{_esc(nm)}</td><td class=n>{g:g}</td>"
-        f"<td class=n><b>{g * n:.0f}</b></td>"
+        f"<tr><td>{_esc(nm)}</td><td class=n>{fmt_g(g)}</td>"
+        f"<td class=n><b>{fmt_g(g * n)}</b></td>"
         + (f"<td>{_esc(household_units(nm, g * n))}</td>" if has_u else "")
         + "<td class=c>☐</td></tr>" for nm, g in rows)
     label = (f"<div class=lab><b>{_esc(note or title)}</b><br>{m:.0f} g · "
@@ -6015,7 +6025,7 @@ class BatchWindow(tk.Toplevel):
         for nm, g in self.app.recipe:
             g = g / mpd
             self.tv.insert("", "end", text=nm, values=(
-                f"{g:.1f}", f"{g * n:.0f}", household_units(nm, g * n)))
+                fmt_g(g), fmt_g(g * n), household_units(nm, g * n)))
         m = sum(g for _, g in self.app.recipe) / mpd
         self.lbl.config(text=batch_meals_text(mpd, n).replace("**", "")
                         + f"\nCook {m * n:.0f} g in total and split into "

@@ -457,7 +457,8 @@ def main(page: ft.Page):
                 u = rc.household_units(nm, g * n)
                 rows.append(ft.Row([
                     ft.Text(nm, size=12, expand=True),
-                    ft.Text(f"{g:.0f} → {g * n:.0f} g" + (f" ({u})" if u
+                    ft.Text(f"{rc.fmt_g(g)} → {rc.fmt_g(g * n)} g"
+                            + (f" ({u})" if u
                                                         else ""),
                             size=12, weight=ft.FontWeight.BOLD)]))
             table.controls = rows
