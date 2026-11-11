@@ -204,6 +204,17 @@ the top bar, with *Enter / view…*), marked "targets adapted from these ✓"
 or "not applied". On one computer the desktop and web apps share them
 (renal_prefs.json); the web app also keeps them in the browser.
 
+### Blood results history
+
+Results are kept in a history file on disk (`blood_history.json`, next to
+`renal_prefs.json`; shared by the desktop and web apps on one computer).
+My Dog (desktop: 🩸 *Enter / view…*) shows the most recent results and a
+table of all dates, newest first. **➕ Add new blood results** clears the
+form with today's date; **💾 Save to history** stores it (same date =
+replaced); applying results to the targets saves them too. *Other dates*
+/ *History…* shows an older date in the form or deletes it. Online, use
+*History file* → Download / Load to keep the file on your computer.
+
 ### Daily targets
 
 My Dog (desktop: **Daily targets** button) lists the key nutrients per day

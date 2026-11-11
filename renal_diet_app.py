@@ -29,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.11b"
+ENGINE_VERSION = "2026.11.11c"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -215,7 +215,7 @@ def apply_dog_state(d):
         ss.stage = dog["stage"]
     if "ext" in dog:
         ss.ext = bool(dog["ext"])
-    bl = d.get("bloods") or {}
+    bl = rc.current_bloods(d.get("bloods") or {}, rc.load_blood_history())
     for k, *_ in rc.BLOOD_FIELDS:
         try:
             ss[f"bl_{k}"] = None if bl.get(k) is None else float(bl[k])
@@ -694,11 +694,95 @@ def blood_values():
     return d
 
 
+def _store_history(hist):
+    """Keep the history in the session and write it to disk; False if the
+    file could not be written."""
+    ss.blood_hist = hist
+    try:
+        rc.save_blood_history(hist)
+        return True
+    except OSError:
+        return False
+
+
+def new_bloods_cb():
+    """➕ Add new blood results: empty form dated today."""
+    import datetime
+    for k, *_ in rc.BLOOD_FIELDS:
+        ss[f"bl_{k}"] = None
+    ss.bl_date = datetime.date.today().isoformat()
+    ss.bl_trend = "stable"
+    ss.blood_eval = None
+    ss.blood_msg = ("New results: enter the values (and the test date), "
+                    "then 💾 Save to history. Evaluate / Apply to targets "
+                    "as usual.")
+
+
+def save_bloods_cb():
+    try:
+        hist = rc.add_blood_entry(ss.blood_hist, blood_values())
+    except ValueError as e:
+        ss.blood_err = str(e)
+        return
+    ok = _store_history(hist)
+    ss.blood_msg = (f"Saved the results of {blood_values()['date']} to the "
+                    "history" + ("." if ok else " (this session only – the "
+                                 "file could not be written; use Download)."))
+
+
+def show_bloods_cb(date):
+    """Put a history entry into the form."""
+    e = next((x for x in ss.blood_hist if x.get("date") == date), None)
+    if not e:
+        return
+    for k, *_ in rc.BLOOD_FIELDS:
+        ss[f"bl_{k}"] = e.get(k)
+    ss.bl_date = e.get("date", "")
+    ss.bl_trend = e.get("weight_trend", "stable")
+    ss.blood_eval = None
+
+
+def delete_bloods_cb(date):
+    ok = _store_history([x for x in ss.blood_hist if x.get("date") != date])
+    if ss.get("bl_date") == date:            # show the most recent instead
+        if ss.blood_hist:
+            show_bloods_cb(ss.blood_hist[-1]["date"])
+        else:
+            new_bloods_cb()
+    ss.blood_msg = f"Deleted {date} from the history" + (
+        "." if ok else " (this session only).")
+
+
+def load_history_cb():
+    f = ss.get(f"bl_hist_up_{ss.get('bl_up_ver', 0)}")
+    if f is None:
+        return
+    try:
+        new = rc.blood_history_from_json(json.loads(
+            f.getvalue().decode("utf-8")))
+    except (ValueError, UnicodeDecodeError) as e:
+        ss.blood_err = f"Could not load {f.name}: {e}"
+    else:
+        dates = {e["date"] for e in new}
+        hist = sorted([x for x in ss.blood_hist if x["date"] not in dates]
+                      + new, key=lambda x: x["date"] or "")
+        _store_history(hist)
+        if hist:
+            show_bloods_cb(hist[-1]["date"])
+        ss.blood_msg = (f"Loaded {len(new)} result date(s) from {f.name}; "
+                        "the most recent are shown.")
+    ss.bl_up_ver = ss.get("bl_up_ver", 0) + 1
+
+
 def apply_bloods_cb():
     ev = ss.blood_eval
     if not ev:
         return
     a, b = ev["adapt"], ev["bloods"]
+    try:                                  # applied results go in the history
+        _store_history(rc.add_blood_entry(ss.blood_hist, b))
+    except ValueError:
+        pass
     # the MER change of an earlier Apply is replaced, not added again
     prev = float((ss.score_ctx or {}).get("mer_applied") or 0.0)
     new = float(a["mer_delta"] or 0.0) if ss.get("bl_mer", True) else 0.0
@@ -1511,7 +1595,52 @@ with tab_dog:
                "use them. Reference ranges are typical canine values – your "
                "lab's own ranges take precedence. Adjustment sizes are this "
                "app's rules of thumb, for discussion with your vet.")
-    prev = (ss.score_ctx or {}).get("bloods") or {}
+    if "blood_hist" not in ss:
+        ss.blood_hist = rc.load_blood_history()
+    _hist = ss.blood_hist
+    prev = ((ss.score_ctx or {}).get("bloods")
+            or (_hist[-1] if _hist else {}))
+    if _hist:
+        _hh, _hr = rc.blood_history_rows(_hist)
+        st.markdown(f"**History** – most recent first ({len(_hist)} "
+                    f"date{'s' if len(_hist) > 1 else ''})")
+        show_df(st, pd.DataFrame(_hr, columns=_hh), hide_index=True,
+                height=(len(_hr) + 1) * ROW_H + 3, **FULL)
+    hb = st.columns(3)
+    hb[0].button("➕ Add new blood results", key="bl_new",
+                 on_click=new_bloods_cb, use_container_width=True)
+    hb[1].button("💾 Save to history", key="bl_save",
+                 on_click=save_bloods_cb, use_container_width=True,
+                 help="Adds the results in the form below to the history "
+                      "file (same date = replaced). Applying them to the "
+                      "targets saves them too.")
+    if _hist:
+        _dates = [e["date"] for e in reversed(_hist)]
+        with hb[2].popover("📅 Other dates", use_container_width=True):
+            _d = st.selectbox("Date", _dates, key="bl_pick")
+            st.button("Show in the form", key="bl_show",
+                      on_click=show_bloods_cb, args=(_d,))
+            st.button(f"🗑️ Delete {_d} from history", key="bl_del",
+                      on_click=delete_bloods_cb, args=(_d,))
+    if ss.get("blood_err"):
+        st.error(ss.pop("blood_err"))
+    with st.expander("History file"):
+        st.caption("Saved on disk as " + rc.BLOOD_HISTORY_PATH + ". If the "
+                   "app runs online, download the file to keep it on your "
+                   "computer, and load it next time.")
+        st.download_button(
+            "⬇️ Download history file", json.dumps(
+                rc.blood_history_to_json(_hist), indent=1,
+                ensure_ascii=False),
+            file_name="blood_history.json", mime="application/json",
+            key="bl_hist_dl", disabled=not _hist)
+        st.file_uploader("📂 Load a history file", type=["json"],
+                         key=f"bl_hist_up_{ss.get('bl_up_ver', 0)}",
+                         on_change=load_history_cb,
+                         help="Dates in the file are added to the history "
+                              "(same date = replaced).")
+    st.markdown("**Results**" + (f" – {ss.get('bl_date')}"
+                                 if ss.get("bl_date") else ""))
     for k, *_ in rc.BLOOD_FIELDS:            # prefill once from saved
         if f"bl_{k}" not in ss:
             ss[f"bl_{k}"] = (None if prev.get(k) is None

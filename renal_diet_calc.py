@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.11b"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.11c"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -5337,6 +5337,111 @@ BLOOD_FIELDS = [
 DOG_PREF = "web_dog"     # My Dog + bloods, shared by the web and desktop apps
 
 
+BLOOD_HISTORY_PATH = os.path.join(_prefs_dir(), "blood_history.json")
+BLOOD_HISTORY_FORMAT = "renalfood-blood-history"
+
+
+def blood_entry(bloods):
+    """A clean history entry: date, weight trend and the numeric results
+    (blank tests left out)."""
+    b = bloods or {}
+    e = {"date": str(b.get("date") or "").strip(),
+         "weight_trend": b.get("weight_trend") or "stable"}
+    for k, *_ in BLOOD_FIELDS:
+        v = b.get(k)
+        if isinstance(v, (int, float)) and v == v:
+            e[k] = float(v)
+    return e
+
+
+def blood_entry_has_values(e):
+    return any(isinstance((e or {}).get(k), (int, float))
+               for k, *_ in BLOOD_FIELDS)
+
+
+def blood_history_from_json(d):
+    """Entries from a history file's data (also a bare list), sorted by
+    date (oldest first); entries without results are dropped."""
+    if isinstance(d, dict):
+        d = d.get("entries", [])
+    if not isinstance(d, list):
+        raise ValueError("Not a blood results history file.")
+    out = [blood_entry(e) for e in d if isinstance(e, dict)]
+    out = [e for e in out if blood_entry_has_values(e)]
+    return sorted(out, key=lambda e: e["date"] or "")
+
+
+def blood_history_to_json(entries):
+    return {"format": BLOOD_HISTORY_FORMAT, "version": 1,
+            "entries": sorted((blood_entry(e) for e in entries),
+                              key=lambda e: e["date"] or "")}
+
+
+def load_blood_history(path=None):
+    """The blood results history on disk ([] if none)."""
+    try:
+        with open(path or BLOOD_HISTORY_PATH, encoding="utf-8") as f:
+            return blood_history_from_json(json.load(f))
+    except (OSError, ValueError):
+        return []
+
+
+def save_blood_history(entries, path=None):
+    """Write the history file; returns the path or raises OSError."""
+    path = path or BLOOD_HISTORY_PATH
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(blood_history_to_json(entries), f, indent=1,
+                  ensure_ascii=False)
+    os.replace(tmp, path)
+    return path
+
+
+def add_blood_entry(entries, bloods):
+    """History with these results added (an entry with the same date is
+    replaced). Raises ValueError without a date or any result."""
+    e = blood_entry(bloods)
+    if not blood_entry_has_values(e):
+        raise ValueError("Enter at least one result.")
+    if not e["date"]:
+        raise ValueError("Enter the test date.")
+    out = [x for x in entries if x.get("date") != e["date"]] + [e]
+    return sorted(out, key=lambda x: x["date"] or "")
+
+
+def current_bloods(stored, history):
+    """The results to show: the most recent in the history, unless the
+    stored (last entered) ones are newer or not dated."""
+    st_ = stored or {}
+    if not history:
+        return st_
+    last = history[-1]
+    if blood_entry_has_values(st_) and (
+            (st_.get("date") or "") > (last.get("date") or "")
+            or (not st_.get("date") and not any(
+                blood_entry(st_) == e for e in history))):
+        return st_
+    return dict(last)
+
+
+def blood_history_rows(entries):
+    """Table rows for the history, newest date first: (test, unit,
+    value per date...) for every test with at least one result; header
+    = ['Test', 'Unit'] + dates."""
+    ents = sorted(entries, key=lambda e: e.get("date") or "", reverse=True)
+    head = ["Test", "Unit"] + [e.get("date") or "?" for e in ents]
+    rows = []
+    for k, lab, u, _ in BLOOD_FIELDS:
+        vals = [e.get(k) for e in ents]
+        if any(isinstance(v, (int, float)) for v in vals):
+            rows.append([lab, u] + ["" if v is None else f"{v:g}"
+                                    for v in vals])
+    if any(e.get("weight_trend", "stable") != "stable" for e in ents):
+        rows.append(["Weight trend", ""] + [e.get("weight_trend", "")
+                                            for e in ents])
+    return head, rows
+
+
 def blood_summary(bloods, score_ctx=None):
     """One line for My Dog: the remembered results and whether the targets
     in use are adapted from them ('' if nothing entered)."""
@@ -6180,9 +6285,23 @@ class BloodDialog(tk.Toplevel):
         self.title("Blood results → adapted targets")
         self.transient(app)
         self.adapt = None
-        prev = app.bloods or (app.score_ctx or {}).get("bloods") or {}
+        self.hist = load_blood_history()
+        prev = (app.bloods or (app.score_ctx or {}).get("bloods")
+                or (self.hist[-1] if self.hist else {}))
         frm = ttk.Frame(self, padding=10)
         frm.pack(fill="both", expand=True)
+        hb = ttk.Frame(frm)
+        hb.pack(fill="x", pady=(0, 6))
+        ttk.Button(hb, text="➕ Add new blood results",
+                   command=self.new_results).pack(side="left")
+        ttk.Button(hb, text="💾 Save to history",
+                   command=self.save_history).pack(side="left", padx=6)
+        ttk.Button(hb, text="History…",
+                   command=lambda: BloodHistoryWindow(self)).pack(
+            side="left")
+        self.hist_lbl = ttk.Label(hb, foreground="#555")
+        self.hist_lbl.pack(side="left", padx=8)
+        self._hist_text()
         top = ttk.Frame(frm)
         top.pack(fill="x")
         ttk.Label(top, text="Test date").pack(side="left")
@@ -6238,6 +6357,54 @@ class BloodDialog(tk.Toplevel):
         if prev:
             self.evaluate()
 
+    def _hist_text(self):
+        h = self.hist
+        self.hist_lbl.config(
+            text=(f"History: {len(h)} date{'s' if len(h) > 1 else ''}, most "
+                  f"recent {h[-1]['date']}" if h else "History: empty")
+            + f"  ({BLOOD_HISTORY_PATH})")
+
+    def fill(self, e):
+        """Show these results in the form."""
+        e = e or {}
+        self.date.set(e.get("date", ""))
+        self.trend.set(e.get("weight_trend", "stable"))
+        for k, var in self.e.items():
+            v = e.get(k)
+            var.set("" if v is None else f"{v:g}")
+        self.adapt = None
+        self.apply_btn.state(["disabled"])
+        self.out.delete("1.0", "end")
+
+    def new_results(self):
+        import datetime
+        self.fill({"date": datetime.date.today().isoformat()})
+        self.out.insert("end", "Enter the new results (and the test date), "
+                        "then Save to history. Evaluate / Apply to targets "
+                        "as usual.")
+
+    def save_history(self, quiet=False):
+        try:
+            b = self.values()
+            hist = add_blood_entry(self.hist, b)
+            save_blood_history(hist)
+        except ValueError as e:
+            if not quiet:
+                messagebox.showerror("Blood results", str(e), parent=self)
+            return False
+        except OSError as e:
+            messagebox.showerror("Blood results", "Could not write the "
+                                 f"history file:\n{e}", parent=self)
+            return False
+        self.hist = hist
+        self.app.bloods = dict(b)
+        self.app.remember_dog()
+        self._hist_text()
+        if not quiet:
+            messagebox.showinfo("Blood results", f"Saved the results of "
+                                f"{b['date']} to the history.", parent=self)
+        return True
+
     def values(self):
         d = {"date": self.date.get().strip(), "weight_trend": self.trend.get()}
         for k, var in self.e.items():
@@ -6283,6 +6450,7 @@ class BloodDialog(tk.Toplevel):
             return
         a, app = self.adapt, self.app
         app.bloods = dict(self.bvals)
+        self.save_history(quiet=True)     # applied results go in the history
         app.stage.set(a["stage"])
         app.score_ctx = blood_score_context(a, self.bvals)
         if self.mer_too.get() and a["mer_delta"]:
@@ -6301,6 +6469,78 @@ class BloodDialog(tk.Toplevel):
         self.app.recalc()
         messagebox.showinfo("Blood results", "Targets reset to the defaults "
                             "for the current stage.", parent=self)
+
+
+class BloodHistoryWindow(tk.Toplevel):
+    """All saved blood results, newest first; show one in the form or
+    delete it."""
+
+    def __init__(self, dlg):
+        super().__init__(dlg)
+        self.dlg = dlg
+        self.title("Blood results history")
+        self.transient(dlg)
+        frm = ttk.Frame(self, padding=10)
+        frm.pack(fill="both", expand=True)
+        self.tv = ttk.Treeview(frm, height=16, show="headings")
+        self.tv.pack(fill="both", expand=True)
+        b = ttk.Frame(frm)
+        b.pack(fill="x", pady=(6, 0))
+        ttk.Label(b, text="Date").pack(side="left")
+        self.pick = ttk.Combobox(b, state="readonly", width=12)
+        self.pick.pack(side="left", padx=4)
+        ttk.Button(b, text="Show in the form", command=self.show).pack(
+            side="left")
+        ttk.Button(b, text="Delete", command=self.delete).pack(side="left",
+                                                               padx=6)
+        ttk.Button(b, text="Close", command=self.destroy).pack(side="right")
+        self.refresh()
+
+    def refresh(self):
+        head, rows = blood_history_rows(self.dlg.hist)
+        self.tv.configure(columns=[str(i) for i in range(len(head))])
+        for i, h in enumerate(head):
+            self.tv.heading(str(i), text=h)
+            self.tv.column(str(i), width=210 if i == 0 else 80,
+                           anchor="w" if i < 2 else "e")
+        self.tv.delete(*self.tv.get_children())
+        for r in rows:
+            self.tv.insert("", "end", values=r)
+        dates = head[2:]
+        self.pick.configure(values=dates)
+        if dates:
+            self.pick.set(dates[0])
+
+    def entry(self):
+        d = self.pick.get()
+        return next((e for e in self.dlg.hist if e.get("date") == d), None)
+
+    def show(self):
+        e = self.entry()
+        if e:
+            self.dlg.fill(e)
+            self.dlg.evaluate()
+
+    def delete(self):
+        e = self.entry()
+        if not e or not messagebox.askyesno(
+                "Blood results", f"Delete the results of {e['date']} from "
+                "the history?", parent=self):
+            return
+        hist = [x for x in self.dlg.hist if x is not e]
+        try:
+            save_blood_history(hist)
+        except OSError as err:
+            messagebox.showerror("Blood results", str(err), parent=self)
+            return
+        self.dlg.hist = hist
+        self.dlg._hist_text()
+        app = self.dlg.app
+        if (app.bloods or {}).get("date") == e["date"]:
+            app.bloods = current_bloods({}, hist)
+            app.remember_dog()
+            self.dlg.fill(app.bloods)
+        self.refresh()
 
 
 class GeneratorDialog(tk.Toplevel):
@@ -8981,6 +9221,7 @@ class App(tk.Tk):
                 self.bloods = dict(bl)
             sc = d.get("score_ctx")
             self.score_ctx = sc if isinstance(sc, dict) else None
+        self.bloods = current_bloods(self.bloods, load_blood_history())
         if self._dog_job:
             self.after_cancel(self._dog_job)
             self._dog_job = None
