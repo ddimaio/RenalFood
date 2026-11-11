@@ -447,9 +447,9 @@ def main(page: ft.Page):
             state["batch"] = n
             mpd = max(1, int(dog.meals or 1))
             m = sum(g for _, g in recipe) / mpd
-            rows = [ft.Text((f"One meal = the day recipe ÷ {mpd} meals a "
-                             "day. " if mpd > 1 else "")
-                            + f"Cook {m * n:.0f} g in total, split into {n} "
+            rows = [ft.Text(rc.batch_meals_text(mpd, n).replace("**", ""),
+                            size=12),
+                    ft.Text(f"Cook {m * n:.0f} g in total, split into {n} "
                             f"portions of {m:.0f} g.", size=12,
                             weight=ft.FontWeight.BOLD)]
             for nm, g in recipe:

@@ -29,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.10b"
+ENGINE_VERSION = "2026.11.11a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -1044,9 +1044,7 @@ with tab_rec:
                          "itself is not changed; the printout gets a batch "
                          "column."))
                 _mpd = max(1, int(ss.meals))
-                if _mpd > 1:
-                    st.caption(f"One meal = the day recipe ÷ {_mpd} meals a "
-                               "day (My dog).")
+                st.markdown(rc.batch_meals_text(_mpd, bn))
                 if bn > 1:
                     bt = pd.DataFrame({
                         "Ingredient": [n for n, _ in ss.recipe],
