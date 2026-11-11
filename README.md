@@ -124,6 +124,10 @@ calcium, potassium and magnesium carbonates). From the manufacturer's label.
 Renal Met, the same balancer with added DL-methionine (5.8%), for recipes
 low in methionine (e.g. plant-based). From the manufacturer's label.
 
+`imports/extra_vegetables.json` (also in the library): kale, boiled (USDA
+SR Legacy 169238; low oxalate) and runner beans, boiled (NZ FOODfiles
+X1109, gaps from green beans).
+
 `imports/tahini.json` (also in the library): plain tahini from hulled, roasted
 sesame (USDA SR26 12166). Oxalate left unknown (no reliable value).
 
