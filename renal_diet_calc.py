@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.11c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.11d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -595,6 +595,9 @@ def normalise(item):
     ad = item.get("adds")
     if ad is not None and ad == ad and str(ad).strip():
         out["adds"] = str(ad).strip()
+    ps = item.get("phosphate_salts")
+    if ps is not None and ps == ps:
+        out["phosphate_salts"] = ps
     try:
         if item.get("piece_g") and float(item["piece_g"]) > 0:
             out["piece_g"] = round(float(item["piece_g"]), 2)
@@ -4599,6 +4602,76 @@ def taurine_carnitine_note(recipe, db):
             "taurine test.")
 
 
+_PHOSPHATE_SALT = re.compile(
+    r"\b((mono|di|tri|tetra)?(calcium|sodium|potassium|magnesium|ammonium|"
+    r"iron|ferric)?[\s-]*(hydrogen\s+|dihydrogen\s+)?"
+    r"(ortho|pyro|poly|tripoly|hexameta)?phosphates?|phosphoric acid)\b",
+    re.I)
+_NO_PHOSPHATE = re.compile(r"\b(no|without|free of|free from)\s+(added\s+)?"
+                           r"phosphat|phosphate[\s-]*free", re.I)
+
+
+def phosphate_salts(item):
+    """Phosphate additives the item declares (its 'phosphate_salts' field
+    if set, else found in its label note); [] if none."""
+    v = item.get("phosphate_salts")
+    if v is not None:
+        return [str(v)] if v not in (False, "", 0) else []
+    note = str(item.get("note", ""))
+    if _NO_PHOSPHATE.search(note):
+        return []
+    out = []
+    for m in _PHOSPHATE_SALT.finditer(note):
+        t = " ".join(m.group(0).split()).lower()
+        if t not in out:
+            out.append(t)
+    return out
+
+
+def phosphate_note(recipe, db):
+    """One assessment line naming foods with added phosphate salts."""
+    hits = []
+    for n, g in recipe:
+        if n in db and g and g > 0:
+            s = phosphate_salts(db[n])
+            if s:
+                hits.append(f"{n} ({', '.join(s)})")
+    if not hits:
+        return ""
+    return ("• Added phosphate salts in: " + "; ".join(hits) + ". Phosphorus "
+            "from phosphate additives is readily absorbed (unlike much of "
+            "the phosphorus in plant foods), so it counts fully – for a "
+            "kidney diet prefer products without them (e.g. a renal "
+            "balancer).")
+
+
+ZN_FE_MARGIN = 1.5      # plant diets: aim this × the AAFCO minimum (advice)
+
+
+def zinc_iron_note(recipe, db, t, miss, kcal):
+    """Advice line when a meat- and fish-free recipe only just meets the
+    zinc or iron minimum (phytate lowers their absorption); '' else."""
+    names = [n for n, g in recipe if n in db and g and g > 0]
+    if not names or kcal <= 0 or any(
+            _MEAT_FISH.search(n) and "oil" not in n.lower() for n in names):
+        return ""
+    low = []
+    for k, lab in (("zn", "zinc"), ("fe", "iron")):
+        if miss.get(k):
+            continue
+        per = t[k] / kcal * 1000
+        lo = AAFCO[k]
+        if lo <= per < ZN_FE_MARGIN * lo:
+            low.append(f"{lab} {per:.0f} mg/1000 kcal (minimum {lo:g})")
+    if not low:
+        return ""
+    return ("• Only just above the minimum: " + ", ".join(low) + ". Phytate "
+            "in grains, legumes and seeds lowers zinc and iron absorption, "
+            "so on plant-based recipes it is sensible to sit comfortably "
+            f"above it (about {ZN_FE_MARGIN:g}×) – e.g. with a balancer that "
+            "adds them. Advice, not a scored target.")
+
+
 def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
                   acid, k1000, renal_mode, stage_note, fat_frac, ranges=None,
                   blood_note="", extended=False, assumed=None):
@@ -4743,9 +4816,11 @@ def assess_recipe(stage_name, recipe, db, t, miss, mass, kcal, need, capr,
         w = water_note(t, miss, need or kcal)
         if w:
             out.append(w)
-    tc = taurine_carnitine_note(recipe, db)
-    if tc:
-        out.append(tc)
+    for line in (phosphate_note(recipe, db),
+                 zinc_iron_note(recipe, db, t, miss, kcal),
+                 taurine_carnitine_note(recipe, db)):
+        if line:
+            out.append(line)
     missing = sorted({n for k in BASE_KEYS for n in miss[k]})
     if missing:
         out.append("• Incomplete data for: " + ", ".join(missing) +

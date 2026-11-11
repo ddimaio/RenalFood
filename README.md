@@ -288,6 +288,22 @@ or fish has no food that declares added taurine and/or L-carnitine
 note – write "adds taurine, L-carnitine" in a new product's note, or set
 its `adds` field).
 
+## Phosphate additives and zinc / iron margin
+
+Two more assessment lines (not scored):
+
+- **Added phosphate salts** – names any food whose label note declares
+  one (e.g. monopotassium or dicalcium phosphate, polyphosphates; a
+  `phosphate_salts` field overrides the note). Phosphorus from phosphate
+  additives is readily absorbed, unlike much plant phosphorus (Dobenecker
+  et al. 2021, PLOS ONE), so renal products without them are preferable.
+  In the library only Dafy V-Integra Adult declares one.
+- **Zinc / iron only just above the minimum** – for recipes without meat
+  or fish, when zinc or iron is between the AAFCO minimum and 1.5× it:
+  phytate in grains, legumes and seeds lowers their absorption, so a
+  margin is sensible (advice; dog data show zinc status can hold up –
+  Pereira et al. 2020, Animals).
+
 ## Energy of target
 
 Next to score and rating, every analysis, optimiser option, generated
