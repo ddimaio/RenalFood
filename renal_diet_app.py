@@ -29,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.11d"
+ENGINE_VERSION = "2026.11.12a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -401,6 +401,24 @@ def _select_all(names, on, which):
         ss.gen_set_base = ss.gen_set
     ss.opt_ex_ver += 1
     ss.gen_ex_ver += 1
+
+
+EXT_HELP = ("Also check essential amino acids, linoleic acid and trace "
+            "minerals (Fe, Cu, Mn, Zn, I, Se) against AAFCO adult minimums "
+            "– in the generator, the optimiser and the recipe analysis "
+            "(one setting). Needs these values in the ingredient library.")
+
+
+def _ext_changed(key):
+    ss.ext = bool(ss[key])
+
+
+def ext_toggle(where, key):
+    """The Extended nutrients switch (shown in the generator and in the
+    optimiser; both change the same setting)."""
+    ss[key] = bool(ss.ext)
+    where.toggle("Extended nutrients", key=key, on_change=_ext_changed,
+                 args=(key,), help=EXT_HELP)
 
 
 def select_all_box(where, names, ex, which, label="Select/Deselect all"):
@@ -1582,11 +1600,6 @@ with tab_dog:
                "kibble, treats and supplements included. They follow the "
                "weight, factor and stage above and any blood adaptation "
                "below.")
-    st.toggle("Extended nutrients", key="ext",
-              help="Also show and check essential amino acids, linoleic "
-                   "acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) against "
-                   "AAFCO adult minimums. Needs these values in the "
-                   "ingredient library.")
     st.divider()
     st.subheader("Blood results → adapted targets")
     st.caption("Enter what was tested (leave the rest blank). The app "
@@ -1849,6 +1862,7 @@ with tab_opt:
         cc4 = st.columns(2)
         max_add = cc4[0].slider("Add up to … foods together", 1, 6, 3,
                                 key="o_max", disabled=not do_sug)
+        ext_toggle(cc4[1], "ext_opt")
         o_full = cc4[1].checkbox(
             "Only foods with complete data (choline may be missing)", False,
             key="o_full",
@@ -2300,6 +2314,7 @@ with tab_gen:
                      and rc.ingredient_role(db[n]) != "binder"),
                     key=lambda n: (rc.ROLES.index(rc.ingredient_role(db[n])),
                                    n.lower()))
+    ext_toggle(st, "ext_gen")
     fc = st.columns([3, 2])
     g_full = fc[0].checkbox(
         "Only ingredients with complete data", False, key="g_full",
@@ -2983,7 +2998,7 @@ with tab_about:
 Ca:P, sodium, potassium, magnesium, fat and energy density, vitamins A, B1,
 B2, B3, B5, B6, B12, folate, choline, D (min and max), E, C, EPA+DHA,
 acid load (indicative) and calories vs the dog's daily need. With
-*Extended nutrients* on (sidebar): essential amino acids, linoleic acid and
+*Extended nutrients* on (switch in the generator and the optimiser): essential amino acids, linoleic acid and
 trace minerals (Fe, Cu, Mn, Zn, I, Se) vs AAFCO adult minimums; fill these
 values with `fdc_fill.py`.
 

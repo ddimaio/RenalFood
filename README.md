@@ -30,7 +30,7 @@ scripts on first run.
   (140 mg × BW^0.75 a day) spread over the daily energy target.
 - Missing nutrient values are not treated as zero: totals are minimums, so
   shortfalls in those nutrients are not scored, only excesses.
-- Optional *extended nutrients* check (a toggle, off by default): essential
+- Optional *extended nutrients* check (a switch in the recipe generator and the optimiser – one setting, also used by the analysis; off by default): essential
   amino acids, linoleic acid and trace minerals (Fe, Cu, Mn, Zn, I, Se) vs
   AAFCO adult minimums, plus iodine and selenium maximums. Hidden from the
   results and library editor unless switched on.

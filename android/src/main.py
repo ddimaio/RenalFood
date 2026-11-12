@@ -684,7 +684,8 @@ def main(page: ft.Page):
         generator.show()
         return True
 
-    generator = GeneratorView(page, db, recipe, settings, apply_result, undo)
+    generator = GeneratorView(page, db, recipe, settings, apply_result, undo,
+                              lambda v: settings_view.set_extended(v))
 
     # ---- settings screen
     def dog_changed():

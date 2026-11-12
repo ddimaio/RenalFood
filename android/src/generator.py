@@ -134,10 +134,18 @@ class GeneratorView:
     (bw, factor, stage, extended, need, max_g); `apply(recipe_rows, label)` puts a
     result in the Recipe screen; `undo()` restores the previous recipe."""
 
-    def __init__(self, page, db, recipe, get_settings, apply, undo):
+    def __init__(self, page, db, recipe, get_settings, apply, undo,
+                 set_extended=None):
         self.page, self.db, self.recipe = page, db, recipe
         self.get_settings, self.apply_cb, self.undo_cb = \
             get_settings, apply, undo
+        self.set_extended = set_extended
+        self.ext = ft.Switch(
+            label="Extended nutrients",
+            tooltip="Also check amino acids, linoleic acid and trace "
+                    "minerals – here and in the recipe analysis.",
+            on_change=lambda e: self.set_extended and self.set_extended(
+                bool(e.control.value)))
         self.cancel_flag = False
         self.running = False
         self.mode = ft.SegmentedButton(
@@ -240,15 +248,23 @@ class GeneratorView:
                 ft.Column(rows, spacing=0),
                 ft.Row([self.o_add, self.o_swap, self.o_rem], wrap=True),
                 ft.Row([self.o_max, ft.Container(expand=True)]),
-                self.o_full]
+                self.o_full, self._ext()]
 
     def _gen_settings(self):
         return [ft.Text("Builds new balanced recipes from the library.",
                         size=12),
                 ft.Row([self.g_n, self.g_max]),
                 ft.Row([self.g_vmin, self.g_vmax]),
-                self.g_fixed, self.g_ign, self.g_full,
+                self.g_fixed, self.g_ign, self.g_full, self._ext(),
                 self._food_choices()]
+
+    def _ext(self):
+        """The Extended nutrients switch, showing the current setting."""
+        try:
+            self.ext.value = bool(self.get_settings()[3])
+        except (TypeError, IndexError):
+            pass
+        return self.ext
 
     def _food_choices(self):
         """Per-food settings: leave out, always include, min g, max g."""

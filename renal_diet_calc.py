@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.11d"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.12a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1407,6 +1407,14 @@ def save_excluded(excluded, key="excluded"):
     p = load_prefs()
     p[key] = sorted(excluded, key=str.lower)
     save_prefs(p)
+
+
+def ext_switch(parent, app):
+    """The Extended nutrients tick, shown in the generator and in the
+    optimiser: one setting (app.ext) that also applies to the analysis."""
+    return ttk.Checkbutton(
+        parent, variable=app.ext, command=app.recalc,
+        text="Extended nutrients (amino acids, trace minerals)")
 
 
 def select_all_tick(parent, lb, on_change):
@@ -6791,6 +6799,7 @@ class GeneratorDialog(tk.Toplevel):
         ttk.Checkbutton(cf, variable=self.full_ch,
                         text="…but allow missing choline").pack(
             side="left", padx=8)
+        ext_switch(cf, app).pack(side="left", padx=(16, 0))
         bb = ttk.Frame(frm)
         bb.pack(fill="x", pady=2)
         self._all_ref = select_all_tick(bb, self.lb, self.save_excl)
@@ -7786,6 +7795,7 @@ class OptimiseDialog(tk.Toplevel):
         ttk.Checkbutton(row, text="Only foods with complete data",
                         variable=self.full_only).pack(side="left",
                                                       padx=(8, 0))
+        ext_switch(row, self.app).pack(side="left", padx=(8, 0))
         ttk.Label(row, text="   max. to combine").pack(side="left")
         self.max_add = tk.StringVar(value="3")
         ttk.Spinbox(row, from_=1, to=6, textvariable=self.max_add,
@@ -8494,10 +8504,7 @@ class App(tk.Tk):
                           state="readonly", width=26)
         cb.pack(side="left", padx=(2, 12))
         cb.bind("<<ComboboxSelected>>", lambda e: self.recalc())
-        self.ext = tk.BooleanVar(value=False)
-        ttk.Checkbutton(top, variable=self.ext, command=self.recalc,
-                        text="Extended nutrients (amino acids, trace "
-                             "minerals)").pack(side="left", padx=(0, 12))
+        self.ext = tk.BooleanVar(value=False)   # switch: generator/optimiser
         for var in (self.bw, self.factor):
             var.trace_add("write", lambda *a: self._dog_changed())
         self.max_g.trace_add("write", lambda *a: self.recalc())

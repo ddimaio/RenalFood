@@ -56,7 +56,7 @@ build reports a missing Android SDK or Java.
 ## Status
 
 - [x] Settings tab: body weight, age + activity (suggested MER factor),
-      max food per day, meals per day, IRIS stage, extended nutrients;
+      max food per day, meals per day, IRIS stage (Extended nutrients switch on the Generator tab);
       remembered between launches and saved with each recipe; Daily targets
       (key nutrients per day at her energy need); Batch cooking (amounts ×
       number of meals, a printable batch sheet, and a batch column on the

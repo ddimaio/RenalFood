@@ -155,10 +155,6 @@ class SettingsView:
                   "1000 kcal × energy ÷ 1000), for the whole day – kibble, "
                   "treats and supplements included."),
             ft.Divider(),
-            ft.Text("Analysis", weight=ft.FontWeight.BOLD),
-            self.ext,
-            ft.Text("Adds amino acids and trace minerals to the "
-                    "analysis.", size=12),
             self.err,
             ft.Text("Approximate tool – not veterinary advice.", size=11,
                     italic=True)])
@@ -198,6 +194,11 @@ class SettingsView:
                                         weight=ft.FontWeight.BOLD)]))
             rows.append(ft.Text(why, size=10, italic=True))
         self.targets.controls = rows
+
+    def set_extended(self, v):
+        """Extended nutrients (switch on the Generator tab)."""
+        self.ext.value = bool(v)
+        self.changed()
 
     def changed(self, e=None):
         vals = {"activity": self.activity.value, "stage": self.stage.value,
