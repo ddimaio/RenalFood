@@ -67,6 +67,7 @@ VALUES = {
     "Squash, summer (button), boiled": (per100(4, 100), OHF),
     "Butternut squash, boiled": (per100(4, 100), OHF + " (winter squash)"),
     "Kabocha squash, boiled": (per100(4, 100), OHF + " (winter squash)"),
+    "Crown Prince squash, boiled": (per100(4, 100), OHF + " (winter squash)"),
     "Pumpkin, boiled": (per100(7, 120), OHF + " (canned pumpkin)"),
     "Pak choi (bok choy), steamed": (per100(5, 156), OHF + " (leaves+stalks)"),
     "Asparagus, boiled": (per100(5, 90), OHF),

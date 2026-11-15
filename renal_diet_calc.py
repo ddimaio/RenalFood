@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.15c"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.15d"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -466,6 +466,7 @@ OXALATE_DEFAULTS = {
     'Cottage cheese': 0,
     'Courgette, boiled': 4,
     'Couscous, boiled': 16.6,
+    'Crown Prince squash, boiled': 4,
     'Cucumber, peeled, raw': 4.2,
     'Dafy V-Integra Adult Dog homemade diet balancer': 0,
     'Dafy V-Integra Renal homemade diet balancer': 0,
@@ -2921,6 +2922,7 @@ CUP_G = {
     "Popcorn, air-popped (plain)": 8,
     "Chestnuts, roasted (sweet, peeled)": 143,
     "Kale, boiled": 118, "Cavolo nero (Tuscan kale), boiled": 118,
+    "Kabocha squash, boiled": 205, "Crown Prince squash, boiled": 205,
     "Cauliflower, boiled": 124, "Green beans, boiled": 125,
     "Spinach, boiled": 180, "Cabbage, boiled": 150,
     "Courgette, boiled": 180, "Pumpkin, boiled": 245,
