@@ -54,6 +54,9 @@ VALUES = {
     "Carrot, boiled": (per100(9, 78), OHF),
     "Carrot, raw": (per100(30, 128), OHF + " (raw, 1 cup grated)"),
     "Popcorn, air-popped (plain)": (33.0, OHF + " (popped, 33 mg/100 g)"),
+    "Chestnuts, roasted (sweet, peeled)": (28.0, OHF + " (roasted, 28 mg/100 g)"),
+    "Chestnuts, boiled (sweet, peeled)": (
+        15.0, OHF + " roasted value scaled to boiled dry matter (estimate)"),
     "Celery, raw": (per100(30, 120), OHF),
     "Green beans, boiled": (per100(15, 62), OHF),
     "Broccoli, boiled": (per100(4, 60), OHF),
