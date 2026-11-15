@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.12a"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.15a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -2913,6 +2913,7 @@ CUP_G = {
     "Soya beans, boiled": 172, "Split peas, boiled": 196,
     "Edamame, boiled": 155, "Peas, green, boiled": 160, "Natto": 175,
     "Broccoli, boiled": 156, "Carrot, boiled": 156, "Carrot, raw": 128,
+    "Popcorn, air-popped (plain)": 8,
     "Cauliflower, boiled": 124, "Green beans, boiled": 125,
     "Spinach, boiled": 180, "Cabbage, boiled": 150,
     "Courgette, boiled": 180, "Pumpkin, boiled": 245,

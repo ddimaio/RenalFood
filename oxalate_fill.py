@@ -53,6 +53,7 @@ VALUES = {
     "Okra, boiled": (per100(56, 56), OHF),
     "Carrot, boiled": (per100(9, 78), OHF),
     "Carrot, raw": (per100(30, 128), OHF + " (raw, 1 cup grated)"),
+    "Popcorn, air-popped (plain)": (33.0, OHF + " (popped, 33 mg/100 g)"),
     "Celery, raw": (per100(30, 120), OHF),
     "Green beans, boiled": (per100(15, 62), OHF),
     "Broccoli, boiled": (per100(4, 60), OHF),
