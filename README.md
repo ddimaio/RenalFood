@@ -124,6 +124,10 @@ calcium, potassium and magnesium carbonates). From the manufacturer's label.
 Renal Met, the same balancer with added DL-methionine (5.8%), for recipes
 low in methionine (e.g. plant-based). From the manufacturer's label.
 
+`imports/tofoo_tofu.json` (also in the library): Tofoo Naked Tofu
+(organic, nigari-set) – label macros and sodium; minerals from the Japanese
+tables' magnesium-chloride firm tofu (04097) scaled to the label protein.
+
 `imports/pure_companion_plaque.json` (also in the library): Pure Companion
 Plaque Removal Powder – seaweed (Ascophyllum nodosum) dental powder; label
 protein/fat/iodine (670 mg/kg), other minerals estimated from Feedipedia
