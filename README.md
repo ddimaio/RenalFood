@@ -124,6 +124,10 @@ calcium, potassium and magnesium carbonates). From the manufacturer's label.
 Renal Met, the same balancer with added DL-methionine (5.8%), for recipes
 low in methionine (e.g. plant-based). From the manufacturer's label.
 
+`imports/just_be_kind_give_a_dog_a_bean.json` (also in the library): Just
+Be Kind Give a Dog a Bean wet food – label analysis, Ca 0.18% / P 0.16% from
+the product page; complete food (missing values at the AAFCO minimum).
+
 `imports/tofoo_tofu.json` (also in the library): Tofoo Naked Tofu
 (organic, nigari-set) – label macros and sodium; minerals from the Japanese
 tables' magnesium-chloride firm tofu (04097) scaled to the label protein.
