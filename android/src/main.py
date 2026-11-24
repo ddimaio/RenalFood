@@ -615,6 +615,8 @@ def main(page: ft.Page):
         def do_open(e):
             n = e.control.data
             d = saved_recipes().get(n, {})
+            d = dict(d, items=[[rc.current_name(x), g]
+                               for x, g in d.get("items", [])])
             missing = [x for x, _ in d.get("items", []) if x not in db]
             recipe[:] = [[x, float(g)] for x, g in rc.merge_duplicates(
                 [(x, g) for x, g in d.get("items", []) if x in db])]

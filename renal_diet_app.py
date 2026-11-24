@@ -29,7 +29,7 @@ except ImportError:                    # app still works (file only)
 
 # Streamlit keeps imported modules in memory between reruns, so after an
 # update the new app script can meet the old engine. Reload it if stale.
-ENGINE_VERSION = "2026.11.15d"
+ENGINE_VERSION = "2026.11.24a"
 if getattr(rc, "ENGINE_VERSION", None) != ENGINE_VERSION:
     rc = importlib.reload(rc)
 
@@ -832,8 +832,9 @@ def load_recipe_cb():
     if up is None:
         return
     d = json.load(up)
-    missing = [n for n, _ in d.get("items", []) if n not in db]
-    set_recipe([(n, float(g)) for n, g in d.get("items", []) if n in db])
+    _items = [(rc.current_name(n), g) for n, g in d.get("items", [])]
+    missing = [n for n, _ in _items if n not in db]
+    set_recipe([(n, float(g)) for n, g in _items if n in db])
     pl = rc.plan_from_json(d["plan"], db) if d.get("plan") else None
     if pl:
         set_plan(pl)

@@ -50,7 +50,7 @@ except ImportError:          # engine still importable (e.g. Streamlit app)
                      showerror=lambda *a, **k: None,
                      showinfo=lambda *a, **k: None)
 
-ENGINE_VERSION = "2026.11.15d"   # bump when the Streamlit app needs new code
+ENGINE_VERSION = "2026.11.24a"   # bump when the Streamlit app needs new code
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # Optional writable data folder (the phone app sets RENALFOOD_DATA_DIR,
 # because an Android app's own folder is read-only). Unset = files live next
@@ -1377,7 +1377,7 @@ def load_excluded(key="excluded"):
     """Foods the user unticked for the generator / optimiser additions.
     key="opt_excluded": the optimiser's own list, used when it does not
     share the generator's exclusions (see opt_shares_exclusions)."""
-    return set(load_prefs().get(key, []))
+    return {current_name(n) for n in load_prefs().get(key, [])}
 
 
 def opt_shares_exclusions():
@@ -3662,13 +3662,25 @@ def plan_to_json(plan):
             "items": [[t, n, round(g, 2)] for t, n, g in plan_items(plan)]}
 
 
+# library foods that were renamed: old name -> new name, so recipes and
+# plans saved before the rename still load
+RENAMED_FOODS = {
+    "Just Be Kind vegan wet dog food (290 g tray)":
+        "Just Be Kind Jumping Jack GOLD (290 g tray)",
+}
+
+
+def current_name(n):
+    return RENAMED_FOODS.get(n, n)
+
+
 def plan_from_json(d, db):
     """Plan from plan_to_json() data (unknown foods skipped); None if
     invalid."""
     try:
-        items = [(t if t in ("fixed", "serving", "treats") else int(t), n,
-                  float(g))
-                 for t, n, g in d["items"] if n in db]
+        items = [(t if t in ("fixed", "serving", "treats") else int(t),
+                  current_name(n), float(g))
+                 for t, n, g in d["items"] if current_name(n) in db]
         return plan_from_items(items, [float(x) for x in d["shares"]])
     except (KeyError, TypeError, ValueError, IndexError):
         return None
@@ -9171,9 +9183,9 @@ class App(tk.Tk):
             return
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
-        missing = [n for n, _ in d.get("items", []) if n not in self.db]
-        self.recipe = [[n, float(g)] for n, g in d.get("items", [])
-                       if n in self.db]
+        items = [(current_name(n), g) for n, g in d.get("items", [])]
+        missing = [n for n, _ in items if n not in self.db]
+        self.recipe = [[n, float(g)] for n, g in items if n in self.db]
         self.plan = None
         pl = plan_from_json(d["plan"], self.db) if d.get("plan") else None
         if pl:
